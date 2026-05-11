@@ -1,0 +1,28 @@
+{
+  "name": "steadyspec",
+  "version": "0.1.0",
+  "description": "Anti-drift methodology packaged as a software SDD reference implementation.",
+  "languages": ["en"],
+  "install": {
+    "defaultLayout": "flat-runtime-skills",
+    "skillPrefix": "steadyspec",
+    "entrySkill": "steadyspec-adopt",
+    "routerSkill": "steadyspec-workflow",
+    "copyOnly": true
+  },
+  "skills": [
+    "adoption/steadyspec-adopt",
+    "router/steadyspec-workflow",
+    "primitives/steadyspec-apply",
+    "primitives/steadyspec-archive",
+    "primitives/steadyspec-context-archaeology",
+    "primitives/steadyspec-debate",
+    "primitives/steadyspec-doc-sync",
+    "primitives/steadyspec-explore",
+    "primitives/steadyspec-grill",
+    "primitives/steadyspec-human-decision-record",
+    "primitives/steadyspec-propose",
+    "primitives/steadyspec-review-against-intent",
+    "primitives/steadyspec-strategy-rollup"
+  ]
+}

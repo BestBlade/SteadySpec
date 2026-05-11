@@ -1,0 +1,4 @@
+interface:
+  display_name: "SDD Propose"
+  short_description: "Create SDD proposal artifacts, with governed path when risky"
+  default_prompt: "Create proposal, design, spec, issue, or task artifacts from clear intent; use the governed proposal path first when direction, boundary, validation, or architecture can drift."

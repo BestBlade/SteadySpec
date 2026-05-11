@@ -1,0 +1,4 @@
+interface:
+  display_name: "Proof-Gated Change"
+  short_description: "Governance gradient for spec-driven work"
+  default_prompt: "Bootstrap or run a proof-gated change workflow by matching governance strength to project risk, preserving intent, and requiring evidence before completion."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "SDD Human Decision Record"
+  short_description: "Record human-owned decisions"
+  default_prompt: "Create a short human decision record for this SDD value judgment, separating agent recommendation from human-owned risk, debt, fallback, or roadmap responsibility."

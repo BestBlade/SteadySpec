@@ -1,0 +1,6 @@
+node_modules/
+.steadyspec/
+.claude/
+.codex/
+.DS_Store
+*.log

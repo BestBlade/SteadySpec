@@ -1,0 +1,4 @@
+interface:
+  display_name: "SDD Apply"
+  short_description: "Implement SDD tasks with evidence"
+  default_prompt: "Apply a recorded SDD change in narrow slices: define the proof path before coding, make the smallest code change, run the proof signal, record evidence, and stop on drift."

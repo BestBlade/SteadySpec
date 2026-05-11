@@ -1,0 +1,4 @@
+interface:
+  display_name: "SDD Context Archaeology"
+  short_description: "Recover project history before decisions"
+  default_prompt: "Reconstruct the project history and rationale behind the current code or workflow shape, separating confirmed history from inference before proposing or changing behavior."

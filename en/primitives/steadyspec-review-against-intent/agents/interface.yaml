@@ -1,0 +1,4 @@
+interface:
+  display_name: "SDD Review Against Intent"
+  short_description: "Check implementation against intent"
+  default_prompt: "Review this completed SDD implementation against recorded intent, evidence, fallback, and drift handling before archive."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "SDD Explore"
+  short_description: "Clarify intent before proposing"
+  default_prompt: "Explore a change idea by clarifying intent, terms, boundaries, evidence needs, risks, and whether context archaeology or grill should run before proposal."

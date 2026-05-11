@@ -1,0 +1,4 @@
+interface:
+  display_name: "SDD Debate"
+  short_description: "Debate risky SDD decisions"
+  default_prompt: "Run a mode-declared SDD debate for an uncertain decision, report isolation limits, moderate objections, run an expert blind-spot pass, and produce findings with counter-cases and missing evidence."

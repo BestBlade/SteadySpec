@@ -1,0 +1,4 @@
+interface:
+  display_name: "SDD Workflow"
+  short_description: "Route generic proof-gated SDD work"
+  default_prompt: "Route this SDD change by checking existing artifacts, then choose the next skill, human decision needs, strategy rollup needs, and stop condition."

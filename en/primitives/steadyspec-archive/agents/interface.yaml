@@ -1,0 +1,4 @@
+interface:
+  display_name: "SDD Archive"
+  short_description: "Close SDD changes with evidence"
+  default_prompt: "Archive or close an SDD change only after review-against-intent, doc sync, evidence, human decisions, strategy signals, accepted debt, fallback, and final truth are recorded."

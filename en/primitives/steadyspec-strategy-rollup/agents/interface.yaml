@@ -1,0 +1,4 @@
+interface:
+  display_name: "SDD Strategy Rollup"
+  short_description: "Roll up strategy signals"
+  default_prompt: "Roll up recent SDD drift, fallback, debt, roadmap mismatch, architecture deltas, and recurring evidence gaps into human-reviewable strategy signals."

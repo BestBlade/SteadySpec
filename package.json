@@ -1,0 +1,41 @@
+{
+  "name": "steadyspec",
+  "version": "0.1.0",
+  "description": "Anti-drift methodology packaged as a software SDD reference implementation.",
+  "bin": {
+    "steadyspec": "bin/init.js"
+  },
+  "scripts": {
+    "validate": "node bin/validate.js"
+  },
+  "keywords": [
+    "sdd",
+    "spec-driven-development",
+    "drift",
+    "agent-skills",
+    "codex",
+    "claude"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BestBlade/SteadySpec.git"
+  },
+  "bugs": {
+    "url": "https://github.com/BestBlade/SteadySpec/issues"
+  },
+  "homepage": "https://github.com/BestBlade/SteadySpec#readme",
+  "files": [
+    "bin/",
+    "en/",
+    "recipes/",
+    "METHOD.md",
+    "CHANGELOG.md",
+    "manifest.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT"
+}

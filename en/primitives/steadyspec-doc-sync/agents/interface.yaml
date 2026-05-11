@@ -1,0 +1,4 @@
+interface:
+  display_name: "SDD Doc Sync"
+  short_description: "Sync docs to implemented truth"
+  default_prompt: "Sync durable SDD records and user-facing docs to the implemented truth before archive, recording accepted debt and fallback where needed."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "SDD Grill"
+  short_description: "Stress-test a design tree"
+  default_prompt: "Stress-test this SDD plan or design one blocking question at a time, resolving decision dependencies and parking out-of-scope long-tail concerns."
