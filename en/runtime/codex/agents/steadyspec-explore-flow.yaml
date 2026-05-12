@@ -1,0 +1,4 @@
+interface:
+  display_name: "SteadySpec Explore"
+  short_description: "Activation entry — status report (no topic) or topical exploration with project history loaded"
+  default_prompt: "Run SteadySpec explore-flow. With no topic, produce a four-section status report (active changes / debt aggregate / recent archived / recommended next verb). With a topic, think with the user, load project history, and hand off to propose if intent converges. Activates SteadySpec for the session."

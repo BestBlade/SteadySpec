@@ -1,0 +1,4 @@
+interface:
+  display_name: "SteadySpec Archive"
+  short_description: "Close a change with no silent close — four gates (review / doc-sync / confirmed_by / completeness) all must pass"
+  default_prompt: "Run SteadySpec archive-flow on the given change-id. Run four gates in order: review-against-intent (block on blocker), doc-sync auto-scan (block on must-update unchecked), confirmed_by gate (block if any human-decision-record lacks confirmation), completeness check (block if any archive.md field has no source). After gates pass, check rollup trigger (≥3 of last 10 archived mention same module/keyword); if so, may auto-run strategy-rollup. Then write archive.md and move the change to the substrate's archive location."

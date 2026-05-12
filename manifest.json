@@ -1,6 +1,6 @@
 {
   "name": "steadyspec",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Anti-drift methodology packaged as a software SDD reference implementation.",
   "languages": ["en"],
   "install": {
@@ -8,7 +8,17 @@
     "skillPrefix": "steadyspec",
     "entrySkill": "steadyspec-adopt",
     "routerSkill": "steadyspec-workflow",
-    "copyOnly": true
+    "copyOnly": true,
+    "runtimeAdapters": {
+      "claude": {
+        "commandsSource": "runtime/claude/commands/steadyspec",
+        "commandsTarget": ".claude/commands/steadyspec"
+      },
+      "codex": {
+        "agentsSource": "runtime/codex/agents",
+        "agentsTargetSubpath": "agents/openai.yaml"
+      }
+    }
   },
   "skills": [
     "adoption/steadyspec-adopt",
@@ -24,5 +34,11 @@
     "primitives/steadyspec-propose",
     "primitives/steadyspec-review-against-intent",
     "primitives/steadyspec-strategy-rollup"
+  ],
+  "flows": [
+    "flows/steadyspec-explore-flow",
+    "flows/steadyspec-propose-flow",
+    "flows/steadyspec-apply-flow",
+    "flows/steadyspec-archive-flow"
   ]
 }

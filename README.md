@@ -1,122 +1,129 @@
 # SteadySpec
 
-### Anti-drift methodology - packaged for software SDD, applicable beyond
+### Opinionated drift-defense orchestration on top of OpenSpec — for Tier 1/2 single-author projects
 
-SteadySpec v1 is a reference implementation of a general anti-drift method in the software spec-driven-development setting. The npm package is the fastest way to feel the method in a real code project; it is not the boundary of the method.
+> **Read [SCOPE.md](SCOPE.md) before adopting.** SteadySpec narrows OpenSpec's audience (Tier 2+ agents, single developer per change, no issue-tracker substrate yet) in exchange for stronger drift gates and a closed-loop verb-flow. If your project doesn't fit those boundaries, SteadySpec is not the right tool.
 
-Use it with plain docs, OpenSpec, issue trackers, or project-local protocols when agents need guardrails against intent drift, evidence drift, decision drift, and archive drift. Humans read [METHOD.md](METHOD.md) to understand the portable method; agents configure and install the software SDD reference implementation for a target runtime.
+SteadySpec wraps OpenSpec's four outward verbs (`/steadyspec:explore` / `/steadyspec:propose` / `/steadyspec:apply` / `/steadyspec:archive`) with closed-loop orchestration. OpenSpec manages the artifact substrate (proposal / design / tasks / archive). SteadySpec adds anti-drift gates around each verb: explore auto-loads project history, propose runs grill + (optional) debate, apply executes slice-by-slice with TDD discipline and pauses on drift, archive runs review + doc-sync auto-scan + confirmed_by gate before writing.
 
-v0.1 ships in English. Chinese localization will be reintroduced through a generator path; do not hand-translate.
+The npm package is the fastest way to feel the method in a real code project. It is not the boundary of the method — read [METHOD.md](METHOD.md) for the domain-neutral anti-drift method underneath.
 
-## What This Is
+## Quick start
 
-- **A portable anti-drift method** — eight mechanisms that apply to any long-running work where intent, decisions, output, and records can diverge. The method lives in [METHOD.md](METHOD.md) and does not depend on this npm package.
-- **A reference implementation for software SDD** — concrete agent skills (`steadyspec-*`) that apply the method to spec-driven development. This package is one way to use the method, not the only way.
-- **Governance on a gradient** — four levels from zero-governance to project-local protocol. You choose the weight; the skills enforce what you chose, not what we prefer.
-- **Substrate-agnostic** — works alongside OpenSpec, plain docs, or issue trackers. SteadySpec owns the anti-drift process; the substrate owns the records.
+See [QUICKSTART.md](QUICKSTART.md) for install + the four verbs + manual cleanup checklist. Below is just enough to orient.
 
-## What This Is Not
+```bash
+npm install -g steadyspec
+cd my-project
+steadyspec init
+```
 
-- **Not an OpenSpec replacement or competitor.** OpenSpec manages specs, proposals, and tasks. SteadySpec adds drift-defense guardrails that OpenSpec deliberately leaves open. The two are designed to coexist.
-- **Not a project management tool.** No backlog, no sprints, no velocity tracking. SteadySpec only asks: did intent survive contact with reality?
-- **Not a testing framework.** TDD, integration tests, and linters produce evidence. SteadySpec does not run them — it checks that evidence exists and matches intent.
-- **Not production-grade software.** v0.1 is alpha. It ships `init` only. `check`, `upgrade`, and `uninstall` are not yet implemented. Breaking changes may occur before 1.0.
-- **Not claiming universality.** The method is opinionated about drift prevention. The governance levels are configurable. Use what works; ignore what doesn't.
+Then in your agent (Claude Code or Codex):
+
+```
+/steadyspec:explore           # status report (no topic) or topical exploration
+/steadyspec:propose <intent>  # write a proposal with grill + debate when needed
+/steadyspec:apply <change-id> # implement slice-by-slice with drift gates
+/steadyspec:archive <change-id> # close with review + doc-sync + confirmed_by gates
+```
+
+Vibe mode (no slash command) remains valid; SteadySpec stays out of the way.
+
+## Boundaries (read before adopting)
+
+SteadySpec v0.2-alpha is alpha. Boundaries are explicit. Full matrix in [SCOPE.md](SCOPE.md).
+
+- **Agent capability:** optimized for **Tier 2** agents (DeepSeek-V4-Pro, Claude Sonnet 4.5+, GPT-4o-class). Tier 3 (smaller / older models) is **not promised** to trigger skills reliably.
+- **Single developer:** designed for one author per change. "Human" in the skills means **future-you or a successor**, not a teammate. Multi-person team workflows are not validated.
+- **User-invoked, not background:** SteadySpec does not auto-detect drift. It provides verbs you call when drift is suspected.
+- **`init` only CLI:** no `update`, no `uninstall`, no `check` in v0.2-alpha. Removal is by manual checklist (in QUICKSTART) + `npm uninstall -g steadyspec`. Reason for no per-project uninstall: a file-touching uninstall is a data-loss risk we won't take in v0.2-alpha.
+- **No issue-tracker substrate yet:** GitHub issues / Jira / Linear deferred to v0.3.
+
+If any of these does not match your situation, see [SCOPE.md](SCOPE.md) for the decision checklist before installing.
 
 ## Layout
 
 ```text
 steadyspec/
-  METHOD.md
+  METHOD.md             # domain-neutral anti-drift method
+  SCOPE.md              # tier matrix, single-developer assumption, no-promise list
+  QUICKSTART.md         # 4 verbs + install + manual cleanup
+  README.md             # this file
+  CHANGELOG.md
   recipes/
-    software-sdd.md
-    research-paper.md
+    software-sdd.md     # map the method to software SDD
+    research-paper.md   # non-software transfer example
   en/
-    adoption/
-    router/
-    primitives/
+    flows/              # 4 verb-flow SKILLs (orchestration, NEW in v0.2-alpha)
+      steadyspec-explore-flow/
+      steadyspec-propose-flow/
+      steadyspec-apply-flow/
+      steadyspec-archive-flow/
+    primitives/         # 11 primitive SKILLs (sharp + lean, called by verb-flows)
+    router/             # steadyspec-workflow (internal router, called by verb-flows)
+    adoption/           # steadyspec-adopt (governance level chooser)
+    runtime/
+      claude/commands/steadyspec/    # 4 thin-pointer slash commands (Claude)
+      codex/agents/                  # 4 yaml interface descriptors (Codex)
+  bin/
+    init.js             # the only CLI command in v0.2-alpha
+    validate.js         # internal package validator
+  manifest.json         # install spec
+  package.json
 ```
 
-- `METHOD.md`: domain-neutral anti-drift method.
-- `recipes/`: concrete mappings from the method to a working domain.
-- `adoption/`: choose drift-defense strength, working medium, evidence level, and localization path.
-- `router/`: route a request by observed SDD state and drift risk.
-- `primitives/`: small phase skills for intent, history, decision, implementation, evidence, doc-sync, archive, human responsibility, and strategy drift.
-- High-risk proposal work uses `steadyspec-propose/references/governed-proposal-path.md` instead of a separate flow layer.
+## Drift covered
 
-## Drift Covered
+The four verb-flows + their primitives address these drift kinds:
 
-- Intent -> implementation drift: `steadyspec-apply`, `steadyspec-review-against-intent`.
-- Decision -> record drift: `steadyspec-human-decision-record`, `steadyspec-doc-sync`.
-- Context/history drift: `steadyspec-context-archaeology`, `steadyspec-grill`.
-- Consensus/architecture drift: `steadyspec-debate`, governed proposal path.
-- Archive truth drift: `steadyspec-archive`.
-- Repeated local drift becoming strategy signal: `steadyspec-strategy-rollup`.
+- **Intent → implementation drift:** propose-flow + apply-flow drift detection + archive-flow review-against-intent gate
+- **Decision → record drift:** apply-flow records evidence per slice; archive-flow confirmed_by gate for human-owned decisions
+- **Context / history drift:** propose-flow auto-loads context-archaeology; explore-flow status mode aggregates historical signals
+- **Consensus / architecture drift:** propose-flow auto-runs debate when direction forks or boundary is unsharp
+- **Doc / code drift:** archive-flow doc-sync auto-scan with `must-update` / `should-check` / `unlikely` confidence levels
+- **Repeated local drift becoming strategy signal:** archive-flow rollup-trigger check (≥3 of last 10 archived mention same module/keyword) auto-surfaces strategy-rollup
 
-## Agent Setup
+## Coexistence with OpenSpec and other skill packs
 
-When asked to use this package in a project, the agent should:
+In an OpenSpec project:
 
-1. Run `npx steadyspec init`.
-2. Start configuration from the installed `steadyspec-adopt`.
-3. Use `steadyspec-workflow` when the next SDD phase is unclear.
+1. OpenSpec owns the substrate (proposal files, tasks, specs, archive structure).
+2. SteadySpec owns the anti-drift orchestration (the four verb-flows).
+3. SteadySpec writes change records into OpenSpec's substrate (`openspec/changes/<id>/`), respecting OpenSpec conventions.
+4. If both `openspec/` and `docs/changes/` exist, init prompts you to choose — or pass `--substrate openspec` / `--substrate docs` to bypass the prompt.
 
-The init command auto-detects `.claude/` or `.codex/`; pass `--runtime claude` or `--runtime codex` to override. V1 command scope is also shown by `npx steadyspec --help`. Current v1 ships `init`; `check`, `upgrade`, and `uninstall` are not implemented.
+SteadySpec is compatible with general skill packs (TDD, diagnosis, review, productivity). Those skills can produce proof signals or execution help; they do not replace SteadySpec intent, review, and archive records.
 
-Init writes SteadySpec state to `.steadyspec/substrate.json`. This is SteadySpec-owned state, not substrate-owned state. It is safe to delete; rerun `npx steadyspec init` to recreate it.
+## Upgrade and removal
 
-## OpenSpec And Other Skills
-
-SteadySpec is not an OpenSpec replacement. In an OpenSpec project, the recommended v0.1 posture is:
-
-1. OpenSpec owns the substrate: proposal files, tasks, specs, and local OpenSpec conventions.
-2. SteadySpec owns the anti-drift process: governance level, proof-gated apply, output-vs-intent review, doc sync, archive truth, human decisions, and strategy rollup.
-3. If both OpenSpec and SteadySpec skills are installed and the next step is unclear, start with `steadyspec-workflow`.
-4. Use native `openspec-*` skills for OpenSpec-only maintenance. Use `steadyspec-*` skills when drift defense is part of the work.
-
-SteadySpec is compatible with general skill packs such as TDD, diagnosis, review, or productivity skills. Those skills can produce proof signals or execution help; they do not replace SteadySpec intent, review, and archive records.
-
-## Upgrade And Uninstall
-
-V0.1 does not ship `update` or `uninstall` commands.
-
-To upgrade manually:
-
-1. Remove installed SteadySpec skills: `.claude/skills/steadyspec-*` or `.codex/skills/steadyspec-*`.
-2. Rerun `npx steadyspec@latest init`.
-3. Keep `.steadyspec/substrate.json` unless you want init to re-detect the substrate from scratch.
-
-To uninstall manually, remove the installed `steadyspec-*` skill directories, remove `.steadyspec/`, and delete the `<!-- steadyspec -->` block from `CLAUDE.md` or `AGENTS.md`.
+v0.2-alpha ships `init` only. There is no `update` or `uninstall` CLI command. To upgrade or remove SteadySpec, see [QUICKSTART.md](QUICKSTART.md). Global package removal is `npm uninstall -g steadyspec`.
 
 ## Stability
 
-V0.1 is alpha. Before 1.0, breaking changes may still happen, but SteadySpec intends to keep these surfaces stable unless a release note explicitly says otherwise:
+v0.2-alpha is alpha. Before 1.0, breaking changes may still happen, but SteadySpec intends to keep these surfaces stable unless [CHANGELOG.md](CHANGELOG.md) says otherwise:
 
-- Skill names: `steadyspec-adopt`, `steadyspec-workflow`, and the current `steadyspec-*` primitive names.
+- Outward verb names: `/steadyspec:explore`, `/steadyspec:propose`, `/steadyspec:apply`, `/steadyspec:archive`.
+- Verb-flow SKILL names: `steadyspec-<verb>-flow`.
+- Primitive SKILL names: current `steadyspec-*` names.
 - METHOD.md structure: the eight mechanism sections remain addressable; content may expand.
-- CLI meaning: `steadyspec init` installs the local runtime skills and writes project state.
+- CLI meaning: `steadyspec init` installs the runtime skills, verb-flows, runtime adapters, and writes project state.
 - State schema: `.steadyspec/substrate.json` uses `schemaVersion: 1`; fields may be added, not silently removed, within that schema version.
 
-Breaking changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+## Method first
 
-## Method First
+Read [METHOD.md](METHOD.md) to learn the domain-neutral anti-drift mechanisms. Read [recipes/software-sdd.md](recipes/software-sdd.md) to see how this package maps the method into software SDD verbs and primitives. Read [recipes/research-paper.md](recipes/research-paper.md) for a compact non-software transfer example.
 
-Read [METHOD.md](METHOD.md) to learn the domain-neutral anti-drift mechanisms. Read [recipes/software-sdd.md](recipes/software-sdd.md) to see how this package maps the method into software SDD skills. Read [recipes/research-paper.md](recipes/research-paper.md) for a compact non-software transfer example.
+## Human reading path
 
-## Human Reading Path
+If you are evaluating SteadySpec for adoption:
 
-Inside the chosen language tree, read these first:
+1. [SCOPE.md](SCOPE.md) — does this fit your project?
+2. [QUICKSTART.md](QUICKSTART.md) — what does daily use look like?
+3. [METHOD.md](METHOD.md) — what is the underlying method?
+4. `recipes/software-sdd.md` — how does the method map to the four verbs?
 
-1. `en/adoption/steadyspec-adopt/references/adoption-guide.md`
-2. `en/adoption/steadyspec-adopt/references/method-and-execution.md`
-3. `README.md` inside the chosen language tree
+If you are an agent inheriting an existing SteadySpec project:
 
-## Acknowledgments
-
-- Skill format and structure inspired by [Matt Pocock's agent skills](https://github.com/mattpocock/skills) (MIT).
-- Runtime installation patterns learned from the OpenSpec CLI ecosystem.
-- Anti-drift methodology is original work; any flaws in its application to SDD are ours.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+1. The installed `steadyspec-adopt` SKILL — to understand governance level.
+2. The installed `steadyspec-workflow` SKILL — to know which verb-flow runs next.
+3. The four `steadyspec-<verb>-flow` SKILLs in your runtime's `skills/` directory.

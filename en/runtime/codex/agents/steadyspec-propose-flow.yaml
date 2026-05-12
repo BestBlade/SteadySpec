@@ -1,0 +1,4 @@
+interface:
+  display_name: "SteadySpec Propose"
+  short_description: "Write a proposal whose intent is grilled, debated when needed, and traceable to prior changes"
+  default_prompt: "Run SteadySpec propose-flow. Given the user's intent string, fetch project history and prior decisions, harden the decision tree via grill, run debate when direction forks / area is high-risk / boundary is not yet sharp (skip for trivial single-file or doc-only changes), then write the proposal artifact in the substrate (openspec/ or docs/changes/) with intent / boundary / non-goals / evidence required / stop conditions / basis / inherits-from."

@@ -1,6 +1,18 @@
+# SteadySpec self-governance records — local only, never published.
+.meta/
+
+# Node
 node_modules/
-.steadyspec/
-.claude/
-.codex/
-.DS_Store
 *.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Build artifacts (just in case)
+dist/
+*.tgz

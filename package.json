@@ -1,6 +1,6 @@
 {
   "name": "steadyspec",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Anti-drift methodology packaged as a software SDD reference implementation.",
   "bin": {
     "steadyspec": "bin/init.js"
@@ -35,6 +35,8 @@
     "CHANGELOG.md",
     "manifest.json",
     "README.md",
+    "SCOPE.md",
+    "QUICKSTART.md",
     "LICENSE"
   ],
   "license": "MIT"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "SteadySpec Apply"
+  short_description: "Implement a recorded change slice-by-slice with proof-gated execution; pause on drift with four options"
+  default_prompt: "Run SteadySpec apply-flow on the given change-id. Loop slice-by-slice with TDD discipline (vertical slices, no refactor while RED, no anticipating next slice, refactor only after all GREEN). On drift, pause and offer four options: in-place patch / accept as known-limitation / revert this slice / STOP and recommend opening a new change. Record evidence per slice."
