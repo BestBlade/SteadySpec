@@ -7,6 +7,7 @@ const { execSync } = require("child_process");
 const ALLOWED_ROOT_FILES = new Set([
   "README.md",
   "METHOD.md",
+  "EVIDENCE.md",
   "SCOPE.md",
   "QUICKSTART.md",
   "CHANGELOG.md",
@@ -15,7 +16,7 @@ const ALLOWED_ROOT_FILES = new Set([
   ".gitignore",
   "LICENSE",
 ]);
-const ALLOWED_ROOT_DIRS = new Set(["bin", "en", "recipes"]);
+const ALLOWED_ROOT_DIRS = new Set(["bin", "en", "zh", "recipes"]);
 const IGNORED_DEV_DIRS = new Set([".git", ".meta", "node_modules"]);
 const FORBIDDEN_NAMES = new Set([
   ".claude",
@@ -32,6 +33,7 @@ const FORBIDDEN_NAMES = new Set([
 const REQUIRED_ROOT_FILES = [
   "README.md",
   "METHOD.md",
+  "EVIDENCE.md",
   "SCOPE.md",
   "QUICKSTART.md",
   "CHANGELOG.md",

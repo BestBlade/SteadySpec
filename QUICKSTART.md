@@ -1,6 +1,6 @@
 # SteadySpec Quick Start
 
-SteadySpec is the advanced version of OpenSpec: same four outward verbs, each a small closed-loop with anti-drift gates. Read [SCOPE.md](SCOPE.md) before adopting.
+SteadySpec is a reference skill pack of the anti-drift method. Four outward verbs, each a small closed-loop with anti-drift gates. Read [SCOPE.md](SCOPE.md) before adopting.
 
 ## Install
 

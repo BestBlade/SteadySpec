@@ -6,15 +6,74 @@ The core claim is simple: work does not usually fail because people never wrote 
 
 Use this document as the portable method. Use `recipes/software-sdd.md` as the software reference implementation.
 
-## Vocabulary
+## How Work Drifts
 
-- Intent record: the durable statement of what the work is trying to achieve.
-- Working medium: the place where intent and records live. In software it may be OpenSpec, plain docs, or issues. In other domains it may be a brief, outline, protocol, contract draft, or research plan.
-- Unit of work: the smallest slice being produced or changed.
-- Observable check: a concrete signal that something happened. It can be a test, replay, reviewer check, citation audit, user interview result, clause comparison, or artifact inspection.
-- Output-vs-intent check: a review that asks whether the output satisfies the intent instead of merely asking whether the output looks good.
-- Human-owned decision: a value, risk, priority, legal, ethical, or strategic decision that a process must record but cannot own.
-- Finalized record: the closing record that says what is true after the work, including residual risk and accepted debt.
+Everyone's coding with agents now. Self-paid, company-funded — it doesn't matter.
+
+And quickly, people notice a pattern. Agents are great at single, small tasks. But when you keep going — no guardrails, conversation stretching across dozens of turns — the output becomes unstable. The agent quietly edits something you never asked it to touch. It made a judgment call, and you weren't in the room.
+
+So document-driven development gets pulled off the shelf. The idea: before the agent writes a line, talk through the requirements. Lock down the direction. Write a spec. Hand the agent that spec and say: follow this. This approach — roughly L3 in AI-coding circles — is the first serious attempt to put a fence around the problem.
+
+**→ Intent Before Production (1).** The spec is an intent record — a short note, written before work begins, that says what you're trying to achieve, where the boundary is, and what evidence would make completion credible. When the agent later touches something outside the boundary, you can point at the record. Without it, the boundary lives only in your head.
+
+L3 works. Until it doesn't.
+
+Code pours out of the agent faster than anyone can read it. The bottleneck moves to you: you're supposed to audit docs AND read code, and the gap between "done" and "next" keeps shrinking. Your brain cannot compile every changed file.
+
+**→ Production With Nearby Checks (4).** Reviewing a finished pile of changes is too late. The fifth change may have quietly undone an assumption the first change depended on. The fix is not "review harder" — it's checking at the moment each small unit is produced. One unit. One check. Record. Then continue.
+
+Then there's the other thing. The agent almost never considers how this new requirement connects to the system you already have. It wants the fastest path to done. Over time, your system fills with scattered one-off functions, duplicated logic, things only there because "the agent put it there."
+
+**→ Durable Record Sync (6).** The code changed. The docs didn't. Every missed update erodes trust, until nobody reads the docs — they know the docs lie. The fix isn't a reminder. It's a gate: before closing, scan which docs reference the changed code, and block until must-update ones are updated.
+
+And here the loop tightens. AI writes. AI builds. AI reviews. The human becomes a Yes machine — approving too fast, too many, too shallowly. When you ship multiple changes a day, you won't remember what the code looked like this morning.
+
+**→ Output-Vs-Intent Review (5).** Review becomes "does the code look good?" instead of "did we solve the problem we opened this for?" You need to go back to the *original intent* — the one written before any code existed — and compare. Not the tests. Not the evolved spec. The intent.
+
+At this point, the agent is like a new hire who starts fresh every morning. Highly capable, zero project memory. Every new session, you reteach the why and the how.
+
+**→ Context Before Confidence (2).** Before the agent acts on unclear history — "this looks like dead code" — separate what's confirmed from what's inferred from what's unknown. Don't let "probably" harden into "definitely." When nobody wrote down why the weird workaround exists, the right answer is "we don't know — flag it."
+
+**→ Decision Pressure Before Agreement (3).** Two messages to agreement feels efficient. It's often just shared blind spots. Before locking a direction, ask: "What would break this? And if it breaks, what alternative handles it better?" Consensus without pressure is just politeness.
+
+Around here, a newer idea surfaces: put explicit boundaries around the workflow itself. SDD tells the agent what to build. This governance layer tells the agent how the work must be governed — what evidence is required before each step can be called complete, what records must be updated, what gates must be passed.
+
+**→ Finalization Without Truth Drift (7).** Closing work is the most dangerous moment. Everyone wants a clean story. The archive wants to say "done" — it doesn't mention the fallback, the untested edge case, the deferred decision. But a clean archive is a lie that compounds: the next person trusts it, and builds on an incomplete foundation. The archive must preserve what actually happened.
+
+**→ Local Signals To Strategy (8).** Ten changes shipped. Three carried the same debt: "manual validation pending." Each one looked reasonable in isolation — "I'll finish later." But three identical deferrals is a pattern. You can't see a pattern looking at one change at a time. The system needs to force that cross-change view.
+
+---
+
+These eight moments are not a list. They're a timeline — the life of a single piece of work:
+
+```
+Intent (1) → Context (2) → Decisions (3) → Production (4)
+    → Review against intent (5) → Doc sync (6) → Archive (7)
+                                                          ↓
+                                              Strategy from patterns (8)
+```
+
+Skip intent (1), and you can't review against it later (5). Skip review (5), and you don't know what docs need updating (6). Skip doc sync (6), and your archive describes a world that doesn't exist (7). Archive fiction (7), and you'll never spot the strategy patterns (8).
+
+The mechanisms are checkpoints along a path that work naturally drifts off of — each one catching the drift the previous checkpoint can't see.
+
+The story above happens to be about code. But the pattern (intent drifts, decisions lose their owner, records stop matching reality) is the same whether you're drafting a contract, writing a research paper, or outlining a novel. Swap the nouns; the drift stays the same.
+
+---
+
+## Key Terms
+
+These appear throughout the mechanisms. Each names the thing whose absence is where drift gets in.
+
+| Term | What it means |
+|---|---|
+| **Intent record** | A short note, written before work starts, that says what you're trying to do and where the boundary is. The thing you can point at later. |
+| **Observable check** | A concrete signal that something happened — a passing test, a command output you can see, a reviewer's confirmation. Not "I think it works." |
+| **Output-vs-intent review** | After the work, comparing what was built against the original intent — not the tests, not the code quality. "Did we solve the problem we set out to solve?" |
+| **Human-owned decision** | A call about value, risk, priority, or direction that a process can record but cannot make. Only a person can say "this debt is acceptable" or "this risk is mine." |
+| **Drift** | The quiet gap between what was intended and what actually happened. Not a bug. Not a mistake. The natural tendency of work to wander when nobody's watching the boundary. |
+
+Additional vocabulary (working medium, unit of work, finalized record) is defined in context within each mechanism.
 
 ## 1. Intent Before Production
 

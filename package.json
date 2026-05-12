@@ -30,6 +30,7 @@
   "files": [
     "bin/",
     "en/",
+    "zh/",
     "recipes/",
     "METHOD.md",
     "CHANGELOG.md",
@@ -37,6 +38,7 @@
     "README.md",
     "SCOPE.md",
     "QUICKSTART.md",
+    "EVIDENCE.md",
     "LICENSE"
   ],
   "license": "MIT"
