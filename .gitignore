@@ -1,6 +1,12 @@
 # SteadySpec self-governance records — local only, never published.
 .meta/
 
+# SteadySpec runtime artifacts — created by `steadyspec init`, not committed.
+.claude/
+.steadyspec/
+CLAUDE.md
+AGENTS.md
+
 # Node
 node_modules/
 *.log

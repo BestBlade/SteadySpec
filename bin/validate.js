@@ -11,12 +11,13 @@ const ALLOWED_ROOT_FILES = new Set([
   "SCOPE.md",
   "QUICKSTART.md",
   "CHANGELOG.md",
+  "ARTIFACT_CONTRACT.md",
   "manifest.json",
   "package.json",
   ".gitignore",
   "LICENSE",
 ]);
-const ALLOWED_ROOT_DIRS = new Set(["bin", "en", "zh", "recipes"]);
+const ALLOWED_ROOT_DIRS = new Set(["bin", "design", "docs", "en", "scripts", "zh", "recipes"]);
 const IGNORED_DEV_DIRS = new Set([".git", ".meta", "node_modules"]);
 const FORBIDDEN_NAMES = new Set([
   ".claude",
@@ -37,6 +38,7 @@ const REQUIRED_ROOT_FILES = [
   "SCOPE.md",
   "QUICKSTART.md",
   "CHANGELOG.md",
+  "ARTIFACT_CONTRACT.md",
   "manifest.json",
   "package.json",
   ".gitignore",
@@ -173,6 +175,9 @@ function main() {
   const pkg = readJson(packagePath);
   if (manifest.description !== pkg.description) {
     fail("manifest description must match package.json description");
+  }
+  if (manifest.version !== pkg.version) {
+    fail("manifest version must match package.json version");
   }
   if (!pkg.files || pkg.files.includes("scripts/")) {
     fail("scripts/ must not be published; use bin/validate.js");

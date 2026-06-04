@@ -1,6 +1,6 @@
 {
   "name": "steadyspec",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Anti-drift methodology packaged as a software SDD reference implementation.",
   "bin": {
     "steadyspec": "bin/init.js"
@@ -34,6 +34,7 @@
     "recipes/",
     "METHOD.md",
     "CHANGELOG.md",
+    "ARTIFACT_CONTRACT.md",
     "manifest.json",
     "README.md",
     "SCOPE.md",

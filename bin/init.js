@@ -331,6 +331,42 @@ function installClaudeCommands(plan, root, dryRun) {
   }
 }
 
+function installClaudeWorkflows(plan, root, manifest, dryRun) {
+  if (plan.runtime !== "claude") return;
+
+  const workflowsConfig = manifest.install.workflows;
+  if (!workflowsConfig || !workflowsConfig.claude) {
+    console.warn("WARN: No workflows config in manifest.install.workflows.claude");
+    return;
+  }
+
+  const workflowsSrc = path.join(root, "en", workflowsConfig.claude.source);
+  if (!fs.existsSync(workflowsSrc)) {
+    console.warn(`WARN: Claude workflows source missing: ${workflowsSrc}`);
+    return;
+  }
+
+  // skillsDir is <project>/.claude/skills; workflows go to <project>/.claude/workflows
+  const projectDir = path.dirname(path.dirname(plan.skillsDir));
+  const workflowsTarget = path.join(projectDir, workflowsConfig.claude.target);
+
+  // Check if there are any .js files to install
+  const jsFiles = fs.readdirSync(workflowsSrc, { withFileTypes: true })
+    .filter(e => e.isFile() && e.name.endsWith(".js"));
+  if (jsFiles.length === 0) return;
+
+  console.log(`install workflows: en/${workflowsConfig.claude.source}/ -> ${workflowsConfig.claude.target}/`);
+  if (dryRun) return;
+
+  fs.mkdirSync(workflowsTarget, { recursive: true });
+  for (const entry of jsFiles) {
+    const src = path.join(workflowsSrc, entry.name);
+    const dest = path.join(workflowsTarget, entry.name);
+    fs.copyFileSync(src, dest);
+    console.log(`  ${entry.name}`);
+  }
+}
+
 function installCodexAgents(plan, root, manifest, dryRun) {
   if (plan.runtime !== "codex") return;
   const agentsSrc = path.join(root, "en", "runtime", "codex", "agents");
@@ -436,6 +472,7 @@ async function main() {
     console.log(`--- ${plan.runtime} install ---`);
     installSkillsAndFlows(plan, root, source, manifest, args.dryRun);
     installClaudeCommands(plan, root, args.dryRun);
+    installClaudeWorkflows(plan, root, manifest, args.dryRun);
     installCodexAgents(plan, root, manifest, args.dryRun);
     injectInstructionBlock(plan, project, manifest, substrate, substrateFile, args.dryRun);
   }

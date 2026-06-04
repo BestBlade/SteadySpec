@@ -29,6 +29,10 @@ steadyspec init
 
 不输命令的 vibe 模式也照常——SteadySpec 不打扰。
 
+### Workflow 脚本（仅 Claude Code，v0.2.1+）
+
+`init` 后，`.claude/workflows/` 包含 4 个确定性执行脚本（`steadyspec-*.js`），与动词流逻辑一一对应，通过显式阶段门控和 schema 验证输出保证了执行质量。这些脚本通过 Claude Code 的 Workflow 工具调用，而非 slash 命令。
+
 ## 卸载
 
 SteadySpec 不提供按项目的卸载命令——那可能删掉你的工作。卸载分两层：
@@ -45,6 +49,7 @@ npm uninstall -g steadyspec
 # 在项目根目录下，只删 SteadySpec 自己的东西
 rm -rf .claude/skills/steadyspec-*
 rm -rf .claude/commands/steadyspec
+rm -rf .claude/workflows/steadyspec-*
 rm -rf .codex/skills/steadyspec-*
 rm -rf .steadyspec
 # 然后打开 CLAUDE.md 和/或 AGENTS.md，删掉

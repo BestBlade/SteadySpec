@@ -58,7 +58,11 @@ steadyspec/
     primitives/         # 11 个原语 SKILL（精简，被动词流调用）
     router/             # 内部路由器
     adoption/           # 治理级别选择器
-    runtime/            # Claude/Codex 运行时适配
+    runtime/
+      claude/
+        commands/steadyspec/   # 4 个薄指针 slash 命令
+        workflows/             # 4 个确定性执行脚本（v0.2.1 新增）
+      codex/agents/            # Codex yaml 接口描述
   bin/
     init.js             # v0.2-alpha 唯一的 CLI 命令
     validate.js         # 内部包校验器

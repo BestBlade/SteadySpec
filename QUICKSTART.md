@@ -29,6 +29,10 @@ Run any of these once to enter spec-aware mode for the session. The agent stays 
 
 Vibe mode (no slash command) is also valid — SteadySpec stays out of the way.
 
+### Workflow scripts (Claude Code only, v0.2.1+)
+
+After `init`, `.claude/workflows/` contains 4 deterministic execution scripts (`steadyspec-*.js`) that mirror the verb-flow logic with explicit phase gating and schema-validated output. These are invoked via Claude Code's Workflow tool rather than slash commands.
+
 ## Uninstall
 
 SteadySpec does not provide a project-level uninstall command — it would risk deleting your work. Removal is two layers:
@@ -45,6 +49,7 @@ npm uninstall -g steadyspec
 # From the project root, remove SteadySpec's own files only
 rm -rf .claude/skills/steadyspec-*
 rm -rf .claude/commands/steadyspec
+rm -rf .claude/workflows/steadyspec-*
 rm -rf .codex/skills/steadyspec-*
 rm -rf .steadyspec
 # Then open CLAUDE.md and/or AGENTS.md and delete the block between

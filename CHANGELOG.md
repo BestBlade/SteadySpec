@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.1 (alpha)
+
+- **NEW: 4 deterministic Workflow execution scripts** under `en/runtime/claude/workflows/steadyspec-*.js`. Each script mirrors its verb-flow SKILL.md logic but replaces agent-inferred orchestration with deterministic JavaScript execution: `pipeline()` / `parallel()` / `agent()` with JSON Schema-validated structured output. Installs to `<project>/.claude/workflows/` (Claude runtime only; Codex has no Workflow concept).
+- **NEW: `manifest.json` `workflows` array** + `install.workflows.claude` source/target paths.
+- **NEW: `init.js` `installClaudeWorkflows()`** — copies workflow `.js` files into the project for Claude runtime. Codex path unaffected.
+- **NEW: apply workflow `verify` mode** (`--verify`, `args.mode: "verify"`) — re-runs proof signals for already-complete slices to verify they still pass without requiring new implementation.
+- **NEW: all 4 workflows accept optional `changeDir` arg** — prioritizes explicit path over substrate.json over auto-detect. Auto-detect now includes `.meta/changes/` alongside `openspec/changes/` and `docs/changes/`.
+- **FIXED: propose workflow grill prompt** — realigned with grill SKILL.md parking-lot semantics. Parked items are now explicitly NOT new questions; only genuinely unresolved dependencies qualify.
+- **FIXED: archive workflow Gate 1** — now correctly identifies self-referential evidence (requirements that can only be satisfied by archive workflow's own completion) as PASS rather than blocker.
+- **NON-GOAL: no edits to verb-flow or primitive SKILL files.** Workflows are a separate execution layer.
+
 ## 0.2.0 (alpha)
 
 - **NEW: 4 outward verb-flow SKILLs** under `en/flows/steadyspec-<verb>-flow/SKILL.md`. Each verb is a small closed-loop orchestrating primitives — `explore-flow` aggregates project status or thinks topically; `propose-flow` runs grill + (optional) debate before writing a proposal; `apply-flow` runs slice-by-slice with TDD discipline and 4-option drift handling; `archive-flow` runs review + doc-sync auto-scan + confirmed_by gate before writing the archive.

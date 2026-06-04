@@ -63,7 +63,9 @@ steadyspec/
     router/             # steadyspec-workflow (internal router, called by verb-flows)
     adoption/           # steadyspec-adopt (governance level chooser)
     runtime/
-      claude/commands/steadyspec/    # 4 thin-pointer slash commands (Claude)
+      claude/
+        commands/steadyspec/         # 4 thin-pointer slash commands
+        workflows/                   # 4 deterministic execution scripts (NEW in v0.2.1)
       codex/agents/                  # 4 yaml interface descriptors (Codex)
   bin/
     init.js             # the only CLI command in v0.2-alpha
