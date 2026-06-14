@@ -1,6 +1,6 @@
 ---
 name: steadyspec-archive-flow
-description: SteadySpec archive verb. Close a change with no silent close — runs review-against-intent, doc-sync auto-scan, confirmed_by gate, and rollup-trigger check, all gating the actual archive write. Triggers on `/steadyspec:archive <change-id>` and on user phrases like "close this change", "archive 099", "wrap up the change". The change-id is the substrate's id for the change to archive.
+description: SteadySpec archive verb. Close a change with no silent close - runs review-against-intent, doc-sync auto-scan, confirmed_by gate, completeness, durable truth gates, and rollup-trigger check, all gating the actual archive write. Triggers on `/steadyspec:archive <change-id>` and on user phrases like "close this change", "archive 099", "wrap up the change". The change-id is the substrate's id for the change to archive.
 ---
 
 # archive-flow
@@ -16,19 +16,21 @@ The fourth of the four SteadySpec verbs. This skill is an orchestration of primi
 
 ## Inputs to gather
 
-1. The change directory (`<substrate>/changes/<change-id>/`) and all artifacts in it: proposal.md, evidence.md, any debt / fallback / finding records, any human-decision-records linked to this change.
+1. The change directory (`<substrate>/changes/<change-id>/`) and all artifacts in it: proposal.md, evidence.md, decision ledger, attention report, any trust checkpoint, handoff snapshot, debt / fallback / finding records, and any human-decision-records linked to this change.
 2. `git diff` between the change's start state and current HEAD — list of changed source files.
 3. Substrate convention for archive location (e.g. OpenSpec moves to `openspec/changes/archive/<change-id>/`).
+4. Public docs or section anchors cited by the proposed archive.
 
 ## Gates (must pass in order; any STOP halts archive write)
 
-archive-flow runs four gates. Each gate has a real check, not a polite suggestion. If any gate fails, the verb reports the failure and does not write the archive.
+archive-flow runs five gates. Each gate has a real check, not a polite suggestion. If any gate fails, the verb reports the failure and does not write the archive.
 
 ### Gate 1: review-against-intent
 
 The situation calls for `steadyspec-review-against-intent` — surface this; let the agent reach for it based on its description. Review classifies findings as pass / blocker / accepted-debt / doc-sync-required.
 
 - If any blocker: STOP. Report blocker. User must address before re-running archive.
+- Also review responsibility drift: any low-risk agent-owned decision that should have been user-owned or medium/high risk is a blocker unless the user accepts and records the ownership correction.
 
 ### Gate 2: doc-sync auto-scan
 
@@ -54,9 +56,18 @@ List all human-decision-record files linked by this change. For file substrates,
 
 archive-flow always writes a complete archive. Verify the archive.md fields can be filled from real artifacts: final decisions, preserved rejected alternatives, accepted debt + follow-up, fallback (if any), human-decision-record links, drift events from evidence, strategy-rollup link (if rollup ran). If any required field has no source: STOP. Report missing source. (Partial archives — specs-only or skeleton entries — are NOT created by archive-flow. If a user wants to preserve specs without a full archive, they manually move files and skip archive-flow.)
 
+### Gate 5: durable truth gates
+
+Before writing archive.md:
+
+1. Verify that citations to document sections resolve to real headings or anchors. Missing anchors are STOP, not prose cleanup.
+2. Check whether the archive converts fallback, accepted debt, or unverified manual checks into proof. If yes, STOP and rewrite the claim.
+3. Surface cross-change doc staleness candidates as strategy-rollup input. Do not auto-edit docs and do not block archive by default unless a must-update doc from Gate 2 is unresolved.
+4. Treat structural rot findings only as external proof input. Do not invent linter, complexity, or architecture metrics inside archive-flow.
+
 ## Rollup trigger check (after gates pass, before write)
 
-Read the last 10 archived changes' debt / fallback / finding fields. If 3 or more mention the same module or keyword, the situation calls for `steadyspec-strategy-rollup` — surface this; let the agent reach for rollup based on its description. Per CON-9 and the user's standing E=auto preference (recorded in v0.2-alpha grill answers), rollup may auto-run; record its output digest as a sibling artifact and reference it from the archive.md.
+Read the last 10 archived changes' debt / fallback / finding fields. If 3 or more mention the same module or keyword, the situation calls for `steadyspec-strategy-rollup` — surface this; let the agent reach for rollup based on its description. Per CON-9 and the user's standing E=auto preference (recorded in prior grill answers), rollup may auto-run; record its output digest as a sibling artifact and reference it from the archive.md.
 
 ## Archive write
 
@@ -64,7 +75,7 @@ Per CON-9 half-auto, ask the user "ready to write archive? auto / step-through /
 
 On auto / step-through:
 
-1. Write `<substrate>/changes/<change-id>/archive.md` (or substrate's equivalent) with the complete fields verified in Gate 4 + rollup link if any.
+1. Write `<substrate>/changes/<change-id>/archive.md` (or substrate's equivalent) with the complete fields verified in Gate 4, the durable truth results from Gate 5, and rollup link if any.
 2. Move the change directory to the substrate's archive location (e.g. `openspec/changes/archive/<change-id>/` for OpenSpec).
 
 On cancel: do not write or move. Preserve gate outputs for resumed archive-flow invocation.
@@ -78,7 +89,8 @@ Aggregate read across all reads in this verb invocation should stay under approx
 The verb's report contains:
 
 - **Change id** and final archive location
-- **Gate results**: review status / doc-sync touched-docs list / confirmed_by status / completeness verified
+- **Gate results**: review status / doc-sync touched-docs list / confirmed_by status / completeness verified / durable truth verified
+- **Attention report**: must-read ownership or risk items preserved in the final record
 - **Rollup**: triggered? digest path if yes
 - **Drift events** carried from evidence.md (summary)
 - **Final decisions** + accepted debt + fallback + follow-up triggers
@@ -89,3 +101,5 @@ The verb's report contains:
 - **FM-prose-hides-decisions:** human-owned decisions, accepted debt, fallback, and strategy signals must be named items in archive.md, not buried in narrative paragraphs that read smoothly but hide responsibility.
 - **FM-must-update-doc-skipped:** a `must-update` doc found in Gate 2 but unchecked is a Gate 2 STOP, not a "should-check" downgrade. Confidence levels are not negotiable to keep momentum.
 - **FM-fallback-as-evidence:** a fallback path is residual risk, not evidence that intent was met. Same FM as apply-flow; restated here because archive is the last gate.
+- **FM-anchor-fiction:** archive citations must not point to headings or anchors that do not exist.
+- **FM-risk-misclassification:** archive must not close when a hard high-risk trigger was treated as low-risk agent-owned work.

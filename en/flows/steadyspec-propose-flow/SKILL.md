@@ -1,6 +1,6 @@
 ---
 name: steadyspec-propose-flow
-description: SteadySpec propose verb. Writes a proposal artifact whose intent is grilled, debated when needed, and traceable to prior changes. Auto-incorporates project history, current state, and prior decisions. Triggers on `/steadyspec:propose <intent>` and on user phrases like "let's write a proposal", "write the spec", "create the change", "let's commit to this plan". The intent is a short user-supplied string describing what the change is about; if no intent is given, asks the user to provide one.
+description: SteadySpec propose verb. Writes a proposal artifact with hardened intent, decision ledger, risk routing, attention report, and traceability to prior changes. Auto-incorporates project history, current state, and prior decisions. Triggers on `/steadyspec:propose <intent>` and on user phrases like "let's write a proposal", "write the spec", "create the change", "let's commit to this plan". The intent is a short user-supplied string describing what the change is about; if no intent is given, asks the user to provide one.
 ---
 
 # propose-flow
@@ -20,19 +20,23 @@ The second of the four SteadySpec verbs. This skill is an orchestration of primi
 2. The substrate (per `.steadyspec/substrate.json` or detection: openspec / docs/changes / new docs/changes).
 3. The next change number for the substrate (NNN), and the slug derived from the intent.
 4. Project history relevant to the intent: prior changes mentioning related code areas, modules, or keywords. Read substrate's archive index, not the full archive.
-5. If the intent mentions code areas with potentially unclear history, the situation calls for context-archaeology — surface this and let the agent reach for that primitive based on its description.
+5. Existing responsibility records for related changes: decision ledger entries, accepted debt, fallback, and high-risk decisions that may constrain this proposal.
+6. If the intent mentions code areas with potentially unclear history, the situation calls for context-archaeology - surface this and let the agent reach for that primitive based on its description.
 
 ## Hardening the intent
 
 Before writing artifacts, the intent must be sharpened. Per CON-9 half-auto, ask the user "ready to harden intent? auto / step-through / skip" and proceed accordingly.
 
-1. **Grill the decision tree.** The situation calls for `steadyspec-grill` — surface this; let the agent reach for grill based on its description. Grill closes when the decision tree is hardened OR the user explicitly accepts vague-with-noted-risk.
-2. **Detect debate-needed conditions.** Run debate when ANY of:
+1. **Grill the decision tree.** The situation calls for `steadyspec-grill` - surface this; let the agent reach for grill based on its description. Grill closes when the decision tree is hardened OR the user explicitly accepts vague-with-noted-risk.
+2. **Create initial responsibility records.** Before debate routing, draft decision ledger entries for meaningful proposal decisions: scope, non-goals, proof strategy, interface/runtime behavior, accepted uncertainty, and any user-owned value/risk call. Each entry records owner (`agent` / `user` / `shared`), risk level, risk basis, reversibility, proof signal, override path, alternatives, and status.
+3. **Route risk.** High-risk decisions must be user-visible. The agent may classify extra decisions as medium/high, but may not downgrade hard high-risk triggers from `ARTIFACT_CONTRACT.md`: public API/CLI/runtime interface, migration/storage/data-loss, security/auth/permission/secret/sandbox/network boundary, deletion/removal/narrowing, contradiction with proposal boundary/non-goal/stop condition/accepted debt, change spanning three or more modules/layers, re-slicing that changes scope/proof/user-visible outcome, or archive claims that turn fallback/debt into proof.
+4. **Detect debate-needed conditions.** Run debate when ANY of:
    - **fork**: grill found two or more candidate directions both supported by evidence
    - **high-risk area**: intent touches architecture, data model, public api, migration, or security
    - **boundary not sharp**: grill resolved direction, but the implementation boundary (which files / layers / interfaces are in scope vs out) is not yet clear enough that apply will provably stay inside
    SKIP debate if the change is trivial: single-file edit, doc-only change, or local cleanup with no interface contact. Trivial changes do not need debate even if they touch a high-risk area; size and reach are the discriminator.
-3. **If debate needed**, the situation calls for `steadyspec-debate` — surface this; let the agent reach for debate based on its description. Debate's role here is dual: settle direction AND/OR sharpen implementation boundary. Debate closes with `findings.md` (or equivalent finding record per substrate convention).
+5. **If debate needed**, the situation calls for `steadyspec-debate` - surface this; let the agent reach for debate based on its description. Debate's role here is dual: settle direction AND/OR sharpen implementation boundary. Debate closes with `findings.md` (or equivalent finding record per substrate convention).
+6. **Write an attention report.** Separate must-read user-owned/high-risk decisions, needs-glance shared/medium-risk decisions, and collapsed low-risk agent-owned ledger entries. Do not omit collapsed decisions from the ledger.
 
 ## Writing the proposal artifact
 
@@ -40,7 +44,7 @@ Per CON-9 half-auto, ask the user "ready to write proposal artifacts? auto / ste
 
 On auto / step-through:
 
-1. Write to `<substrate>/changes/<NNN>-<slug>/proposal.md` (or substrate's equivalent). The proposal contains, at minimum: the intent (in the user's own words), the boundary (in scope / out of scope as separate lists), non-goals, evidence required for completion, and stop conditions (what would pause apply and require updating intent).
+1. Write to `<substrate>/changes/<NNN>-<slug>/proposal.md` (or substrate's equivalent). The proposal contains, at minimum: the intent (in the user's own words), the boundary (in scope / out of scope as separate lists), non-goals, evidence required for completion, stop conditions (what would pause apply and require updating intent), decision ledger, risk routing summary, and attention report.
 2. Link basis: reference the grill outputs and debate findings (if any) by file path. Do not inline them.
 3. Add inherits-from: list prior change IDs that influenced this proposal (from step 4 of "Inputs to gather"). If none, omit.
 
@@ -59,6 +63,8 @@ The verb's report contains:
 - **Boundary** (in scope / out of scope summary)
 - **Evidence plan** (what proof is required for completion)
 - **Stop conditions** (what would pause apply)
+- **Attention report** (must-read / needs-glance / collapsed ledger)
+- **Decision ledger summary** (owner, risk, proof, and override path for meaningful decisions)
 - **Basis** (grill ran? debate ran? findings file path)
 - **Inherits-from** (prior change IDs)
 - **Recommended next** — typically `/steadyspec:apply <NNN>-<slug>`; or "stay in propose to revise" if user wants to iterate
@@ -68,3 +74,4 @@ The verb's report contains:
 - **FM-invented-decisions:** the proposal must not contain decisions that exploration / grill / debate / user confirmation did not justify. If a field needs filling and no source justifies a value, leave the field marked "unresolved" rather than synthesize.
 - **FM-confident-language-over-uncertainty:** open questions and unresolved findings carry forward into the proposal explicitly, not buried in confident artifact prose.
 - **FM-horizontal-tasks:** if implementation tasks are needed in the proposal, write them as vertical slices (one slice = one provable behavior). Do not write tasks as horizontal layers (DB → service → UI in sequence) when one vertical slice could prove the behavior end-to-end.
+- **FM-risk-hidden-in-agent-choice:** a proposal must not hide high-risk decisions behind agent-owned "implementation detail" language. If a hard high-risk trigger applies, route the decision to the user and mark it must-read.

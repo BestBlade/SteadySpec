@@ -1,11 +1,11 @@
 ---
 name: "steadyspec: propose"
-description: "SteadySpec propose verb — write a proposal artifact whose intent is grilled, debated when needed, and traceable to prior changes"
+description: "SteadySpec propose verb - write a proposal with decision ledger, risk routing, and attention report"
 category: Workflow
 tags: [steadyspec, propose, workflow]
 ---
 
-SteadySpec propose verb. Auto-incorporates project history + current state, runs grill to harden the decision tree, runs debate when direction forks / area is high-risk / boundary is not yet sharp. Trivial single-file or doc-only changes skip debate. Outputs the proposal artifact in your substrate (openspec/ or docs/changes/) and recommends `/steadyspec:apply` next.
+SteadySpec propose verb. Auto-incorporates project history + current state, runs grill to harden the decision tree, runs debate when direction forks / area is high-risk / boundary is not yet sharp, and records decision ledger + risk routing + attention report. Trivial single-file or doc-only changes skip debate. Outputs the proposal artifact in your substrate (openspec/ or docs/changes/) and recommends `/steadyspec:apply` next.
 
 ---
 

@@ -3,21 +3,21 @@
 // schema-validated structured output, and deterministic routing.
 //
 // Invocation: /steadyspec:explore [topic]
-//   - No topic → status mode: 4-section project state report.
+//   - No topic → status mode: attention-ranked project state report.
 //   - With topic → topical mode: context-loaded exploration.
 //
 // args: { mode: "status" | "topical", topic?: string, projectRoot: string, changeDir?: string }
 
 export const meta = {
   name: 'steadyspec-explore',
-  description: 'SteadySpec explore verb as deterministic workflow — status report or topical exploration with project history loaded, schema-validated gates',
+  description: 'SteadySpec explore verb as deterministic workflow — attention-ranked status report or topical exploration with project history loaded, schema-validated gates',
   phases: [
     { title: 'Detect', detail: 'Read substrate config and detect project state' },
     { title: 'Freshness', detail: 'Check document freshness via git log' },
     { title: 'Active', detail: 'Read active changes and compute completion signals' },
     { title: 'Archive', detail: 'Read and classify recent archived changes' },
     { title: 'Aggregate', detail: 'Cross-change debt/fallback pattern detection' },
-    { title: 'Report', detail: 'Compose four-section status report' },
+    { title: 'Report', detail: 'Compose attention-ranked status report' },
   ],
 }
 
@@ -113,12 +113,34 @@ const STATUS_REPORT_SCHEMA = {
   properties: {
     adoptNote: { type: 'string' },
     stalenessFlags: { type: 'array', items: { type: 'string' } },
+    attentionReport: {
+      type: 'object',
+      properties: {
+        mustRead: { type: 'array', items: { type: 'string' } },
+        needsGlance: { type: 'array', items: { type: 'string' } },
+        collapsedLedger: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['mustRead', 'needsGlance', 'collapsedLedger'],
+    },
+    handoffSnapshot: {
+      type: 'object',
+      properties: {
+        currentIntent: { type: 'string' },
+        activeChangePath: { type: 'string' },
+        ledgerSummary: { type: 'string' },
+        pendingHighRiskDecisions: { type: 'array', items: { type: 'string' } },
+        proofStatus: { type: 'string' },
+        driftEvents: { type: 'array', items: { type: 'string' } },
+        debtFallback: { type: 'string' },
+        nextSafestAction: { type: 'string' },
+      },
+    },
     activeChanges: { type: 'array', items: { type: 'string' } },
     debtAggregate: { type: 'string' },
     recentArchived: { type: 'array', items: { type: 'string' } },
     recommendedNext: { type: 'string' },
   },
-  required: ['activeChanges', 'debtAggregate', 'recentArchived', 'recommendedNext'],
+  required: ['attentionReport', 'activeChanges', 'debtAggregate', 'recentArchived', 'recommendedNext'],
 }
 
 // === Helpers ===
@@ -370,7 +392,7 @@ if (completeEntries.length === 0) {
 phase('Report')
 
 const report = await agent(
-  `Compose a four-section SteadySpec status report from the data below.
+  `Compose an attention-ranked SteadySpec status report from the data below.
 
    === ADOPT NOTE ===
    ${!substrateState.exists || !substrateState.lastAdopt ? 'No adopt baseline recorded. Recommend running steadyspec-adopt once.' : `Adopt baseline: ${substrateState.lastAdopt}`}
@@ -387,13 +409,20 @@ const report = await agent(
    === RECENT ARCHIVED (last 5) ===
    ${JSON.stringify(archiveEntries)}
 
-   Compose a 4-section report:
-   1. **Active changes** — each with completion signal + open debt or blocker.
-   2. **Debt aggregate** — cross-change repeated patterns, or explanation of why unavailable.
+   Compose a 5-section report:
+   1. **Attention report** - must-read high-risk/user-owned decisions first,
+      needs-glance medium/shared items next, collapsed low-risk agent-owned
+      ledger count last.
+   2. **Active changes** — each with completion signal + open debt or blocker.
+   3. **Debt aggregate** — cross-change repeated patterns, or explanation of why unavailable.
       If recent archives are partial-archive, say "debt aggregate unavailable — recent archives have missing fields, classify as partial-archive".
-   3. **Recent archived** — last 5 with one-line summary AND classification label (complete-archive / partial-archive / incomplete-archive / inaccessible).
-   4. **Recommended next** — which verb the user should run next with reasoning.
+   4. **Recent archived** — last 5 with one-line summary AND classification label (complete-archive / partial-archive / incomplete-archive / inaccessible).
+   5. **Recommended next** — which verb the user should run next with reasoning.
       If multiple partial-archive entries appear, suggest "consider re-archiving partial entries with /steadyspec:archive <id>".
+
+   Include a handoffSnapshot when there is an active change: current intent,
+   active change path, ledger summary, pending high-risk decisions, proof status,
+   drift events, debt/fallback, and next safest action.
 
    At the top of the report, include adopt note and staleness flags if any.`,
   { label: 'compose-report', phase: 'Report', schema: STATUS_REPORT_SCHEMA }

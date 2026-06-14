@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 (alpha)
+
+- **NEW: Attention & Responsibility Model** across the public method and reference skill pack. v0.3 adds decision ownership ledger, risk routing, attention report, trust checkpoint, handoff snapshot, re-slice event, and durable truth gate contracts.
+- **NEW: `/steadyspec:verify` trust checkpoint** with `steadyspec-verify-flow`, Claude slash command, Codex descriptor, and Claude workflow script. Verify checks output-vs-intent, evidence credibility, risk routing, debt/fallback visibility, and next safest action without archiving.
+- **NEW: v0.3 artifact contract anchors** in `ARTIFACT_CONTRACT.md`, including machine-readable sections for ledger, risk routing, attention report, re-slice event, trust checkpoint, handoff snapshot, and durable truth gates.
+- **UPDATED: propose/apply/explore/archive flows** now carry responsibility routing: propose writes ledger/risk/attention records; apply links proof to decisions and records re-slice events; explore emits attention-ranked status and handoff snapshots; archive adds responsibility drift review and durable truth gates.
+- **UPDATED: runtime surfaces** for Claude and Codex now include the verify verb and install guidance.
+- **UPDATED: validator** now checks the v0.3 responsibility contract and verify runtime surface.
+- **NON-GOAL: ECC is not imported.** ECC remains prior art and optional lower-level proof/review material, not SteadySpec's product identity.
+- **NON-GOAL: issue-tracker substrates remain experimental.** v0.3 prioritizes responsibility routing before substrate expansion.
+
 ## 0.2.1 (alpha)
 
 - **NEW: 4 deterministic Workflow execution scripts** under `en/runtime/claude/workflows/steadyspec-*.js`. Each script mirrors its verb-flow SKILL.md logic but replaces agent-inferred orchestration with deterministic JavaScript execution: `pipeline()` / `parallel()` / `agent()` with JSON Schema-validated structured output. Installs to `<project>/.claude/workflows/` (Claude runtime only; Codex has no Workflow concept).

@@ -158,9 +158,57 @@ function checkPrimitiveByteEquivalence(root) {
   } catch {
     fail(
       "primitive / router / adoption SKILLs have uncommitted edits — " +
-        "v0.2-alpha CON-7 forbids editing existing SKILLs. " +
+        "primitive/router/adoption SKILLs are protected from uncommitted edits. " +
         "Commit the change first if it is intentional, or revert.",
     );
+  }
+}
+
+function checkV03ResponsibilityModel(root, manifest) {
+  const contractPath = path.join(root, "ARTIFACT_CONTRACT.md");
+  const contract = readText(contractPath);
+  const requiredContractAnchors = [
+    "## v0.3 Responsibility Model",
+    "### Decision Ownership Ledger",
+    "### Risk Routing",
+    "### Attention Report",
+    "### Apply Re-slice Event",
+    "### Trust Checkpoint",
+    "### Handoff Snapshot",
+    "### Durable Truth Gates",
+  ];
+  for (const anchor of requiredContractAnchors) {
+    if (!contract.includes(anchor)) {
+      fail(`ARTIFACT_CONTRACT.md missing v0.3 anchor: ${anchor}`);
+    }
+  }
+
+  const requiredFlow = "flows/steadyspec-verify-flow";
+  if (!(manifest.flows || []).includes(requiredFlow)) {
+    fail(`manifest.flows missing ${requiredFlow}`);
+  }
+
+  const verifyFlow = path.join(root, "en", requiredFlow, "SKILL.md");
+  if (!fs.existsSync(verifyFlow)) {
+    fail(`missing flow SKILL: en/${requiredFlow}/SKILL.md`);
+  }
+
+  const verifyCommand = path.join(root, "en", "runtime", "claude", "commands", "steadyspec", "verify.md");
+  if (!fs.existsSync(verifyCommand)) {
+    fail("missing Claude verify command: en/runtime/claude/commands/steadyspec/verify.md");
+  }
+
+  const verifyAgent = path.join(root, "en", "runtime", "codex", "agents", "steadyspec-verify-flow.yaml");
+  if (!fs.existsSync(verifyAgent)) {
+    fail("missing Codex verify descriptor: en/runtime/codex/agents/steadyspec-verify-flow.yaml");
+  }
+
+  const verifyWorkflow = "runtime/claude/workflows/steadyspec-verify.js";
+  if (!(manifest.workflows || []).includes(verifyWorkflow)) {
+    fail(`manifest.workflows missing ${verifyWorkflow}`);
+  }
+  if (!fs.existsSync(path.join(root, "en", verifyWorkflow))) {
+    fail(`missing Claude verify workflow: en/${verifyWorkflow}`);
   }
 }
 
@@ -230,11 +278,12 @@ function main() {
     }
   }
 
-  // v0.2-alpha rules
+  // Package integrity rules
   checkCjkBan(root);
   checkRequiredRootFiles(root);
   checkFlowsReferencePrimitives(root, manifest);
   checkPrimitiveByteEquivalence(root);
+  checkV03ResponsibilityModel(root, manifest);
 
   console.log("Package is valid.");
 }

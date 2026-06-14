@@ -221,11 +221,11 @@ async function resolveSubstrate(project, args) {
     };
   }
   if (detected.includes("issue-tracker")) {
-    // v0.2-alpha treats issue-tracker as no-substrate per proposal Step 7
+    // v0.3-alpha still treats issue-tracker as experimental and falls back to docs.
     return {
       primary: "docs",
       detected,
-      note: "Issue-tracker detected but not used as substrate in v0.2-alpha. Will create docs/changes/ as fallback.",
+      note: "Issue-tracker detected but not used as primary substrate in v0.3-alpha. Will create docs/changes/ as fallback.",
       source: "auto-fallback",
     };
   }
@@ -394,13 +394,14 @@ function injectInstructionBlock(plan, project, manifest, substrate, substrateFil
   const entrySkill = manifest.install.entrySkill;
   const routerSkill = manifest.install.routerSkill;
   const snippet = `
-This project uses SteadySpec — anti-drift methodology with four outward verbs (\`/steadyspec:explore\` / \`:propose\` / \`:apply\` / \`:archive\`).
+This project uses SteadySpec - anti-drift methodology with five outward verbs (\`/steadyspec:explore\` / \`:propose\` / \`:apply\` / \`:verify\` / \`:archive\`).
 
 Quick start:
 - \`/steadyspec:explore\` (no topic) — status report; \`/steadyspec:explore <topic>\` — topical exploration.
 - \`/steadyspec:propose <intent>\` — write a proposal with grill + (optional) debate.
 - \`/steadyspec:apply <change-id>\` — implement slice-by-slice with drift gates.
-- \`/steadyspec:archive <change-id>\` — close with review + doc-sync + confirmed_by gates.
+- \`/steadyspec:verify <change-id>\` - run a trust checkpoint before archive or handoff.
+- \`/steadyspec:archive <change-id>\` - close with review + doc-sync + confirmed_by + durable truth gates.
 
 Internal: skills under \`${path.relative(project, plan.skillsDir).replace(/\\/g, "/")}\` (verb-flows: \`steadyspec-<verb>-flow\`; primitives: \`steadyspec-<name>\`).
 Substrate state: \`${path.relative(project, substrateFile).replace(/\\/g, "/")}\` (${substrate.note}).
@@ -439,6 +440,7 @@ function printQuickStart(project, plans, substrate) {
   console.log("Next steps:");
   console.log(`  - Try \`${verbsPath}\` to see the project status.`);
   console.log(`  - Or \`${plans[0].runtime === "claude" ? "/steadyspec:propose" : "(invoke `steadyspec-propose-flow`)"} <intent>\` to record new work.`);
+  console.log(`  - Run \`${plans[0].runtime === "claude" ? "/steadyspec:verify" : "(invoke `steadyspec-verify-flow`)"} <change-id>\` for a trust checkpoint before archive or handoff.`);
   console.log(`  - Substrate: ${substrate.primary === "openspec" ? "openspec/" : "docs/changes/"}.`);
   console.log(`  - To remove SteadySpec from this project, see QUICKSTART.md "Uninstall" section.`);
 }

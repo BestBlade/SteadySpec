@@ -87,6 +87,12 @@ const SLICE_RESULT_SCHEMA = {
     coverageLimit: { type: 'string' },
     fallback: { type: 'string' },
     acceptedDebt: { type: 'string' },
+    linkedDecisionIds: { type: 'array', items: { type: 'string' } },
+    reSliceNeeded: { type: 'boolean' },
+    reSliceType: { type: 'string', enum: ['proposal-gap', 'implementation-discovery', 'proof-split', 'user-override', ''] },
+    reSliceImpact: { type: 'string' },
+    reSliceRiskLevel: { type: 'string', enum: ['low', 'medium', 'high', ''] },
+    reSliceOwner: { type: 'string', enum: ['agent', 'user', 'shared', ''] },
     driftDetected: { type: 'boolean' },
     driftDetail: { type: 'string' },
     driftOption: { type: 'string', enum: ['patch-intent', 'accept-limitation', 'revert-slice', 'stop', ''] },
@@ -103,8 +109,9 @@ const EVIDENCE_ENTRY_SCHEMA = {
     coverageLimit: { type: 'string' },
     fallback: { type: 'string' },
     acceptedDebt: { type: 'string' },
+    linkedDecisionIds: { type: 'string' },
   },
-  required: ['proofCommand', 'result', 'outputSummary', 'coverageLimit', 'fallback', 'acceptedDebt'],
+  required: ['proofCommand', 'result', 'outputSummary', 'coverageLimit', 'fallback', 'acceptedDebt', 'linkedDecisionIds'],
 }
 
 const EVIDENCE_PATH_CHECK_SCHEMA = {
@@ -178,6 +185,7 @@ function renderEvidenceEntry(entry) {
 | Result | ${tableEscape(entry.result)} |
 | Output Summary | ${tableEscape(entry.outputSummary)} |
 | Coverage Limit | ${tableEscape(entry.coverageLimit)} |
+| Linked Decisions | ${tableEscape(entry.linkedDecisionIds)} |
 | Fallback | ${tableEscape(entry.fallback)} |
 | Accepted Debt | ${tableEscape(entry.acceptedDebt)} |
 `
@@ -266,6 +274,7 @@ phase('Slice')
 const pendingSlices = context.slices.filter(s => s.status === 'pending' || s.status === 'in-progress')
 const sliceResults = []
 const driftEvents = [...(context.priorDriftEvents || [])]
+const reSliceEvents = []
 let stopRequested = false
 
 for (let i = 0; i < pendingSlices.length && !stopRequested; i++) {
@@ -371,6 +380,11 @@ for (let i = 0; i < pendingSlices.length && !stopRequested; i++) {
      3. Do NOT anticipate the next slice.
      4. Do NOT touch out-of-scope areas.
      5. If the implementation reveals the intent/boundary was wrong, report it as drift.
+     6. Link the proof to decision ledger ids when proposal.md contains a ledger.
+     7. If the original slice shape needs to change, report reSliceNeeded=true with:
+        proposal-gap, implementation-discovery, proof-split, or user-override.
+        If re-slicing changes scope, proof strategy, or user-visible outcome,
+        set reSliceRiskLevel="high" and reSliceOwner="user".
 
      After implementing, run the proof command. If GREEN: report pass.
      If still RED: iterate within this slice (do not move to next slice).
@@ -426,6 +440,23 @@ for (let i = 0; i < pendingSlices.length && !stopRequested; i++) {
     }
   }
 
+  if (impl.reSliceNeeded) {
+    const reSliceEvent = {
+      slice: slice.index,
+      type: impl.reSliceType || 'implementation-discovery',
+      impact: impl.reSliceImpact || 'No impact detail recorded.',
+      riskLevel: impl.reSliceRiskLevel || 'medium',
+      owner: impl.reSliceOwner || 'shared',
+      timestamp: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    }
+    reSliceEvents.push(reSliceEvent)
+    log(`RE-SLICE EVENT in slice ${slice.index}: ${reSliceEvent.type} (${reSliceEvent.riskLevel}/${reSliceEvent.owner})`)
+    if (reSliceEvent.riskLevel === 'high' || reSliceEvent.owner === 'user') {
+      stopRequested = true
+      log('STOP: re-slice changes scope/proof/user-visible outcome and requires user ownership.')
+    }
+  }
+
   // Record result
   sliceResults.push({
     sliceIndex: slice.index,
@@ -437,6 +468,8 @@ for (let i = 0; i < pendingSlices.length && !stopRequested; i++) {
     coverageLimit: impl.coverageLimit || proofDef.coverageLimit,
     fallback: impl.fallback || '',
     acceptedDebt: impl.acceptedDebt || '',
+    linkedDecisionIds: impl.linkedDecisionIds || [],
+    reSliceNeeded: impl.reSliceNeeded || false,
     driftDetected: impl.driftDetected || false,
   })
 
@@ -599,6 +632,7 @@ const evidenceEntries = newEvidenceEntries.map(s => ({
   coverageLimit: s.coverageLimit || 'evidence-migration-unavailable',
   fallback: s.fallback || 'None',
   acceptedDebt: s.acceptedDebt || 'None',
+  linkedDecisionIds: (s.linkedDecisionIds || []).join(', ') || 'None',
 }))
 const evidenceFormatValidated = evidenceEntries.every(validateEvidenceEntry)
 const evidenceOverallStatus = stopRequested
@@ -620,17 +654,25 @@ ${evidenceEntries.map(renderEvidenceEntry).join('\n')}
 |-----------|-------|------|--------|
 ${driftEvents.length > 0 ? driftEvents.map(e => `| ${tableEscape(e.timestamp)} | ${tableEscape(e.slice)} | ${tableEscape(e.type)} | ${tableEscape(e.action || e.detail)} |`).join('\n') : '| None | None | None | No drift events recorded |'}
 
+## Re-slice Event Log
+
+| Timestamp | Slice | Type | Risk | Owner | Impact |
+|-----------|-------|------|------|-------|--------|
+${reSliceEvents.length > 0 ? reSliceEvents.map(e => `| ${tableEscape(e.timestamp)} | ${tableEscape(e.slice)} | ${tableEscape(e.type)} | ${tableEscape(e.riskLevel)} | ${tableEscape(e.owner)} | ${tableEscape(e.impact)} |`).join('\n') : '| None | None | None | None | None | No re-slice events recorded |'}
+
 ## Summary
 
 - Total slices this invocation: ${sliceResults.length}
 - Slices completed: ${evidenceEntries.filter(e => e.result === 'pass').length}
 - Slices with fallback: ${evidenceEntries.filter(e => e.result === 'fallback').length}
 - Drift events: ${driftEvents.length}
+- Re-slice events: ${reSliceEvents.length}
 - Overall status: ${evidenceOverallStatus}
 `,
   slicesCompleted: evidenceEntries.filter(e => e.result === 'pass').length,
   slicesWithFallback: evidenceEntries.filter(e => e.result === 'fallback').length,
   driftEventCount: driftEvents.length,
+  reSliceEventCount: reSliceEvents.length,
   overallStatus: evidenceOverallStatus,
   provenance: 'workflow-auto-verified',
   evidenceFormatValidated,
@@ -697,14 +739,18 @@ return {
     behavior: s.behavior,
     proofResult: s.proofResult,
     fallback: s.fallback || null,
+    linkedDecisionIds: s.linkedDecisionIds || [],
+    reSliceNeeded: s.reSliceNeeded || false,
     drift: s.driftDetected || false,
   })),
   driftEvents: driftEvents.filter(e => !context.priorDriftEvents?.some(p => p.slice === e.slice && p.type === e.type)),
+  reSliceEvents,
   evidenceMd: evidenceMd?.evidenceMd || null,
   evidenceSummary: evidenceMd ? {
     slicesCompleted: evidenceMd.slicesCompleted,
     slicesWithFallback: evidenceMd.slicesWithFallback,
     driftEventCount: evidenceMd.driftEventCount,
+    reSliceEventCount: evidenceMd.reSliceEventCount,
     overallStatus: evidenceMd.overallStatus,
   } : null,
   remainingSlices: Math.max(0, remainingCount),

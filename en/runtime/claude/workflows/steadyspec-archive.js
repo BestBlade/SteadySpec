@@ -1,9 +1,10 @@
 // SteadySpec archive-flow as deterministic Workflow script.
-// Replaces agent-inferred orchestration with explicit 4-gate execution:
+// Replaces agent-inferred orchestration with explicit 5-gate execution:
 //   Gate 1: review-against-intent
 //   Gate 2: doc-sync auto-scan (3 layers)
 //   Gate 3: confirmed_by gate
 //   Gate 4: completeness check
+//   Gate 5: durable truth gates
 //   Post-gates: rollup trigger → archive write
 //
 // Invocation: /steadyspec:archive <change-id>
@@ -12,13 +13,14 @@
 
 export const meta = {
   name: 'steadyspec-archive',
-  description: 'SteadySpec archive verb as deterministic workflow — 4-gate review with doc-sync scan, confirmed_by, completeness check, rollup trigger, and archive write',
+  description: 'SteadySpec archive verb as deterministic workflow — 5-gate review with doc-sync scan, confirmed_by, completeness check, durable truth gates, rollup trigger, and archive write',
   phases: [
     { title: 'Gather', detail: 'Read change artifacts, git diff, and archive conventions' },
     { title: 'Gate1-Review', detail: 'Gate 1: review implementation against original intent' },
     { title: 'Gate2-DocSync', detail: 'Gate 2: scan docs for staleness, classify must-update/should-check' },
     { title: 'Gate3-Confirm', detail: 'Gate 3: confirmed_by gate for human-owned decisions' },
     { title: 'Gate4-Complete', detail: 'Gate 4: completeness check — all archive fields fillable' },
+    { title: 'Gate5-DurableTruth', detail: 'Gate 5: citation anchors, risk misclassification, and fallback/debt truth' },
     { title: 'Rollup', detail: 'Cross-change pattern detection (≥3 of last 10)' },
     { title: 'Write', detail: 'Write archive.md and move to archive location' },
   ],
@@ -153,6 +155,19 @@ const COMPLETENESS_SCHEMA = {
     driftEventSummary: { type: 'array', items: { type: 'string' } },
   },
   required: ['canFillAllFields', 'missingSources'],
+}
+
+const DURABLE_TRUTH_SCHEMA = {
+  type: 'object',
+  properties: {
+    canProceed: { type: 'boolean' },
+    missingAnchors: { type: 'array', items: { type: 'string' } },
+    fallbackAsProofClaims: { type: 'array', items: { type: 'string' } },
+    riskMisclassifications: { type: 'array', items: { type: 'string' } },
+    docStalenessCandidates: { type: 'array', items: { type: 'string' } },
+    notes: { type: 'string' },
+  },
+  required: ['canProceed', 'missingAnchors', 'fallbackAsProofClaims', 'riskMisclassifications', 'docStalenessCandidates'],
 }
 
 // === Helpers ===
@@ -479,6 +494,54 @@ if (!completeness.canFillAllFields) {
 }
 
 // ─── Rollup Trigger Check ───
+// Gate 5: Durable Truth Gates
+phase('Gate5-DurableTruth')
+
+const durableTruth = await agent(
+  `Run SteadySpec v0.3 durable truth gates for archive "${changeId}".
+
+   CHANGE DIR: ${context.changeDir}
+   PROPOSAL: ${context.proposalPath || 'unknown'}
+   EVIDENCE: ${context.evidencePath || 'unknown'}
+   FINAL DECISIONS: ${JSON.stringify(completeness.finalDecisions || [])}
+   ACCEPTED DEBT: ${JSON.stringify(completeness.acceptedDebt || [])}
+   FALLBACK: ${JSON.stringify(completeness.fallback || [])}
+   REVIEW FINDINGS: ${JSON.stringify(review?.findings || [])}
+
+   Checks:
+   1. Citation anchors: if archive claims will cite document headings or anchors,
+      verify the referenced headings/anchors exist before archive write.
+   2. Fallback/debt truth: detect any claim that converts fallback, accepted debt,
+      or unverified manual checks into proof.
+   3. Risk routing: detect any hard high-risk trigger that was treated as low-risk
+      agent-owned work.
+   4. Doc staleness: surface cross-change doc staleness candidates as strategy
+      input, but do not auto-edit docs and do not block by default.
+
+   canProceed is false if missingAnchors, fallbackAsProofClaims, or
+   riskMisclassifications are non-empty.`,
+  { label: 'gate5-durable-truth', phase: 'Gate5-DurableTruth', schema: DURABLE_TRUTH_SCHEMA }
+)
+
+if (!durableTruth) {
+  log('GATE 5 FAILED: durable truth check could not complete')
+  return { error: 'gate5-durable-truth-failed', changeId }
+}
+
+log(`Gate 5: ${durableTruth.canProceed ? 'PASSED' : 'FAILED'}`)
+
+if (!durableTruth.canProceed) {
+  return {
+    changeId,
+    gate: 5,
+    status: 'blocked',
+    missingAnchors: durableTruth.missingAnchors,
+    fallbackAsProofClaims: durableTruth.fallbackAsProofClaims,
+    riskMisclassifications: durableTruth.riskMisclassifications,
+    recommendedNext: 'Fix durable truth blockers before re-running /steadyspec:archive.',
+  }
+}
+
 phase('Rollup')
 
 const rollup = await agent(
@@ -526,11 +589,14 @@ const archiveResult = await agent(
    Gate 2 (doc-sync): ${docSync.candidates.length} candidates, ${docSync.mustUpdateNotUpdated.length} must-update
    Gate 3 (confirmed_by): ${confirmedByPassed ? 'passed' : 'blocked'}
    Gate 4 (completeness): ${completeness.canFillAllFields ? 'passed' : 'blocked'}
+   Gate 5 (durable truth): ${durableTruth.canProceed ? 'passed' : 'blocked'}
+   Doc staleness candidates: ${JSON.stringify(durableTruth.docStalenessCandidates || [])}
 
    RULES:
    1. Human-owned decisions, accepted debt, fallback, and strategy signals must be NAMED ITEMS in archive.md — not buried in narrative paragraphs.
    2. Each field must be traceable to a source artifact.
-   3. Write the complete archive.md content as markdown.
+   3. Citation anchors must be real; fallback/debt must not be converted into proof.
+   4. Write the complete archive.md content as markdown.
 
    The archive should be placed at: ${context.archiveLocation}/archive.md
    Also provide the git mv command to move the change directory to archive location.`,
@@ -569,6 +635,13 @@ return {
     },
     confirmedBy: confirmedByPassed ? 'passed' : 'blocked',
     completeness: 'passed',
+    durableTruth: 'passed',
+  },
+  durableTruth: {
+    missingAnchors: durableTruth.missingAnchors,
+    fallbackAsProofClaims: durableTruth.fallbackAsProofClaims,
+    riskMisclassifications: durableTruth.riskMisclassifications,
+    docStalenessCandidates: durableTruth.docStalenessCandidates,
   },
   rollup: rollup?.triggered ? {
     triggered: true,

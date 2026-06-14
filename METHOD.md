@@ -59,6 +59,21 @@ The mechanisms are checkpoints along a path that work naturally drifts off of â€
 
 The story above happens to be about code. But the pattern (intent drifts, decisions lose their owner, records stop matching reality) is the same whether you're drafting a contract, writing a research paper, or outlining a novel. Swap the nouns; the drift stays the same.
 
+## Attention And Responsibility
+
+v0.3 adds one cross-cutting question to the eight mechanisms:
+
+> For each meaningful decision, who owns it, how risky is it, and how much user attention does it deserve now?
+
+The answer is a responsibility layer:
+
+1. Record meaningful choices in a decision ownership ledger.
+2. Route hard high-risk decisions to the user.
+3. Collapse low-risk agent-owned detail only after it remains auditable.
+4. Use a trust checkpoint before archive or handoff when confidence matters.
+
+This does not make the method heavier by default. It makes the heavy parts visible only where ownership or risk requires attention.
+
 ---
 
 ## Key Terms
@@ -72,6 +87,9 @@ These appear throughout the mechanisms. Each names the thing whose absence is wh
 | **Output-vs-intent review** | After the work, comparing what was built against the original intent â€” not the tests, not the code quality. "Did we solve the problem we set out to solve?" |
 | **Human-owned decision** | A call about value, risk, priority, or direction that a process can record but cannot make. Only a person can say "this debt is acceptable" or "this risk is mine." |
 | **Drift** | The quiet gap between what was intended and what actually happened. Not a bug. Not a mistake. The natural tendency of work to wander when nobody's watching the boundary. |
+| **Decision ownership ledger** | A record of meaningful decisions with owner, risk, basis, reversibility, proof signal, override path, alternatives, and status. |
+| **Attention report** | A user-facing summary that shows must-read high-risk/user-owned decisions first, then medium/shared items, while keeping low-risk agent-owned decisions auditable. |
+| **Trust checkpoint** | A pre-archive or pre-handoff review that checks output-vs-intent, evidence credibility, risk routing, debt/fallback visibility, and the next safest action. |
 
 Additional vocabulary (working medium, unit of work, finalized record) is defined in context within each mechanism.
 

@@ -1,6 +1,6 @@
 {
   "name": "steadyspec",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Anti-drift methodology packaged as a software SDD reference implementation.",
   "languages": ["en"],
   "install": {
@@ -45,12 +45,14 @@
     "flows/steadyspec-explore-flow",
     "flows/steadyspec-propose-flow",
     "flows/steadyspec-apply-flow",
+    "flows/steadyspec-verify-flow",
     "flows/steadyspec-archive-flow"
   ],
   "workflows": [
     "runtime/claude/workflows/steadyspec-explore.js",
     "runtime/claude/workflows/steadyspec-propose.js",
     "runtime/claude/workflows/steadyspec-apply.js",
+    "runtime/claude/workflows/steadyspec-verify.js",
     "runtime/claude/workflows/steadyspec-archive.js"
   ]
 }

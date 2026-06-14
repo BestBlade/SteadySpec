@@ -1,6 +1,6 @@
 # SteadySpec Quick Start
 
-SteadySpec is a reference skill pack of the anti-drift method. Four outward verbs, each a small closed-loop with anti-drift gates. Read [SCOPE.md](SCOPE.md) before adopting.
+SteadySpec is a reference skill pack of the anti-drift method. Five outward verbs, each a small closed-loop with anti-drift gates and responsibility routing. Read [SCOPE.md](SCOPE.md) before adopting.
 
 ## Install
 
@@ -16,7 +16,7 @@ steadyspec init
 
 Auto-detects `.claude/` or `.codex/` in your project. Pass `--runtime claude` or `--runtime codex` to override. If both `openspec/` and `docs/changes/` exist, init prompts which substrate is canonical (`--substrate openspec` or `--substrate docs` to bypass the prompt).
 
-## The four verbs
+## The five verbs
 
 Run any of these once to enter spec-aware mode for the session. The agent stays SteadySpec-aware until the session ends.
 
@@ -25,13 +25,14 @@ Run any of these once to enter spec-aware mode for the session. The agent stays 
 | `/steadyspec:explore` | Ask "what's the project state, what debt, what's next" (no topic), OR think through a topic with project history loaded (with topic) | `/steadyspec:explore` for status; `/steadyspec:explore "refactor auth"` for topical |
 | `/steadyspec:propose` | Record intent for new work; auto-runs context-archaeology + grill + (optionally) debate to converge on a verified direction | `/steadyspec:propose "unify session timeout"` |
 | `/steadyspec:apply` | Implement a recorded change slice-by-slice; pauses on drift; offers in-place intent patch | `/steadyspec:apply 099` |
-| `/steadyspec:archive` | Close a change; auto-runs review-against-intent + doc-sync auto-scan + confirmed_by gate + rollup-trigger check | `/steadyspec:archive 099` |
+| `/steadyspec:verify` | Run a trust checkpoint before archive, handoff, or risky continuation | `/steadyspec:verify 099` |
+| `/steadyspec:archive` | Close a change; auto-runs review-against-intent + doc-sync auto-scan + confirmed_by gate + durable truth gates + rollup-trigger check | `/steadyspec:archive 099` |
 
 Vibe mode (no slash command) is also valid — SteadySpec stays out of the way.
 
 ### Workflow scripts (Claude Code only, v0.2.1+)
 
-After `init`, `.claude/workflows/` contains 4 deterministic execution scripts (`steadyspec-*.js`) that mirror the verb-flow logic with explicit phase gating and schema-validated output. These are invoked via Claude Code's Workflow tool rather than slash commands.
+After `init`, `.claude/workflows/` contains deterministic execution scripts (`steadyspec-*.js`) that mirror the verb-flow logic with explicit phase gating and schema-validated output. v0.3 includes the trust-checkpoint workflow `steadyspec-verify.js`. These are invoked via Claude Code's Workflow tool rather than slash commands.
 
 ## Uninstall
 
@@ -61,5 +62,5 @@ rm -rf .steadyspec
 ## Read next
 
 - [SCOPE.md](SCOPE.md) — agent tier matrix, single-developer assumption, what SteadySpec does NOT promise.
-- [METHOD.md](METHOD.md) — the portable anti-drift method. The four verbs are one implementation; the method extends.
+- [METHOD.md](METHOD.md) - the portable anti-drift method. The five verbs are one implementation; the method extends.
 - [README.md](README.md) — full product overview, OpenSpec coexistence guidance, stability surface.

@@ -25,6 +25,7 @@ For other primitives, subagents are execution aids, not proof. Use them only for
 - Plain docs: `docs/changes/<id>/{intent,evidence,review,doc-sync}.md`.
 - OpenSpec substrate: `openspec/changes/<id>/{proposal,tasks}.md` plus `.agent/{evidence,review,doc-sync}.md` when no project-local names exist.
 - Issue tracker: issue body sections `## Intent`, `## Evidence`, `## Review`, and `## Doc Sync`.
+- v0.3 responsibility artifacts may live inside proposal/evidence/review/archive or as siblings: decision ledger, attention report, `trust-checkpoint.md`, `handoff-snapshot.md`, and re-slice events.
 
 ## Artifact State
 
@@ -34,6 +35,8 @@ For other primitives, subagents are execution aids, not proof. Use them only for
   - evidence: proof signal, result, coverage limit, and fallback/debt if any
   - review: pass/blocker/debt/doc-sync finding against intent
   - doc-sync: docs changed, or no-op reason
+  - trust checkpoint: intent match, evidence credibility, risk routing review, debt/fallback visibility, and recommended next action
+  - handoff snapshot: current intent, active change path, ledger summary, pending high-risk decisions, proof status, drift, debt/fallback, next safest action
 - If intent changes after evidence or review exists, downstream evidence/review/doc-sync records are stale until refreshed. Do not route past a stale record.
 
 ## Route
@@ -53,6 +56,7 @@ For other primitives, subagents are execution aids, not proof. Use them only for
 
 - `steadyspec-propose`: write intent and stop conditions.
 - `steadyspec-apply`: implement one slice with proof signal and evidence.
+- `steadyspec-verify`: run a trust checkpoint before archive, handoff, or risky continuation.
 - `steadyspec-review-against-intent`: check implementation against intent.
 - `steadyspec-doc-sync`: write implemented truth back to durable records.
 - `steadyspec-archive`: close after truth is durable.

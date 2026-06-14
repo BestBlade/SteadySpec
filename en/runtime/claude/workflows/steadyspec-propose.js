@@ -210,6 +210,45 @@ const PROPOSAL_SCHEMA = {
     nonGoals: { type: 'array', items: { type: 'string' } },
     evidenceRequired: { type: 'array', items: { type: 'string' } },
     stopConditions: { type: 'array', items: { type: 'string' } },
+    decisionLedger: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          decisionId: { type: 'string' },
+          phase: { type: 'string', enum: ['explore', 'propose', 'apply', 'verify', 'archive'] },
+          decision: { type: 'string' },
+          owner: { type: 'string', enum: ['agent', 'user', 'shared'] },
+          riskLevel: { type: 'string', enum: ['low', 'medium', 'high'] },
+          riskBasis: { type: 'string' },
+          basis: { type: 'string' },
+          alternatives: { type: 'array', items: { type: 'string' } },
+          reversibility: { type: 'string', enum: ['easy', 'moderate', 'hard', 'irreversible'] },
+          proofSignal: { type: 'string' },
+          overridePath: { type: 'string' },
+          status: { type: 'string', enum: ['proposed', 'accepted', 'overridden', 'superseded'] },
+        },
+        required: ['decisionId', 'phase', 'decision', 'owner', 'riskLevel', 'riskBasis', 'basis', 'alternatives', 'reversibility', 'overridePath', 'status'],
+      },
+    },
+    riskRouting: {
+      type: 'object',
+      properties: {
+        hardHighRiskTriggers: { type: 'array', items: { type: 'string' } },
+        userRoutedDecisions: { type: 'array', items: { type: 'string' } },
+        agentOwnedDecisions: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['hardHighRiskTriggers', 'userRoutedDecisions', 'agentOwnedDecisions'],
+    },
+    attentionReport: {
+      type: 'object',
+      properties: {
+        mustRead: { type: 'array', items: { type: 'string' } },
+        needsGlance: { type: 'array', items: { type: 'string' } },
+        collapsedLedger: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['mustRead', 'needsGlance', 'collapsedLedger'],
+    },
     inheritsFrom: { type: 'array', items: { type: 'string' } },
     basis: {
       type: 'object',
@@ -223,7 +262,7 @@ const PROPOSAL_SCHEMA = {
     },
     unresolvedFields: { type: 'array', items: { type: 'string' } },
   },
-  required: ['intent', 'boundary', 'evidenceRequired', 'stopConditions', 'basis'],
+  required: ['intent', 'boundary', 'evidenceRequired', 'stopConditions', 'decisionLedger', 'riskRouting', 'attentionReport', 'basis'],
 }
 
 const OPENSPEC_TASKS_SCHEMA = {
@@ -1078,12 +1117,17 @@ const proposal = await agent(
    3. **Non-goals** — what we are deliberately NOT doing
    4. **Evidence required** — what observable checks make completion credible
    5. **Stop conditions** — what would pause apply and require intent revision
-   6. **Basis** — grill ran? debate ran? findings file path (if run)
-   7. **Inherits-from** — prior change IDs that influenced this proposal
+   6. **Decision ledger** - meaningful decisions with owner, risk, basis, alternatives, reversibility, proof signal, override path, and status
+   7. **Risk routing** - hard high-risk triggers, user-routed decisions, and agent-owned low-risk decisions
+   8. **Attention report** - must-read, needs-glance, and collapsed ledger
+   9. **Basis** — grill ran? debate ran? findings file path (if run)
+   10. **Inherits-from** — prior change IDs that influenced this proposal
 
    CRITICAL RULES:
    - Do NOT invent decisions that grill/debate/user did not justify.
      If a field has no source, mark it "unresolved" in unresolvedFields.
+   - Hard high-risk triggers from ARTIFACT_CONTRACT.md must route to the user.
+   - Low-risk agent-owned decisions may be collapsed in the attention report, but must remain in decisionLedger.
    - Open questions carry forward explicitly, not buried in confident prose.
    - If implementation tasks are included, write as VERTICAL SLICES (one slice = one provable behavior).
      Do NOT write horizontal layers (DB → service → UI).
@@ -1118,6 +1162,35 @@ ${proposal.evidenceRequired.map(e => `- ${e}`).join('\n')}
 
 ## Stop Conditions
 ${proposal.stopConditions.map(s => `- ${s}`).join('\n')}
+
+## Decision Ledger
+${(proposal.decisionLedger || []).length > 0
+  ? `| decisionId | phase | owner | riskLevel | decision | riskBasis | reversibility | proofSignal | overridePath | status |
+|------------|-------|-------|-----------|----------|-----------|---------------|-------------|--------------|--------|
+${proposal.decisionLedger.map(d => `| ${d.decisionId} | ${d.phase} | ${d.owner} | ${d.riskLevel} | ${d.decision} | ${d.riskBasis} | ${d.reversibility} | ${d.proofSignal || 'None'} | ${d.overridePath} | ${d.status} |`).join('\n')}`
+  : '- None recorded'}
+
+## Risk Routing
+
+### Hard High-Risk Triggers
+${(proposal.riskRouting?.hardHighRiskTriggers || []).length > 0 ? proposal.riskRouting.hardHighRiskTriggers.map(s => `- ${s}`).join('\n') : '- None'}
+
+### User-Routed Decisions
+${(proposal.riskRouting?.userRoutedDecisions || []).length > 0 ? proposal.riskRouting.userRoutedDecisions.map(s => `- ${s}`).join('\n') : '- None'}
+
+### Agent-Owned Decisions
+${(proposal.riskRouting?.agentOwnedDecisions || []).length > 0 ? proposal.riskRouting.agentOwnedDecisions.map(s => `- ${s}`).join('\n') : '- None'}
+
+## Attention Report
+
+### Must-read
+${(proposal.attentionReport?.mustRead || []).length > 0 ? proposal.attentionReport.mustRead.map(s => `- ${s}`).join('\n') : '- None'}
+
+### Needs glance
+${(proposal.attentionReport?.needsGlance || []).length > 0 ? proposal.attentionReport.needsGlance.map(s => `- ${s}`).join('\n') : '- None'}
+
+### Collapsed ledger
+${(proposal.attentionReport?.collapsedLedger || []).length > 0 ? proposal.attentionReport.collapsedLedger.map(s => `- ${s}`).join('\n') : '- None'}
 
 ## Basis
 
@@ -1261,6 +1334,9 @@ return {
   boundary: proposal.boundary,
   evidencePlan: proposal.evidenceRequired,
   stopConditions: proposal.stopConditions,
+  decisionLedger: proposal.decisionLedger || [],
+  riskRouting: proposal.riskRouting || null,
+  attentionReport: proposal.attentionReport || null,
   basis: {
     grillRan: proposal.basis.grillRan,
     debateRan: proposal.basis.debateRan,

@@ -7,6 +7,10 @@
 CLAUDE.md
 AGENTS.md
 
+# Local development / proof scratch space.
+design/
+scripts/
+
 # Node
 node_modules/
 *.log
