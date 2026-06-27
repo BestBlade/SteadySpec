@@ -14,7 +14,7 @@ npm install -g steadyspec
 steadyspec init
 ```
 
-会自动检测你项目里的 `.claude/` 或 `.codex/`。传 `--runtime claude` 或 `--runtime codex` 手动指定。如果同时有 `openspec/` 和 `docs/changes/`，init 会问你哪个是正式介质（`--substrate openspec` 或 `--substrate docs` 可跳过提问）。
+会自动检测你项目里的 `.claude/` 或 `.codex/`。传 `--runtime claude` 或 `--runtime codex` 手动指定。如果同时有 `openspec/` 和 `docs/changes/`，init 会问你哪个是正式介质（`--substrate openspec` 或 `--substrate docs` 可跳过提问）。docs 模式项目还会安装 `.steadyspec/substrates/docs/` 下的结构契约和模板。
 
 ## 五个动词
 
@@ -30,9 +30,34 @@ steadyspec init
 
 不输命令的 vibe 模式也照常——SteadySpec 不打扰。
 
+## Docs 模式辅助校验
+
+纯 docs 变更可以运行：
+
+```bash
+steadyspec check <change-id-or-path> --phase proposal --substrate docs
+steadyspec check <change-id-or-path> --phase apply --substrate docs
+steadyspec check <change-id-or-path> --phase verify --substrate docs
+steadyspec check <change-id-or-path> --phase archive --substrate docs
+```
+
+`check` 校验 docs 模式所需的结构、证据字段、信任检查点字段，以及把 fallback/debt 写成 proof 这类 archive truth 风险。它是辅助命令，不是第六个治理动词，也不能替代 `/steadyspec:verify`。
+
+## 可选能力通道
+
+大多数变更不需要额外 artifact。当变更存在真实方向分叉、证据风险、主线风险、高影响产品或架构选择，或用户明确要求更强的解法搜索时，五个动词可以使用 v0.4 能力通道：
+
+- `explore` 或 `propose` 可以创建可选的 `direction-map.md`。
+- `propose` 可以加入 selection findings 和可选的 `evidence-contract.md`。
+- `apply` 记录每个 slice 支持哪个 evidence-contract claim。
+- `verify` 检查证据是否真的支持 mainline claim。
+- `archive` 保留 promoted、parked、rejected 方向；默认路径重要时写 `Mainline Decision` section。
+
+这个通道是可选的，不应该出现在日常清理、typo 修复或一次性工作上。
+
 ### Workflow 脚本（仅 Claude Code，v0.2.1+）
 
-`init` 后，`.claude/workflows/` 包含确定性执行脚本（`steadyspec-*.js`），与动词流逻辑一一对应，通过显式阶段门控和 schema 验证输出保证了执行质量。v0.3 包含信任检查点脚本 `steadyspec-verify.js`。这些脚本通过 Claude Code 的 Workflow 工具调用，而非 slash 命令。
+`init` 后，`.claude/workflows/` 包含确定性执行脚本（`steadyspec-*.js`），与动词流逻辑一一对应，通过显式阶段门控和 schema 验证输出保证了执行质量。当前包包含信任检查点脚本 `steadyspec-verify.js`。这些脚本通过 Claude Code 的 Workflow 工具调用，而非 slash 命令。
 
 ## 卸载
 

@@ -5,7 +5,7 @@ description: SteadySpec activation entry. Two modes - status (no topic) reports 
 
 # explore-flow
 
-The first of the four SteadySpec verbs. This skill is an orchestration of primitives, not a primitive itself. It describes *what to do at this phase*; the agent loads primitive skills (whose own descriptions filter selection) as the orchestration progresses.
+One of SteadySpec's five outward verbs: explore -> propose -> apply -> verify -> archive. This skill is an orchestration of primitives, not a primitive itself. It describes *what to do at this phase*; the agent loads primitive skills (whose own descriptions filter selection) as the orchestration progresses.
 
 ## When this verb runs
 
@@ -25,22 +25,23 @@ Goal: aggregate the real state of the project's spec workflow and produce a stat
 
 1. **Document freshness check (do this before reading any project doc as authoritative).** For each top-level project doc you may rely on (TODO.md, STRATEGY.md, README.md, CHANGELOG.md, etc.): never read its self-declared `Last updated: YYYY-MM-DD` as recency. Use `git log -1 --format=%ai -- <file>` for real mtime. If self-declared date is newer than git mtime by more than 2 days, treat the document as stale and flag in the report.
 2. Detect the substrate. If `openspec/` exists, use OpenSpec convention. If `docs/changes/` exists, use plain-files convention. If both exist and `.steadyspec/substrate.json` does not record a choice, ask which is canonical. If neither exists, the project has no SteadySpec workflow state yet — say so and suggest `/steadyspec:propose` to start the first change.
-3. Read the substrate's change directory. List active changes (those not archived) and inspect their proposal / evidence / review records, decision ledgers, attention reports, trust checkpoints, and handoff snapshots to compute a rough completion signal per change.
-4. **List the most recent 5 archived changes and read their archive records** to extract debt, fallback, finding, follow-up fields. **Classify each archived entry, do not default to "empty placeholder":**
+3. If the substrate is docs mode, report contract health before treating docs artifacts as structurally checked: `contract-active` when `.steadyspec/substrates/docs/contract.json` exists, `legacy-docs-warning` when docs changes exist without the installed contract, or `no-substrate` when no workflow state exists.
+4. Read the substrate's change directory. List active changes (those not archived) and inspect their proposal / evidence / review records, decision ledgers, attention reports, trust checkpoints, and handoff snapshots to compute a rough completion signal per change.
+5. **List the most recent 5 archived changes and read their archive records** to extract debt, fallback, finding, follow-up fields. **Classify each archived entry, do not default to "empty placeholder":**
    - `complete-archive`: archive.md exists AND has the standard fields (decisions / debt / fallback / follow-up)
    - `partial-archive`: archive directory exists with change subdirs but archive.md is missing or fields are empty — record as "partial-archive (archive.md missing or fields empty), check git log for archive context" — DO NOT call this "empty placeholder"
    - `incomplete-archive`: archive directory exists but no change content inside — this is a true empty placeholder; only use this label when the directory truly has no change subdirs
    - `inaccessible`: archive exists but cannot be read — surface the read error
-5. Aggregate drift signals: any debt / fallback / finding that appears in 3 or more of the last N archived changes, mentioning the same module or keyword. Skip this step for `partial-archive` entries (their fields are missing, can't aggregate from them).
-6. Compose a five-section status report:
+6. Aggregate drift signals: any debt / fallback / finding that appears in 3 or more of the last N archived changes, mentioning the same module or keyword. Skip this step for `partial-archive` entries (their fields are missing, can't aggregate from them).
+7. Compose a five-section status report:
    - **Attention report:** must-read high-risk/user-owned decisions first, needs-glance medium/shared items next, collapsed low-risk agent-owned ledger count last
    - **Active changes:** name + completion signal + open debt or blocker per change
    - **Debt aggregate:** cross-change repeated debt or fallback patterns; if all recent archives are partial-archive, say "debt aggregate unavailable — recent archives have missing fields, classify partial-archive"
    - **Recent archived:** last 5 with one-line summary AND classification (`complete-archive` / `partial-archive` / `incomplete-archive` / `inaccessible`)
    - **Recommended next:** which verb the user should run next, with reasoning (e.g. "apply on change 099 — closest to done"; "archive on 098 — already at review pass with no blockers"; "propose for the new feature you mentioned"). If multiple `partial-archive` entries appear, also suggest "consider re-archiving partial entries with `/steadyspec:archive <id>` to populate fields"
-7. If the user asks for status, handoff, or continuation, include a handoff snapshot: current intent, active change path, ledger summary, pending high-risk decisions, proof signals passed/failed/missing, drift events, debt/fallback, and next safest action.
-8. If adopt heuristic fired (or no-baseline informational case), include the suggestion at the top of the report.
-9. If any document was flagged stale in step 1, include the staleness flag in the report's header.
+8. If the user asks for status, handoff, or continuation, include a handoff snapshot: current intent, active change path, ledger summary, pending high-risk decisions, proof signals passed/failed/missing, drift events, debt/fallback, and next safest action.
+9. If adopt heuristic fired (or no-baseline informational case), include the suggestion at the top of the report.
+10. If any document was flagged stale in step 1, include the staleness flag in the report's header.
 
 ## Topical mode (with topic)
 
@@ -49,8 +50,9 @@ Goal: think with the user about a specific topic, with project history loaded, a
 1. Adopt-heuristic-check is already done on entry. Continue.
 2. Read related substrate context. If the topic mentions code areas with potentially unclear history, the situation calls for context-archaeology — surface this and let the agent reach for that primitive based on its description.
 3. Engage with the user on the topic. Surface the topic's known constraints, related prior changes, likely decision owners, obvious hard high-risk triggers, and at least one open question with a recommended answer per matt-style explore.
-4. Stay in exploration. Do not write proposal artifacts during exploration. Do not implement code.
-5. If the user's input converges to a committable intent (problem statement is clear, boundary is roughly visible, the user signals readiness), do not auto-transition. Tell the user "ready to propose? `/steadyspec:propose <draft-intent>`" and stop.
+4. If the topic has real direction forks, evidence-risk, mainline-risk, high-impact direction choice, or explicit "wings" / stronger-solution framing, the v0.4 capability lane may start here. You may create or update a compact `direction-map.md` or equivalent note, but every direction must remain `unknown`, `candidate`, or `parked`. Explore must not promote a direction to mainline.
+5. Stay in exploration. Do not write proposal artifacts during exploration. Do not implement code.
+6. If the user's input converges to a committable intent (problem statement is clear, boundary is roughly visible, the user signals readiness), do not auto-transition. Tell the user "ready to propose? `/steadyspec:propose <draft-intent>`" and stop.
 
 Per CON-9, the verb operates half-auto by default. At any decision point where the agent would do multiple things in sequence, ask the user "auto / step-through / skip" and let the answer set the mode for that invocation.
 
@@ -67,4 +69,5 @@ Both modes produce a structured report to the user. Status mode emits the five-s
 - **FM-no-substrate-pretending:** if the project has no substrate and no prior changes, the verb must say "no SteadySpec workflow state yet" — not invent a fake report from README / git log alone.
 - **FM-stale-doc-as-truth:** never read self-declared `Last updated: YYYY-MM-DD` in TODO / STRATEGY / README as authoritative recency. Use `git log -1 --format=%ai -- <file>` for real document mtime when freshness matters.
 - **FM-explore-becomes-propose:** topical mode that drifts into writing artifacts has crossed the boundary. Stop and hand off to `propose` instead.
+- **FM-direction-map-promotes-mainline:** explore may preserve solution space, but selection belongs to propose with risk routing.
 - **FM-status-without-attention:** a status report that lists everything equally has failed v0.3. Route user attention to owner/risk first, then preserve the full audit trail.

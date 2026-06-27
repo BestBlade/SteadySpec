@@ -1207,6 +1207,37 @@ ${(proposal.unresolvedFields || []).length > 0 ? `## Unresolved Fields\n${propos
 `
 
 // ─── PHASE: OpenSpec (external projects only) ───
+await agent(
+  `Write the following proposal.md content to ${proposalDir}/proposal.md using the Write tool. Create the directory if needed. Do not modify the content - write it exactly as provided.\n\n${proposalMd}`,
+  { label: 'write-proposal-file', phase: 'Proposal' }
+)
+log(`proposal.md written to ${proposalDir}/proposal.md`)
+
+let docsCheck = null
+if (substrate === 'docs') {
+  docsCheck = await agent(
+    `Run docs substrate structural check for proposal phase.
+
+     Command:
+     steadyspec check ${proposalDir} --phase proposal --substrate docs
+
+     If the command is unavailable in this runtime, return status="unavailable" and explain why.
+     If it runs and fails, return status="fail" with the important error codes.
+     If it passes, return status="pass".`,
+    { label: 'docs-check-proposal', phase: 'Proposal', schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['pass', 'fail', 'unavailable'] },
+        command: { type: 'string' },
+        summary: { type: 'string' },
+        errorCodes: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['status', 'summary'],
+    }}
+  )
+  log(`docs check proposal: ${docsCheck?.status || 'unavailable'}${docsCheck?.summary ? ` - ${docsCheck.summary}` : ''}`)
+}
+
 // Generate OpenSpec-compliant artifacts for non-meta substrates.
 // Self-dogfood (.meta/) skips this phase — it uses the simpler 4-file convention.
 let openSpecArtifacts = null
@@ -1345,6 +1376,7 @@ return {
   },
   inheritsFrom: proposal.inheritsFrom || [],
   unresolvedFields: proposal.unresolvedFields || [],
+  docsCheck,
   debateFindings: debateFindings || null,
   archaeology: archaeology ? {
     confirmedCount: archaeology.confirmedFacts.length,
@@ -1353,6 +1385,8 @@ return {
   } : null,
   recommendedNext: proposal.unresolvedFields?.length > 0
     ? `Stay in propose to resolve: ${proposal.unresolvedFields.join(', ')}`
+    : docsCheck?.status === 'fail'
+      ? `Fix docs check errors for ${changeId}, then re-run /steadyspec:propose or /steadyspec:apply.`
     : `/steadyspec:apply ${changeId}`,
   openSpecArtifacts: openSpecArtifacts || null,
 }

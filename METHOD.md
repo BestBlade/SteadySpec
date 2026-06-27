@@ -76,6 +76,24 @@ This does not make the method heavier by default. It makes the heavy parts visib
 
 ---
 
+## Capability Without Drift
+
+v0.4 adds a bounded capability lane to the method. The eight mechanisms keep work from lying to itself; the capability lane helps avoid a different failure mode: a coherent, well-governed, low-ceiling answer chosen too early.
+
+The lane is optional. It triggers when there are real direction forks, evidence-risk, mainline-risk, high-impact choices, or an explicit request to look for a stronger solution space. It should not trigger for typo fixes, routine cleanup, disposable work, or status reports.
+
+Capability work stays inside responsibility routing:
+
+1. Expand directions before selecting a mainline.
+2. Preserve parked directions as parked, not as failures.
+3. Bind important claims to an evidence contract before treating them as supported.
+4. Label qualitative review evidence by source and coverage limit.
+5. Route high-risk mainline choices to the user instead of hiding them as agent preference.
+
+This is "wings" on top of rails, not a replacement for rails. A better answer that loses ownership, evidence boundaries, or archive truth is still drift.
+
+---
+
 ## Key Terms
 
 These appear throughout the mechanisms. Each names the thing whose absence is where drift gets in.
@@ -90,6 +108,9 @@ These appear throughout the mechanisms. Each names the thing whose absence is wh
 | **Decision ownership ledger** | A record of meaningful decisions with owner, risk, basis, reversibility, proof signal, override path, alternatives, and status. |
 | **Attention report** | A user-facing summary that shows must-read high-risk/user-owned decisions first, then medium/shared items, while keeping low-risk agent-owned decisions auditable. |
 | **Trust checkpoint** | A pre-archive or pre-handoff review that checks output-vs-intent, evidence credibility, risk routing, debt/fallback visibility, and the next safest action. |
+| **Direction map** | An optional pre-mainline record of plausible directions, promoted choices, parked options, rejected options, evidence needed, and reopen triggers. |
+| **Evidence contract** | An optional record that names a claim, what would support it, what would falsify it, and what coverage limits remain. |
+| **Mainline decision** | A proposal or archive section that records why one direction became the default path while alternatives remained parked or rejected. |
 
 Additional vocabulary (working medium, unit of work, finalized record) is defined in context within each mechanism.
 

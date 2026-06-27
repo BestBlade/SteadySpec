@@ -678,6 +678,7 @@ ${reSliceEvents.length > 0 ? reSliceEvents.map(e => `| ${tableEscape(e.timestamp
   evidenceFormatValidated,
 } : null
 // Persist evidence.md to the change directory
+let docsCheck = null
 if (evidenceMd) {
   const evidencePath = `${context.proposalPath.replace(/\/proposal\.md$/, '')}/evidence.md`
   const evidencePathCheck = await agent(
@@ -721,6 +722,29 @@ ${evidenceMd.evidenceMd}`,
     evidenceMd.evidenceMd = diskEvidence.evidenceMd
   }
   log(`evidence.md written to ${evidencePath}`)
+  if (context.substrateType === 'docs') {
+    docsCheck = await agent(
+      `Run docs substrate structural check for apply phase.
+
+       Command:
+       steadyspec check ${context.proposalPath.replace(/\/proposal\.md$/, '')} --phase apply --substrate docs
+
+       If the command is unavailable in this runtime, return status="unavailable" and explain why.
+       If it runs and fails, return status="fail" with the important error codes.
+       If it passes, return status="pass".`,
+      { label: 'docs-check-apply', phase: 'Evidence', schema: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['pass', 'fail', 'unavailable'] },
+          command: { type: 'string' },
+          summary: { type: 'string' },
+          errorCodes: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['status', 'summary'],
+      }}
+    )
+    log(`docs check apply: ${docsCheck?.status || 'unavailable'}${docsCheck?.summary ? ` - ${docsCheck.summary}` : ''}`)
+  }
   }
 }
 
@@ -753,9 +777,12 @@ return {
     reSliceEventCount: evidenceMd.reSliceEventCount,
     overallStatus: evidenceMd.overallStatus,
   } : null,
+  docsCheck,
   remainingSlices: Math.max(0, remainingCount),
   recommendedNext: stopRequested
     ? `STOP — open new change via /steadyspec:propose <new-intent>`
+    : docsCheck?.status === 'fail'
+      ? `Fix docs check errors for ${changeId}, then re-run /steadyspec:apply or /steadyspec:verify.`
     : remainingCount > 0
       ? `Stay in apply for remaining ${remainingCount} slice(s)`
       : `/steadyspec:archive ${changeId}`,

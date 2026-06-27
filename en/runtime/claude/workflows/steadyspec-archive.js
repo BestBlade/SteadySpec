@@ -616,11 +616,53 @@ if (!archiveResult) {
   return { error: 'archive-write-failed', changeId }
 }
 
+await agent(
+  `Write the following archive.md content to ${archiveResult.archivePath || `${context.archiveLocation}/archive.md`} using the Write tool. Create the directory if needed. Do not modify the content - write it exactly as provided. Do not move the change directory yet.\n\n${archiveResult.archiveMd}`,
+  { label: 'write-archive-file', phase: 'Write' }
+)
+log(`archive.md written to ${archiveResult.archivePath || `${context.archiveLocation}/archive.md`}`)
+
+let docsCheck = null
+if (context.substrate === 'docs') {
+  const archiveCheckTarget = (archiveResult.archivePath || `${context.archiveLocation}/archive.md`).replace(/\/archive\.md$/, '')
+  docsCheck = await agent(
+    `Run docs substrate structural check for archive phase.
+
+     Command:
+     steadyspec check ${archiveCheckTarget} --phase archive --substrate docs
+
+     If the command is unavailable in this runtime, return status="unavailable" and explain why.
+     If it runs and fails, return status="fail" with the important error codes.
+     If it passes, return status="pass".`,
+    { label: 'docs-check-archive', phase: 'Write', schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['pass', 'fail', 'unavailable'] },
+        command: { type: 'string' },
+        summary: { type: 'string' },
+        errorCodes: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['status', 'summary'],
+    }}
+  )
+  log(`docs check archive: ${docsCheck?.status || 'unavailable'}${docsCheck?.summary ? ` - ${docsCheck.summary}` : ''}`)
+  if (docsCheck?.status === 'fail') {
+    return {
+      error: 'docs-check-failed',
+      changeId,
+      archiveLocation: archiveResult.archivePath,
+      docsCheck,
+      recommendedNext: 'Fix docs archive structure before moving or closing this change.',
+    }
+  }
+}
+
 return {
   changeId,
   status: 'archived',
   archiveLocation: archiveResult.archivePath,
   moveCommand: archiveResult.moveCommand,
+  docsCheck,
   gateResults: {
     review: {
       blockerCount: review.blockerCount,

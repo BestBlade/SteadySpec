@@ -9,6 +9,10 @@ SteadySpec apply verb. Loops slice-by-slice with TDD discipline (vertical slices
 
 ---
 
+For docs substrate, run `steadyspec check <change-id-or-path> --phase apply --substrate docs` after updating evidence and report the result.
+
+---
+
 **Input:** the argument after `/steadyspec:apply` is the change-id in your substrate (e.g. `099-unify-session-timeout` for OpenSpec, `001-improve-logging` for plain docs/changes). If absent, apply-flow asks for it.
 
 Follow the steps in the `steadyspec-apply-flow` SKILL.md exactly.

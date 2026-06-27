@@ -14,7 +14,7 @@ Then in your project directory:
 steadyspec init
 ```
 
-Auto-detects `.claude/` or `.codex/` in your project. Pass `--runtime claude` or `--runtime codex` to override. If both `openspec/` and `docs/changes/` exist, init prompts which substrate is canonical (`--substrate openspec` or `--substrate docs` to bypass the prompt).
+Auto-detects `.claude/` or `.codex/` in your project. Pass `--runtime claude` or `--runtime codex` to override. If both `openspec/` and `docs/changes/` exist, init prompts which substrate is canonical (`--substrate openspec` or `--substrate docs` to bypass the prompt). For docs-mode projects, `init` also installs a structural contract and templates under `.steadyspec/substrates/docs/`.
 
 ## The five verbs
 
@@ -30,9 +30,34 @@ Run any of these once to enter spec-aware mode for the session. The agent stays 
 
 Vibe mode (no slash command) is also valid — SteadySpec stays out of the way.
 
+## Docs-mode support check
+
+For plain docs changes, run:
+
+```bash
+steadyspec check <change-id-or-path> --phase proposal --substrate docs
+steadyspec check <change-id-or-path> --phase apply --substrate docs
+steadyspec check <change-id-or-path> --phase verify --substrate docs
+steadyspec check <change-id-or-path> --phase archive --substrate docs
+```
+
+`check` validates required docs-mode structure, evidence fields, trust checkpoint fields, and archive truth hazards such as fallback/debt being presented as proof. It is a support command, not a sixth governed verb and not a replacement for `/steadyspec:verify`.
+
+## Optional capability lane
+
+Most changes do not need extra artifacts. When a change has real direction forks, evidence-risk, mainline-risk, high-impact product or architecture choices, or the user explicitly asks for stronger solution search, the five verbs may use the v0.4 capability lane:
+
+- `explore` or `propose` can create an optional `direction-map.md`.
+- `propose` can add selection findings and an optional `evidence-contract.md`.
+- `apply` records which evidence-contract claim each slice supports.
+- `verify` checks whether evidence supports the mainline claim.
+- `archive` preserves promoted, parked, and rejected directions, with a `Mainline Decision` section when the default path matters.
+
+This lane is optional and should not appear on routine cleanup, typo fixes, or disposable work.
+
 ### Workflow scripts (Claude Code only, v0.2.1+)
 
-After `init`, `.claude/workflows/` contains deterministic execution scripts (`steadyspec-*.js`) that mirror the verb-flow logic with explicit phase gating and schema-validated output. v0.3 includes the trust-checkpoint workflow `steadyspec-verify.js`. These are invoked via Claude Code's Workflow tool rather than slash commands.
+After `init`, `.claude/workflows/` contains deterministic execution scripts (`steadyspec-*.js`) that mirror the verb-flow logic with explicit phase gating and schema-validated output. The package includes the trust-checkpoint workflow `steadyspec-verify.js`. These are invoked via Claude Code's Workflow tool rather than slash commands.
 
 ## Uninstall
 

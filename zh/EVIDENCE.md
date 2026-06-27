@@ -38,10 +38,24 @@ v0.3 把产品中心从“补齐功能缺口”改成“注意力与责任模型
 
 这不是引入 ECC，也不是把 SteadySpec 变成 agent 工具箱。ECC 只作为先验参考；SteadySpec 继续负责治理、归属、证据和不漂白归档。
 
+## v0.4-alpha（release candidate）
+
+v0.4 补上了用户在 plain docs 项目里指出的介质缺口：没有 OpenSpec 时，SteadySpec 以前只拥有记录位置，不拥有记录结构。
+
+- 增加 `.steadyspec/substrates/docs/` 下的原生 docs substrate contract
+- 增加 `steadyspec check`，校验 docs 模式 proposal/apply/verify/archive 结构
+- 增加 docs templates 和 docs 模式安装状态元数据
+- 在 flows、Claude commands/workflows、Codex descriptors 和包校验器里暴露 docs-check phase 命令
+- 增加最小化的可选能力通道：`direction-map.md`、可选 `evidence-contract.md`、selection findings 合并进 findings、以及条件性的 `Mainline Decision` section
+- 增加 v0.4 校验锚点，防止 release docs、contract、scope、method 和 flow support 静默漂移
+
+这不证明语义正确、不提供独立验证，也不声称 docs 模式等价 OpenSpec。它给 docs 模式项目一个结构校验器，并给高不确定工作一条有边界的方式，避免过早选择低上限主线，同时不把高风险决定交给 agent。
+
 ## 证明了什么（以及没证明什么）
 
 - 这套方法在单作者场景下，从零产出了一个能用的编排层
 - 引入外部审查者之后，方法抓住了自己的盲区
+- docs 模式 checker 能在 plain-docs change 被视为结构就绪前，拒绝缺少结构和已知 archive truth 风险
 - 这套方法还没在多人团队、并行变更或 issue-tracker 介质的项目中验证过
 
 参考技能包做了什么、不承诺什么，见 [SCOPE.md](SCOPE.md)。

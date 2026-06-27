@@ -17,6 +17,10 @@ It may produce `trust-checkpoint.md` and a handoff snapshot. It must not write `
 
 ---
 
+For docs substrate, run `steadyspec check <change-id-or-path> --phase verify --substrate docs` after writing `trust-checkpoint.md` and report the result.
+
+---
+
 **Input:** the argument after `/steadyspec:verify` is the change-id. If absent, verify-flow asks.
 
 Follow the steps in the `steadyspec-verify-flow` SKILL.md exactly.

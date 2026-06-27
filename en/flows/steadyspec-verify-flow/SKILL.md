@@ -20,6 +20,7 @@ The trust checkpoint for SteadySpec v0.3. This skill is an orchestration of prim
 2. Current git diff or changed-file list when available.
 3. The original intent, boundary, non-goals, evidence required, and stop conditions.
 4. Proof signals that were claimed passed, failed, missing, blocked, fallback, or accepted as debt.
+5. Any v0.4 capability-lane artifacts: direction map, selection findings, evidence contract, mainline decision section, parked directions, rejected directions, and source labels for qualitative evidence.
 
 ## Checkpoint gates
 
@@ -41,6 +42,15 @@ For each completed slice, compare the proof signal to the claim it supports.
 - Missing proof is a gap even if the implementation looks plausible.
 
 If all slices are already complete and the runtime supports it, verify-flow may use the apply workflow's `mode: "verify"` behavior to re-run proof signals without implementing new code.
+
+If the v0.4 capability lane exists, also check:
+
+- selected mainline still matches the proposal intent and boundary
+- evidence supports the mainline claim it names, not merely adjacent work
+- parked directions remain preserved as parked, not rewritten as failures
+- rejected directions have reasons and are not silently erased
+- same-model debate is labeled as structured scrutiny, not independent validation
+- qualitative evidence names source label and coverage limit
 
 ### Gate 3: responsibility review
 
@@ -92,6 +102,8 @@ Also include:
 - pending user decisions
 - next safest action rationale
 
+If the substrate is docs mode and `steadyspec check` is available, run `steadyspec check <change-id-or-path> --phase verify --substrate docs` after writing `trust-checkpoint.md`. If it fails, report the checker errors and do not recommend archive until the trust checkpoint structure is fixed.
+
 ## Handoff snapshot
 
 If the recommended next action is `handoff`, or the user asked for handoff/status, write a handoff snapshot with:
@@ -112,8 +124,10 @@ The verb's report contains:
 
 - **Change id** and substrate location
 - **Trust checkpoint result** (intent / evidence / risk routing / debt visibility / recommended next)
+- **Docs check** (`steadyspec check --phase verify`) result when substrate is docs mode
 - **Attention report** (must-read first, needs-glance second, collapsed ledger count last)
 - **Evidence gaps** and proof claims that are too broad
+- **Capability lane credibility** (mainline support / parked directions / qualitative evidence limits, when applicable)
 - **Pending user-owned decisions**
 - **Handoff snapshot path** if generated
 
@@ -123,3 +137,4 @@ The verb's report contains:
 - **FM-test-equals-truth:** a passing check does not prove broader intent unless the proof signal covers that intent.
 - **FM-risk-rubberstamp:** do not accept agent-owned low-risk classification for a hard high-risk trigger.
 - **FM-clean-handoff:** handoff must preserve debt, fallback, drift, and pending decisions instead of making the state look cleaner than it is.
+- **FM-mainline-unsupported:** a mainline decision is not credible just because work happened nearby. The evidence must name and support the actual claim, with limits.

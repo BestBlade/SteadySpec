@@ -212,6 +212,159 @@ function checkV03ResponsibilityModel(root, manifest) {
   }
 }
 
+function checkActiveVerbSurface(root) {
+  const files = [
+    "README.md",
+    "QUICKSTART.md",
+    "SCOPE.md",
+    "METHOD.md",
+    "ARTIFACT_CONTRACT.md",
+    ...walk(path.join(root, "en"))
+      .filter((file) => fs.statSync(file).isFile())
+      .filter((file) => /\.(md|yaml|yml)$/i.test(file))
+      .map((file) => rel(root, file)),
+  ];
+  const forbidden = [
+    /The (first|second|third|fourth) of the four SteadySpec verbs/,
+    /\bfour outward verbs\b/i,
+    /\bfour SteadySpec verbs\b/i,
+  ];
+  for (const name of files) {
+    const text = readText(path.join(root, name));
+    for (const pattern of forbidden) {
+      if (pattern.test(text)) {
+        fail(`${name} contains stale active four-verb wording; active surface must describe five outward verbs`);
+      }
+    }
+  }
+}
+
+function checkDocsSubstrateContract(root) {
+  const requiredFiles = [
+    "bin/docs-check.js",
+    "en/substrates/docs/contract.json",
+    "en/substrates/docs/templates/proposal.md",
+    "en/substrates/docs/templates/tasks.md",
+    "en/substrates/docs/templates/evidence.md",
+    "en/substrates/docs/templates/trust-checkpoint.md",
+    "en/substrates/docs/templates/archive.md",
+  ];
+  for (const file of requiredFiles) {
+    if (!fs.existsSync(path.join(root, file))) {
+      fail(`docs substrate contract file missing: ${file}`);
+    }
+  }
+
+  const contract = readJson(path.join(root, "en/substrates/docs/contract.json"));
+  for (const phase of ["proposal", "apply", "verify", "archive"]) {
+    if (!contract.phases || !contract.phases[phase]) {
+      fail(`docs substrate contract missing phase: ${phase}`);
+    }
+  }
+
+  const initText = readText(path.join(root, "bin/init.js"));
+  if (!initText.includes("runDocsCheckCommand") || !initText.includes("steadyspec check")) {
+    fail("bin/init.js must route the steadyspec check support command");
+  }
+
+  const docsCheckText = readText(path.join(root, "bin/docs-check.js"));
+  for (const code of [
+    "DOCS_PROPOSAL_MISSING_ANCHOR",
+    "DOCS_EVIDENCE_MISSING_FIELD",
+    "DOCS_TRUST_MISSING_RECOMMENDED_NEXT",
+    "DOCS_ARCHIVE_DEBT_AS_PROOF",
+  ]) {
+    if (!docsCheckText.includes(code)) {
+      fail(`bin/docs-check.js missing docs checker error code: ${code}`);
+    }
+  }
+
+  const phaseToVerb = {
+    proposal: "propose",
+    apply: "apply",
+    verify: "verify",
+    archive: "archive",
+  };
+  for (const [phase, verb] of Object.entries(phaseToVerb)) {
+    const surfaces = [
+      `en/flows/steadyspec-${verb}-flow/SKILL.md`,
+      `en/runtime/codex/agents/steadyspec-${verb}-flow.yaml`,
+      `en/runtime/claude/commands/steadyspec/${verb}.md`,
+      `en/runtime/claude/workflows/steadyspec-${verb}.js`,
+    ];
+    for (const file of surfaces) {
+      const text = readText(path.join(root, file));
+      if (!text.includes("steadyspec check") || !text.includes(`--phase ${phase}`)) {
+        fail(`${file} must surface docs-mode check command for phase ${phase}`);
+      }
+    }
+  }
+
+  const exploreSurfaces = [
+    "en/flows/steadyspec-explore-flow/SKILL.md",
+    "en/runtime/codex/agents/steadyspec-explore-flow.yaml",
+    "en/runtime/claude/commands/steadyspec/explore.md",
+    "en/runtime/claude/workflows/steadyspec-explore.js",
+  ];
+  for (const file of exploreSurfaces) {
+    if (!readText(path.join(root, file)).includes("contract")) {
+      fail(`${file} must surface docs substrate contract health`);
+    }
+  }
+}
+
+function requireText(root, file, text, label = text) {
+  const content = readText(path.join(root, file));
+  if (!content.includes(text)) {
+    fail(`${file} missing v0.4 release surface: ${label}`);
+  }
+}
+
+function requirePattern(root, file, pattern, label) {
+  const content = readText(path.join(root, file));
+  if (!pattern.test(content)) {
+    fail(`${file} missing v0.4 release surface: ${label}`);
+  }
+}
+
+function checkV04ReleaseSurface(root, manifest, pkg) {
+  if (pkg.version !== "0.4.0" || manifest.version !== "0.4.0") {
+    fail("v0.4 release surface requires package.json and manifest.json version 0.4.0");
+  }
+
+  requireText(root, "CHANGELOG.md", "## 0.4.0 (alpha)");
+
+  requireText(root, "ARTIFACT_CONTRACT.md", "## Native Docs Substrate Contract");
+  requireText(root, "ARTIFACT_CONTRACT.md", "## v0.4 Capability Lane");
+  for (const anchor of [
+    "### direction-map.md",
+    "### evidence-contract.md",
+    "### Selection Findings",
+    "### Mainline Decision",
+  ]) {
+    requireText(root, "ARTIFACT_CONTRACT.md", anchor);
+  }
+
+  requireText(root, "METHOD.md", "## Capability Without Drift");
+  requireText(root, "README.md", "## v0.4 Docs Contract And Capability Lane");
+  requireText(root, "QUICKSTART.md", "## Optional capability lane");
+  requireText(root, "SCOPE.md", "## v0.4 capability lane boundary");
+
+  const capabilityFlowChecks = {
+    "en/flows/steadyspec-explore-flow/SKILL.md": ["direction-map.md"],
+    "en/flows/steadyspec-propose-flow/SKILL.md": ["direction-map.md", "evidence-contract.md", "Mainline Decision"],
+    "en/flows/steadyspec-apply-flow/SKILL.md": ["evidence-contract", "main path"],
+    "en/flows/steadyspec-verify-flow/SKILL.md": ["mainline claim", "parked directions"],
+    "en/flows/steadyspec-archive-flow/SKILL.md": ["Mainline Decision", "parked"],
+  };
+  for (const [file, anchors] of Object.entries(capabilityFlowChecks)) {
+    requirePattern(root, file, /capability[- ]lane/i, "capability lane wording");
+    for (const anchor of anchors) {
+      requireText(root, file, anchor);
+    }
+  }
+}
+
 function main() {
   const root = path.resolve(process.argv[2] || path.join(__dirname, ".."));
   const manifestPath = path.join(root, "manifest.json");
@@ -284,6 +437,9 @@ function main() {
   checkFlowsReferencePrimitives(root, manifest);
   checkPrimitiveByteEquivalence(root);
   checkV03ResponsibilityModel(root, manifest);
+  checkActiveVerbSurface(root);
+  checkDocsSubstrateContract(root);
+  checkV04ReleaseSurface(root, manifest, pkg);
 
   console.log("Package is valid.");
 }

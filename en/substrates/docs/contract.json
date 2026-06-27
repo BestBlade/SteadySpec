@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "name": "steadyspec-docs",
+  "version": 1,
+  "changeDirPattern": "^\\d+-[a-z0-9][a-z0-9-]*$",
+  "phases": {
+    "proposal": {
+      "requiredFiles": ["proposal.md"],
+      "requiredAnchors": {
+        "proposal.md": [
+          "## Intent",
+          "## Boundary",
+          "## Evidence Required",
+          "## Stop Conditions",
+          "## Decision Ledger",
+          "## Risk Routing",
+          "## Attention Report"
+        ]
+      }
+    },
+    "apply": {
+      "requiresProposal": true,
+      "completedTasksRequire": ["evidence.md"],
+      "evidenceFields": [
+        "Proof Command",
+        "Result",
+        "Output Summary",
+        "Coverage Limit",
+        "Linked Decisions",
+        "Fallback",
+        "Accepted Debt"
+      ]
+    },
+    "verify": {
+      "requiresApply": true,
+      "requiredFiles": ["trust-checkpoint.md"],
+      "trustFields": ["Recommended Next"]
+    },
+    "archive": {
+      "requiresVerify": true,
+      "requiredFiles": ["archive.md"],
+      "requiredAnchors": {
+        "archive.md": [
+          "## Final Decisions",
+          "## Intent Match",
+          "## Evidence Summary",
+          "## Accepted Debt And Fallback",
+          "## Drift And Re-Slice Events",
+          "## Human Decisions",
+          "## Doc Sync",
+          "## Durable Truth Gates",
+          "## Follow-Up And Re-Open Triggers"
+        ]
+      }
+    }
+  },
+  "resultSeverities": ["error", "warning", "info"],
+  "legacyPolicy": {
+    "missingSchemaVersion": "warning",
+    "autoMigration": false
+  }
+}

@@ -1,4 +1,4 @@
 interface:
   display_name: "SteadySpec Verify"
   short_description: "Run a trust checkpoint before archive, handoff, or risky continuation"
-  default_prompt: "Run SteadySpec verify-flow on the given change-id. Compare current output against original intent, review evidence credibility, check decision ownership and risk routing, preserve debt/fallback visibility, and recommend exactly one next safest action: continue, archive, handoff, re-open-intent, or stop. Do not write archive.md or move the change."
+  default_prompt: "Run SteadySpec verify-flow on the given change-id. Compare current output against original intent, review evidence credibility, check decision ownership and risk routing, preserve debt/fallback visibility, and recommend exactly one next safest action: continue, archive, handoff, re-open-intent, or stop. Do not write archive.md or move the change. For docs substrate, run `steadyspec check <change-id-or-path> --phase verify --substrate docs` after writing trust-checkpoint.md and report the result."

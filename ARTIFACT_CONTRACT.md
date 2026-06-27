@@ -29,6 +29,128 @@ schemaVersion: 1
 Existing artifacts without this marker remain valid input. Workflow scripts must
 treat missing schemaVersion as legacy format, not as corruption.
 
+## Native Docs Substrate Contract
+
+When a project uses `docs/changes/` as its primary substrate, SteadySpec owns a
+minimal structural contract for its own docs-mode artifacts. OpenSpec-backed
+projects still use OpenSpec's schema and lifecycle.
+
+Docs-mode `init` installs:
+
+```text
+.steadyspec/substrates/docs/
+  contract.json
+  templates/
+    proposal.md
+    tasks.md
+    evidence.md
+    trust-checkpoint.md
+    archive.md
+```
+
+The substrate state records:
+
+```json
+{
+  "contract": {
+    "name": "steadyspec-docs",
+    "version": 1,
+    "path": ".steadyspec/substrates/docs/contract.json",
+    "templates": ".steadyspec/substrates/docs/templates"
+  }
+}
+```
+
+`steadyspec check <change-id-or-path> --phase proposal|apply|verify|archive
+--substrate docs` validates structure, not semantic truth. Missing
+`schemaVersion: 1` is a legacy warning. Missing required phase anchors, missing
+required evidence/trust fields, and archive claims that convert fallback/debt
+into proof are errors.
+
+The checker is a support command, not a sixth governed verb.
+
+## v0.4 Capability Lane
+
+v0.4 adds an optional capability lane for changes where the problem is not only
+drift, but premature selection of a low-ceiling direction. The lane is part of
+the existing five verbs. It does not add a public verb and does not let the
+agent own high-risk direction choices.
+
+Trigger the lane only when at least one of these applies:
+
+- `fork`: two or more plausible directions have serious support
+- `evidence-risk`: the proposal depends on claims that need observable support
+- `mainline-risk`: selecting a default path parks or rejects meaningful options
+- `high-impact-direction`: the choice changes product thesis, public surface,
+  architecture, storage, security, or long-lived workflow behavior
+- `low-ceiling-risk`: the user asks for stronger solution search, "wings", or
+  equivalent capability-amplification framing
+
+Do not trigger it for routine cleanup, typo fixes, simple metadata updates,
+pure status reports, scratch notes, or disposable work.
+
+### direction-map.md
+
+`direction-map.md` is optional. It records pre-mainline solution space when a
+real fork exists. The minimum useful shape is:
+
+```markdown
+## Direction Map
+
+| Direction | Status | Basis | Evidence Needed | Reopen Trigger |
+|-----------|--------|-------|-----------------|----------------|
+| <name> | candidate|promoted|parked|rejected | <source or reasoning> | <proof needed or None> | <when to reconsider> |
+```
+
+Explore may create a direction map, but explore must not promote a direction to
+mainline. Promotion belongs to propose, with risk routing.
+
+### evidence-contract.md
+
+`evidence-contract.md` is optional. It is used when a mainline claim needs proof
+before it can be trusted.
+
+```markdown
+## Evidence Contract
+
+| Claim | Support Required | Falsifier | Source Label | Coverage Limit | Status |
+|-------|------------------|-----------|--------------|----------------|--------|
+| <claim> | <observable support> | <what would disprove or weaken it> | deterministic-check|manual-check|user-report|same-agent-review|external-review | <what this cannot prove> | proposed|supported|weakened|blocked |
+```
+
+Qualitative evidence is allowed only when its source label and coverage limit
+are explicit. Same-model debate is structured scrutiny, not independent
+validation.
+
+### Selection Findings
+
+When debate or selection runs, record the selection result in `findings.md` or
+the substrate's equivalent finding record. Do not create a default
+`selection-findings.md` file if the substrate already has a finding artifact.
+Selection findings must separate:
+
+- promoted direction
+- parked directions
+- rejected directions
+- missing evidence
+- human-owned or high-risk decisions
+- independence limit when the same agent or same model supplied the review
+
+### Mainline Decision
+
+Use a `## Mainline Decision` section in proposal or archive when the default
+path matters. Do not create a default `mainline-decision.md` file.
+
+The section should name:
+
+- selected mainline
+- why it was selected
+- what evidence supports it
+- what remains parked
+- what was rejected and why
+- fallback or reopen trigger
+- owner of any high-risk direction decision
+
 ## v0.3 Responsibility Model
 
 v0.3 adds a responsibility layer to every governed verb. The layer does not

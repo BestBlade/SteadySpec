@@ -3,14 +3,19 @@
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
+const { runDocsCheckCommand } = require("./docs-check");
 
 function parseArgs(argv) {
   const args = {
+    command: "init",
+    checkTarget: null,
     runtime: null,
     substrate: null,
+    phase: null,
     project: process.cwd(),
     force: false,
     dryRun: false,
+    json: false,
   };
 
   if (argv.includes("--help") || argv.includes("-h")) {
@@ -21,12 +26,29 @@ function parseArgs(argv) {
   for (let i = 2; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "init" || arg === "--here") {
+      args.command = "init";
+      continue;
+    }
+    if (arg === "check") {
+      args.command = "check";
+      const maybeTarget = argv[i + 1];
+      if (maybeTarget && !maybeTarget.startsWith("-")) {
+        args.checkTarget = maybeTarget;
+        i += 1;
+      }
       continue;
     }
     if (arg === "--force") {
       args.force = true;
     } else if (arg === "--dry-run") {
       args.dryRun = true;
+    } else if (arg === "--json") {
+      args.json = true;
+    } else if (arg === "--phase") {
+      const value = argv[i + 1];
+      if (!value) throw new Error("--phase requires a value");
+      args.phase = value;
+      i += 1;
     } else if (arg === "--runtime") {
       const value = argv[i + 1];
       if (!value) throw new Error("--runtime requires a value");
@@ -48,17 +70,20 @@ function parseArgs(argv) {
   if (args.substrate && !["openspec", "docs"].includes(args.substrate)) {
     throw new Error("--substrate must be openspec or docs");
   }
+  if (args.phase && !["proposal", "apply", "verify", "archive"].includes(args.phase)) {
+    throw new Error("--phase must be proposal, apply, verify, or archive");
+  }
   return args;
 }
 
 function printHelp() {
-  console.log(`steadyspec init
+  console.log(`steadyspec
 
-Install SteadySpec into a project. Copies skills, verb-flows, and runtime
-adapter files (slash commands or yaml descriptors) into the project.
+Install SteadySpec into a project or run deterministic support checks.
 
 Usage:
   steadyspec init [options]
+  steadyspec check <change-id-or-path> --phase <proposal|apply|verify|archive> [--substrate docs] [--json]
 
 Options:
   --runtime <claude|codex>  Override runtime auto-detection.
@@ -68,6 +93,8 @@ Options:
   --here                    Install into the current directory. This is the default.
   --force                   Replace existing installed SteadySpec skill directories.
   --dry-run                 Print actions without writing files.
+  --phase <phase>           Check phase for docs-mode artifacts.
+  --json                    Print machine-readable check results.
   --help                    Show this help.
 
 To remove SteadySpec, see QUICKSTART.md "Uninstall" section. There is no
@@ -221,11 +248,11 @@ async function resolveSubstrate(project, args) {
     };
   }
   if (detected.includes("issue-tracker")) {
-    // v0.3-alpha still treats issue-tracker as experimental and falls back to docs.
+    // Issue trackers remain experimental and fall back to docs.
     return {
       primary: "docs",
       detected,
-      note: "Issue-tracker detected but not used as primary substrate in v0.3-alpha. Will create docs/changes/ as fallback.",
+      note: "Issue-tracker detected but not used as primary substrate in v0.4-alpha. Will create docs/changes/ as fallback.",
       source: "auto-fallback",
     };
   }
@@ -260,6 +287,19 @@ function ensureSubstrateDir(project, substrate, dryRun) {
       if (!dryRun) fs.mkdirSync(dcPath, { recursive: true });
     }
   }
+}
+
+function installDocsSubstrateContract(project, root, substrate, dryRun) {
+  if (substrate.primary !== "docs") return;
+  const source = path.join(root, "en", "substrates", "docs");
+  const target = path.join(project, ".steadyspec", "substrates", "docs");
+  if (!fs.existsSync(source)) {
+    throw new Error(`Missing docs substrate contract source: ${source}`);
+  }
+  console.log(`install docs contract: en/substrates/docs/ -> .steadyspec/substrates/docs/`);
+  if (dryRun) return;
+  if (fs.existsSync(target)) fs.rmSync(target, { recursive: true, force: true });
+  copyDir(source, target);
 }
 
 function skillPlan(source, skillsDir, sourceRel) {
@@ -422,14 +462,23 @@ function writeSubstrateState(substrateFile, substrate, dryRun) {
   console.log(`state: ${substrateFile}`);
   if (dryRun) return;
   fs.mkdirSync(path.dirname(substrateFile), { recursive: true });
-  fs.writeFileSync(substrateFile, `${JSON.stringify({
+  const state = {
     schemaVersion: 1,
     primary: substrate.primary,
     detected: substrate.detected,
     note: substrate.note,
     source: substrate.source,
     createdAt: new Date().toISOString(),
-  }, null, 2)}\n`, "utf8");
+  };
+  if (substrate.primary === "docs") {
+    state.contract = {
+      name: "steadyspec-docs",
+      version: 1,
+      path: ".steadyspec/substrates/docs/contract.json",
+      templates: ".steadyspec/substrates/docs/templates",
+    };
+  }
+  fs.writeFileSync(substrateFile, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
 function printQuickStart(project, plans, substrate) {
@@ -450,6 +499,20 @@ async function main() {
   const root = path.resolve(__dirname, "..");
   const manifest = readJson(path.join(root, "manifest.json"));
   const project = path.resolve(args.project);
+
+  if (args.command === "check") {
+    if (args.substrate && args.substrate !== "docs") {
+      throw new Error("steadyspec check currently supports --substrate docs only");
+    }
+    process.exitCode = runDocsCheckCommand({
+      target: args.checkTarget,
+      phase: args.phase || "proposal",
+      json: args.json,
+      project,
+    });
+    return;
+  }
+
   const source = path.join(root, "en");
 
   if (!fs.existsSync(source)) throw new Error(`Missing language tree: ${source}`);
@@ -468,6 +531,7 @@ async function main() {
   const plans = runtimes.map((runtime) => preflight(runtime, project, source, manifest, args.force));
 
   ensureSubstrateDir(project, substrate, args.dryRun);
+  installDocsSubstrateContract(project, root, substrate, args.dryRun);
 
   for (const plan of plans) {
     console.log("");

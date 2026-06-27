@@ -5,7 +5,7 @@ description: SteadySpec archive verb. Close a change with no silent close - runs
 
 # archive-flow
 
-The fourth of the four SteadySpec verbs. This skill is an orchestration of primitives, not a primitive itself. It describes *what to do at this phase*; the agent loads primitive skills (whose own descriptions filter selection) as the orchestration progresses.
+One of SteadySpec's five outward verbs: explore -> propose -> apply -> verify -> archive. This skill is an orchestration of primitives, not a primitive itself. It describes *what to do at this phase*; the agent loads primitive skills (whose own descriptions filter selection) as the orchestration progresses.
 
 ## When this verb runs
 
@@ -20,6 +20,7 @@ The fourth of the four SteadySpec verbs. This skill is an orchestration of primi
 2. `git diff` between the change's start state and current HEAD — list of changed source files.
 3. Substrate convention for archive location (e.g. OpenSpec moves to `openspec/changes/archive/<change-id>/`).
 4. Public docs or section anchors cited by the proposed archive.
+5. Any v0.4 capability-lane artifacts: direction map, selection findings, evidence contract, trust checkpoint notes about mainline credibility, parked directions, rejected directions, and qualitative evidence source labels.
 
 ## Gates (must pass in order; any STOP halts archive write)
 
@@ -56,6 +57,8 @@ List all human-decision-record files linked by this change. For file substrates,
 
 archive-flow always writes a complete archive. Verify the archive.md fields can be filled from real artifacts: final decisions, preserved rejected alternatives, accepted debt + follow-up, fallback (if any), human-decision-record links, drift events from evidence, strategy-rollup link (if rollup ran). If any required field has no source: STOP. Report missing source. (Partial archives — specs-only or skeleton entries — are NOT created by archive-flow. If a user wants to preserve specs without a full archive, they manually move files and skip archive-flow.)
 
+For v0.4 capability-lane changes, completeness also requires preserving promoted, parked, and rejected directions separately. If a default path mattered, archive.md must include or link a `## Mainline Decision` section with support, coverage limits, fallback or reopen triggers, and owner for any high-risk direction call.
+
 ### Gate 5: durable truth gates
 
 Before writing archive.md:
@@ -75,8 +78,9 @@ Per CON-9 half-auto, ask the user "ready to write archive? auto / step-through /
 
 On auto / step-through:
 
-1. Write `<substrate>/changes/<change-id>/archive.md` (or substrate's equivalent) with the complete fields verified in Gate 4, the durable truth results from Gate 5, and rollup link if any.
-2. Move the change directory to the substrate's archive location (e.g. `openspec/changes/archive/<change-id>/` for OpenSpec).
+1. Write `<substrate>/changes/<change-id>/archive.md` (or substrate's equivalent) with the complete fields verified in Gate 4, the durable truth results from Gate 5, promoted/parked/rejected directions when capability lane exists, and rollup link if any.
+2. If the substrate is docs mode and `steadyspec check` is available, run `steadyspec check <change-id-or-path> --phase archive --substrate docs` after writing `archive.md` and before moving/closing the change. If it fails, leave the change active, report the checker errors, and do not archive.
+3. Move the change directory to the substrate's archive location (e.g. `openspec/changes/archive/<change-id>/` for OpenSpec).
 
 On cancel: do not write or move. Preserve gate outputs for resumed archive-flow invocation.
 
@@ -90,10 +94,12 @@ The verb's report contains:
 
 - **Change id** and final archive location
 - **Gate results**: review status / doc-sync touched-docs list / confirmed_by status / completeness verified / durable truth verified
+- **Docs check** (`steadyspec check --phase archive`) result when substrate is docs mode
 - **Attention report**: must-read ownership or risk items preserved in the final record
 - **Rollup**: triggered? digest path if yes
 - **Drift events** carried from evidence.md (summary)
 - **Final decisions** + accepted debt + fallback + follow-up triggers
+- **Capability lane preservation** (promoted / parked / rejected / mainline decision, when applicable)
 - **Recommended next** — typically "the next active change can begin"; or specific suggestion if rollup digest recommended a strategic action
 
 ## Failure modes (consult while running)
@@ -103,3 +109,4 @@ The verb's report contains:
 - **FM-fallback-as-evidence:** a fallback path is residual risk, not evidence that intent was met. Same FM as apply-flow; restated here because archive is the last gate.
 - **FM-anchor-fiction:** archive citations must not point to headings or anchors that do not exist.
 - **FM-risk-misclassification:** archive must not close when a hard high-risk trigger was treated as low-risk agent-owned work.
+- **FM-parked-directions-erased:** archive must preserve parked alternatives and reopen triggers instead of rewriting the winning mainline as if no serious alternatives existed.

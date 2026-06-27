@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 (alpha)
+
+- **NEW: docs substrate contract/checker.** Docs-mode init installs `.steadyspec/substrates/docs/contract.json` and templates, and substrate state records the contract path.
+- **NEW: `steadyspec check`.** Deterministic support command for docs-mode proposal/apply/verify/archive artifact structure. It validates structure and known archive truth hazards; it is not a sixth governed verb and does not prove semantic correctness.
+- **NEW: optional capability lane contract.** v0.4 defines the minimized "wings" lane for high-uncertainty direction choices: optional `direction-map.md`, optional `evidence-contract.md`, selection findings folded into `findings.md`, and a conditional `Mainline Decision` section when default-path selection matters.
+- **UPDATED: docs-mode runtime surfaces.** Propose/apply/verify/archive flows, Claude commands, Codex descriptors, and Claude workflow scripts now surface docs-mode `steadyspec check` at their phase artifact boundaries; explore reports docs contract health.
+- **UPDATED: validator.** Package validation now rejects stale active four-verb wording and verifies docs checker contract/surface integration.
+- **NON-GOAL: capability lane is not autonomy.** Same-model debate remains structured scrutiny, not independent validation; high-risk direction and mainline decisions remain user-owned.
+- **NON-GOAL: docs checker is not semantic truth.** It rejects missing structure and known archive truth hazards; it does not prove the work is correct.
+
 ## 0.3.0 (alpha)
 
 - **NEW: Attention & Responsibility Model** across the public method and reference skill pack. v0.3 adds decision ownership ledger, risk routing, attention report, trust checkpoint, handoff snapshot, re-slice event, and durable truth gate contracts.

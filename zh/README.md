@@ -12,6 +12,12 @@
 
 v0.3 让责任显性化。重要决策会进入决策归属账本，按风险路由，并以注意力分层的方式报告：必须看的用户归属/高风险决策优先，需要瞥一眼的共享/中风险项其次，低风险 agent 自主决策可以折叠但仍可审计。模型细节见 [ARTIFACT_CONTRACT.md](../ARTIFACT_CONTRACT.md)。
 
+## v0.4 文档合同与能力通道
+
+v0.4 增加了两条有边界的能力。第一，docs 模式现在有 SteadySpec 自己的结构合同：`init` 会安装 docs contract 和模板，`steadyspec check` 会拒绝缺少锚点、证据字段不完整、信任检查点形状错误、以及把 fallback/debt 写成 proof 的归档。第二，高不确定度工作可以在原有五个动词内部使用可选的能力通道：记录方向分叉、压力测试主线选择、用 evidence contract 约束 claim 和 proof，并在归档里保留 promoted / parked / rejected 方向。
+
+能力通道不是自治，也不是第六个动词。高风险方向、公共表面、数据、安全和主线决定仍然必须通过责任模型交给用户或至少进入 must-read。
+
 ## 快速开始
 
 看 [QUICKSTART.md](QUICKSTART.md) 了解安装、五个动词和手动卸载清单。下面是方向性介绍。
@@ -41,8 +47,8 @@ steadyspec init
 - **Agent 能力：** 针对 **Tier 2** Agent 优化（DeepSeek-V4-Pro、Claude Sonnet 4.5+、GPT-4o 级别）。Tier 3 **不作承诺。**
 - **单开发者：** 每个变更只有一名作者。"人"指的是**未来的你或接手者。**
 - **你调用它：** SteadySpec 不会自动检测漂移。你怀疑有漂移的时候调它。
-- **`init` 是唯一的 CLI：** 没有 `update`、没有 `uninstall`、没有 `check`。卸载靠手动 + `npm uninstall -g`。
-- **issue-tracker 介质仍是实验性：** v0.3 优先做责任路由，而不是扩展介质。
+- **小型 CLI：** `init` 安装 SteadySpec；`check` 校验 docs 模式的 artifact 结构。没有 `update`、`uninstall` 或 `status`。卸载靠手动 + `npm uninstall -g`。
+- **issue-tracker 介质仍是实验性：** v0.4 增加了 docs 模式结构合同；GitHub issues / Jira / Linear 仍是外部记录。
 
 ## 目录结构
 
@@ -69,7 +75,8 @@ steadyspec/
         workflows/             # 5 个确定性执行脚本
       codex/agents/            # Codex yaml 接口描述
   bin/
-    init.js             # v0.3-alpha 唯一的 CLI 命令
+    init.js             # CLI 入口：init + docs 模式 check
+    docs-check.js       # 确定性 docs substrate checker
     validate.js         # 内部包校验器
   manifest.json
   package.json
@@ -99,17 +106,17 @@ SteadySpec 跟通用技能包（TDD、诊断、审查、效率工具）不冲突
 
 ## 升级与卸载
 
-v0.3-alpha 只有 `init`。没有 `update` 或 `uninstall` 命令。升级或卸载看 [QUICKSTART.md](QUICKSTART.md)。全局包卸载：`npm uninstall -g steadyspec`。
+SteadySpec 提供 `init` 和 docs 模式结构化 `check`。没有 `update` 或 `uninstall` 命令。升级或卸载看 [QUICKSTART.md](QUICKSTART.md)。全局包卸载：`npm uninstall -g steadyspec`。
 
 ## 稳定性
 
-v0.3-alpha 是 alpha。1.0 之前仍可能有破坏性变更，但 SteadySpec 打算保持以下表面稳定，除非 [CHANGELOG.md](CHANGELOG.md) 明确说打破：
+v0.4-alpha 是 alpha。1.0 之前仍可能有破坏性变更，但 SteadySpec 打算保持以下表面稳定，除非 [CHANGELOG.md](CHANGELOG.md) 明确说打破：
 
 - 对外动词名：`/steadyspec:explore`、`/steadyspec:propose`、`/steadyspec:apply`、`/steadyspec:verify`、`/steadyspec:archive`。
 - 动词流 SKILL 名：`steadyspec-<verb>-flow`。
 - 原语 SKILL 名：当前的 `steadyspec-*`。
 - METHOD.md 结构：八个机制段落保持可定位；内容可以扩展。
-- CLI 含义：`steadyspec init` 安装运行时技能、动词流、运行时适配器，写项目状态。
+- CLI 含义：`steadyspec init` 安装运行时技能、动词流、运行时适配器；选择 docs 模式时还会安装 docs contract/templates 并写项目状态。`steadyspec check` 校验 docs 模式 artifact 结构和已知 archive truth 风险。
 - 状态结构：`.steadyspec/substrate.json` 用 `schemaVersion: 1`；在那个结构版本内字段只增不删。
 
 ## 方法优先

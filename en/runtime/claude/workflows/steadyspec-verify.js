@@ -174,6 +174,30 @@ const writeResult = await agent(
   { label: 'write-trust-checkpoint', phase: 'Handoff', schema: WRITE_RESULT_SCHEMA },
 )
 
+let docsCheck = null
+if (context.substrate === 'docs' && writeResult.checkpointWritten) {
+  docsCheck = await agent(
+    `Run docs substrate structural check for verify phase.
+
+     Command:
+     steadyspec check ${context.changeDir || args.changeDir || changeId} --phase verify --substrate docs
+
+     If the command is unavailable in this runtime, return status="unavailable" and explain why.
+     If it runs and fails, return status="fail" with the important error codes.
+     If it passes, return status="pass".`,
+    { label: 'docs-check-verify', phase: 'Handoff', schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['pass', 'fail', 'unavailable'] },
+        command: { type: 'string' },
+        summary: { type: 'string' },
+        errorCodes: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['status', 'summary'],
+    }}
+  )
+}
+
 phase('Report')
 
 log(`Trust checkpoint for ${context.changeId}:`)
@@ -193,4 +217,7 @@ if (writeResult.checkpointWritten) {
 }
 if (writeResult.handoffWritten) {
   log(`  handoff: ${writeResult.handoffPath || context.handoffPath || 'handoff-snapshot.md'}`)
+}
+if (docsCheck) {
+  log(`  docs check verify: ${docsCheck.status}${docsCheck.summary ? ` - ${docsCheck.summary}` : ''}`)
 }

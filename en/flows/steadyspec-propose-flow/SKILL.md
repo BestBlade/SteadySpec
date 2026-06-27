@@ -5,7 +5,7 @@ description: SteadySpec propose verb. Writes a proposal artifact with hardened i
 
 # propose-flow
 
-The second of the four SteadySpec verbs. This skill is an orchestration of primitives, not a primitive itself. It describes *what to do at this phase*; the agent loads primitive skills (whose own descriptions filter selection) as the orchestration progresses.
+One of SteadySpec's five outward verbs: explore -> propose -> apply -> verify -> archive. This skill is an orchestration of primitives, not a primitive itself. It describes *what to do at this phase*; the agent loads primitive skills (whose own descriptions filter selection) as the orchestration progresses.
 
 ## When this verb runs
 
@@ -36,7 +36,9 @@ Before writing artifacts, the intent must be sharpened. Per CON-9 half-auto, ask
    - **boundary not sharp**: grill resolved direction, but the implementation boundary (which files / layers / interfaces are in scope vs out) is not yet clear enough that apply will provably stay inside
    SKIP debate if the change is trivial: single-file edit, doc-only change, or local cleanup with no interface contact. Trivial changes do not need debate even if they touch a high-risk area; size and reach are the discriminator.
 5. **If debate needed**, the situation calls for `steadyspec-debate` - surface this; let the agent reach for debate based on its description. Debate's role here is dual: settle direction AND/OR sharpen implementation boundary. Debate closes with `findings.md` (or equivalent finding record per substrate convention).
-6. **Write an attention report.** Separate must-read user-owned/high-risk decisions, needs-glance shared/medium-risk decisions, and collapsed low-risk agent-owned ledger entries. Do not omit collapsed decisions from the ledger.
+6. **Detect capability-lane triggers.** Use the v0.4 capability lane when there are real direction forks, evidence-risk, mainline-risk, high-impact direction choices, or explicit "wings" / stronger-solution framing. Do not trigger it for routine cleanup, typo fixes, disposable work, pure status, or simple metadata updates.
+7. **When capability lane triggers, record selection support before mainline.** Ensure a `direction-map.md` or equivalent direction section exists; fold selection findings into `findings.md` when debate ran; create an optional `evidence-contract.md` for claims that need observable support; and route high-risk mainline choices to must-read attention. Same-model debate must be labeled as structured scrutiny, not independent validation.
+8. **Write an attention report.** Separate must-read user-owned/high-risk decisions, needs-glance shared/medium-risk decisions, and collapsed low-risk agent-owned ledger entries. Do not omit collapsed decisions from the ledger.
 
 ## Writing the proposal artifact
 
@@ -46,7 +48,9 @@ On auto / step-through:
 
 1. Write to `<substrate>/changes/<NNN>-<slug>/proposal.md` (or substrate's equivalent). The proposal contains, at minimum: the intent (in the user's own words), the boundary (in scope / out of scope as separate lists), non-goals, evidence required for completion, stop conditions (what would pause apply and require updating intent), decision ledger, risk routing summary, and attention report.
 2. Link basis: reference the grill outputs and debate findings (if any) by file path. Do not inline them.
-3. Add inherits-from: list prior change IDs that influenced this proposal (from step 4 of "Inputs to gather"). If none, omit.
+3. If capability lane triggered, add or link the direction map, selection findings, evidence contract, and `## Mainline Decision` section when the default path matters. Parked directions remain parked; rejected directions need a reason; unresolved evidence remains visible.
+4. Add inherits-from: list prior change IDs that influenced this proposal (from step 4 of "Inputs to gather"). If none, omit.
+5. If the substrate is docs mode and `steadyspec check` is available, run `steadyspec check <change-id-or-path> --phase proposal --substrate docs` after writing. If it fails, report the checker errors and do not describe the proposal as structurally ready.
 
 On cancel-keeping-grill-and-debate: do not write the proposal artifact, but preserve any grill / debate output files for a later resumed propose-flow invocation.
 
@@ -59,9 +63,11 @@ Aggregate read across all reads in this verb invocation should stay under approx
 The verb's report contains:
 
 - **Artifact location** (full path to proposal.md and any sibling artifacts created)
+- **Docs check** (`steadyspec check --phase proposal`) result when substrate is docs mode
 - **Intent** (the hardened one-line statement)
 - **Boundary** (in scope / out of scope summary)
 - **Evidence plan** (what proof is required for completion)
+- **Capability lane** (not triggered, or direction map / findings / evidence contract / mainline decision paths)
 - **Stop conditions** (what would pause apply)
 - **Attention report** (must-read / needs-glance / collapsed ledger)
 - **Decision ledger summary** (owner, risk, proof, and override path for meaningful decisions)
@@ -75,3 +81,5 @@ The verb's report contains:
 - **FM-confident-language-over-uncertainty:** open questions and unresolved findings carry forward into the proposal explicitly, not buried in confident artifact prose.
 - **FM-horizontal-tasks:** if implementation tasks are needed in the proposal, write them as vertical slices (one slice = one provable behavior). Do not write tasks as horizontal layers (DB → service → UI in sequence) when one vertical slice could prove the behavior end-to-end.
 - **FM-risk-hidden-in-agent-choice:** a proposal must not hide high-risk decisions behind agent-owned "implementation detail" language. If a hard high-risk trigger applies, route the decision to the user and mark it must-read.
+- **FM-capability-lane-on-trivial-work:** optional lane artifacts on routine cleanup are drift toward ceremony. Do not create them unless a trigger is present.
+- **FM-same-model-as-independent-validation:** debate can sharpen the choice, but it must not be described as independent validation when the same agent/model supplied the scrutiny.

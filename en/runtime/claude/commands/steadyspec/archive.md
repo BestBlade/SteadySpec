@@ -17,6 +17,10 @@ If any gate fails, archive does not write and the verb reports what blocked. Aft
 
 ---
 
+For docs substrate, run `steadyspec check <change-id-or-path> --phase archive --substrate docs` after writing `archive.md` and before moving/closing the change. If it fails, leave the change active and report the checker errors.
+
+---
+
 **Input:** the argument after `/steadyspec:archive` is the change-id. If absent, archive-flow asks.
 
 Follow the steps in the `steadyspec-archive-flow` SKILL.md exactly.

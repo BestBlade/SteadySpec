@@ -5,7 +5,7 @@ description: SteadySpec apply verb. Implement a recorded change slice-by-slice w
 
 # apply-flow
 
-The third of the four SteadySpec verbs. This skill is an orchestration of primitives, not a primitive itself. It describes *what to do at this phase*; the agent loads primitive skills (whose own descriptions filter selection) as the orchestration progresses.
+One of SteadySpec's five outward verbs: explore -> propose -> apply -> verify -> archive. This skill is an orchestration of primitives, not a primitive itself. It describes *what to do at this phase*; the agent loads primitive skills (whose own descriptions filter selection) as the orchestration progresses.
 
 ## When this verb runs
 
@@ -30,12 +30,13 @@ apply-flow's per-slice loop is a generalization of TDD; TDD is the special case 
 3. Any prior evidence already recorded for this change (resumed apply scenario).
 4. Any trust checkpoint or handoff snapshot already recorded for this change.
 5. The drift signals already known for this change (any earlier pause + decision recorded in evidence.md).
+6. Any v0.4 capability-lane artifacts: `direction-map.md`, `findings.md` selection section, `evidence-contract.md`, or `## Mainline Decision` section.
 
 ## Per-slice loop
 
 For each unfinished slice (in order):
 
-1. **Slice setup, ask user.** State: what behavior this slice must prove, what the proof signal will be (test / command / fixture / manual check), the coverage limit (what the proof does NOT prove), and which ledger decision(s) this proof supports. Ask "auto / step-through / skip-this-slice". Per CON-9 half-auto.
+1. **Slice setup, ask user.** State: what behavior this slice must prove, what the proof signal will be (test / command / fixture / manual check), the coverage limit (what the proof does NOT prove), which ledger decision(s) this proof supports, and which evidence-contract claim it supports if the capability lane exists. Ask "auto / step-through / skip-this-slice". Per CON-9 half-auto.
 2. **Define the proof signal in writing before any code change.** The situation calls for `steadyspec-apply` primitive — surface this and let the agent reach for it based on its description; the primitive carries the per-slice mechanics.
 3. **Run the proof signal.** RED state. Do not refactor here.
 4. **Implement the smallest code change that can move the proof signal to GREEN.** Keep slice review-sized.
@@ -44,9 +45,10 @@ For each unfinished slice (in order):
    - FAIL because implementation is incomplete: iterate within this slice. Do not jump to the next slice.
    - FAIL because intent / boundary / validation was wrong: drift detected — go to "Drift handling".
 6. **Update responsibility records.** If implementation confirmed, superseded, or changed a decision, update the ledger entry status and basis. If the slice creates a new meaningful decision, add a ledger entry before moving on.
-7. **Record evidence.** Write to `<substrate>/changes/<change-id>/evidence.md` (or substrate's equivalent): proof command, result, output summary, coverage limit, linked decision ids, any fallback or accepted debt.
-8. **Refresh attention report when needed.** If a decision becomes high-risk, user-owned, or shared, move it to must-read / needs-glance in the report.
-9. **Mark this slice complete only when evidence matches the required level for the change's chosen governance.** Fallback is residual risk, not full proof.
+7. **Record evidence.** Write to `<substrate>/changes/<change-id>/evidence.md` (or substrate's equivalent): proof command, result, output summary, coverage limit, linked decision ids, any linked evidence-contract claim, whether the slice touched the claimed main path, any fallback or accepted debt.
+8. **Run docs structural check when applicable.** If the substrate is docs mode and `steadyspec check` is available, run `steadyspec check <change-id-or-path> --phase apply --substrate docs` after updating evidence. If it fails, keep the slice from being reported as cleanly complete until the structural error is fixed or explicitly recorded as blocked.
+9. **Refresh attention report when needed.** If a decision becomes high-risk, user-owned, or shared, move it to must-read / needs-glance in the report.
+10. **Mark this slice complete only when evidence matches the required level for the change's chosen governance.** Fallback is residual risk, not full proof.
 
 After all slices in this change have passed: optional refactor pass (per discipline 4), prompted by user.
 
@@ -84,6 +86,8 @@ The verb's report contains:
 - **Re-slice events** (if any: type, owner, risk level, proof impact, user decision if required)
 - **Attention report** (must-read user-owned/high-risk decisions first)
 - **Evidence summary** (where evidence.md is, what proofs were recorded)
+- **Capability lane support** (claim touched / main path touched / coverage limit, when applicable)
+- **Docs check** (`steadyspec check --phase apply`) result when substrate is docs mode
 - **Remaining slices** (if any, or "all slices passed")
 - **Recommended next** — typically `/steadyspec:archive <change-id>` if all slices pass; or "stay in apply for next invocation" if slices remain; or "open new change" if STOP path was taken
 
@@ -93,3 +97,4 @@ The verb's report contains:
 - **FM-batch-slices:** combining multiple unrelated changes into one slice for convenience. Each slice proves one behavior; if the work is unrelated, it belongs in a separate slice or a separate change.
 - **FM-fallback-as-proof:** a fallback path is residual risk, not evidence that intent was met. Recording fallback as proof inflates apparent completion.
 - **FM-re-slice-without-ownership:** changing slice shape because implementation got complicated is not a private agent optimization when scope, proof, or user-visible behavior changes. Record the re-slice event and route risk.
+- **FM-claim-proof-mismatch:** when an evidence contract exists, a slice cannot be reported as supporting a mainline claim unless the evidence names that claim, says whether it touched the main path, and states its coverage limit.

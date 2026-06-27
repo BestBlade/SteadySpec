@@ -32,6 +32,7 @@ const SUBSTRATE_STATE_SCHEMA = {
     archiveDir: { type: 'string' },
     lastAdopt: { type: 'string' },
     schemaVersion: { type: 'number' },
+    contractHealth: { type: 'string', enum: ['contract-active', 'legacy-docs-warning', 'openspec-owned', 'no-substrate', 'not-applicable'] },
   },
   required: ['exists', 'primary', 'changeDir', 'archiveDir'],
 }
@@ -200,7 +201,11 @@ const substrateState = await agent(
       If .meta/changes/ exists → primary="meta", changeDir=".meta/changes".
       If none → primary="none".
 
-   Report: primary, changeDir, archiveDir, exists (whether any substrate was found), lastAdopt.`,
+   For docs substrate, check whether .steadyspec/substrates/docs/contract.json exists.
+   Set contractHealth="contract-active" when it exists, and "legacy-docs-warning" when docs changes exist without it.
+   For openspec set contractHealth="openspec-owned"; for none set "no-substrate"; otherwise set "not-applicable".
+
+   Report: primary, changeDir, archiveDir, exists (whether any substrate was found), lastAdopt, and contractHealth.`,
   { label: 'detect-substrate', phase: 'Detect', schema: SUBSTRATE_STATE_SCHEMA }
 )
 
@@ -220,6 +225,7 @@ if (substrateState.primary === 'none' || !substrateState.exists) {
     activeChanges: [],
     debtAggregate: 'unavailable - no SteadySpec substrate detected',
     recentArchived: [],
+    contractHealth: substrateState.contractHealth || 'no-substrate',
     recommendedNext: 'Run steadyspec-adopt or provide args.changeDir; do not pretend a substrate exists.',
   }
 }
@@ -424,7 +430,7 @@ const report = await agent(
    active change path, ledger summary, pending high-risk decisions, proof status,
    drift events, debt/fallback, and next safest action.
 
-   At the top of the report, include adopt note and staleness flags if any.`,
+   At the top of the report, include adopt note, docs contract health for docs substrate, and staleness flags if any.`,
   { label: 'compose-report', phase: 'Report', schema: STATUS_REPORT_SCHEMA }
 )
 
@@ -435,6 +441,7 @@ if (!report) {
 return {
   mode: 'status',
   substrate: substrateState.primary,
+  contractHealth: substrateState.contractHealth || 'not-applicable',
   adoptNote: (!substrateState.exists || !substrateState.lastAdopt)
     ? 'No adopt baseline recorded. Recommend running steadyspec-adopt once.'
     : null,
