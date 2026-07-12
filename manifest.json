@@ -1,6 +1,6 @@
 {
   "name": "steadyspec",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Anti-drift methodology packaged as a software SDD reference implementation.",
   "languages": ["en"],
   "install": {

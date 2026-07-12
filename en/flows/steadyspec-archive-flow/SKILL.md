@@ -21,6 +21,7 @@ One of SteadySpec's five outward verbs: explore -> propose -> apply -> verify ->
 3. Substrate convention for archive location (e.g. OpenSpec moves to `openspec/changes/archive/<change-id>/`).
 4. Public docs or section anchors cited by the proposed archive.
 5. Any v0.4 capability-lane artifacts: direction map, selection findings, evidence contract, trust checkpoint notes about mainline credibility, parked directions, rejected directions, and qualitative evidence source labels.
+6. Any cross-agent review artifacts or claims under `cross-agent/`.
 
 ## Gates (must pass in order; any STOP halts archive write)
 
@@ -67,6 +68,25 @@ Before writing archive.md:
 2. Check whether the archive converts fallback, accepted debt, or unverified manual checks into proof. If yes, STOP and rewrite the claim.
 3. Surface cross-change doc staleness candidates as strategy-rollup input. Do not auto-edit docs and do not block archive by default unless a must-update doc from Gate 2 is unresolved.
 4. Treat structural rot findings only as external proof input. Do not invent linter, complexity, or architecture metrics inside archive-flow.
+5. Treat the v0.5 cross-review lane as single-user Windows support; on macOS/Linux, carry missing POSIX smoke evidence as a future cross-platform limitation instead of claiming reviewer execution support. Two-agent consensus requires auxiliary findings, primary moderation, and same-peer final convergence for rejected or downgraded P1/P2 findings; it does not require third-party arbitration.
+   - Resolve the opposite peer by host: Codex uses Claude; Claude uses Codex with `--experimental-codex`. Preserve that reviewer across run and check-latest; same-host output is only a second pass.
+   - **WINDOWS V0.5:** If `.steadyspec/cross-review.json` has `mode: advisory`, run `steadyspec cross-review --change <change-id-or-path> --mode review --include-diff --advice --json` and surface any `recommended: true` result before archive readiness is claimed; advisory mode is non-blocking, so the primary agent decides whether to run or carry the recommendation as a limitation.
+   - **WINDOWS V0.5 / POSIX UNTESTED / CALIBRATION REQUIRED:** If the config has `mode: gated`, run `steadyspec cross-review --change <change-id-or-path> --mode review --include-diff --gate --json`. Gated mode is a v0.5 mechanism demo for a single operator; multi-user defaults are outside v0.5.
+   - Interpret gate JSON by status:
+     | status | Archive action |
+     |--------|----------------|
+      | `blocked` | WARN / claim-stop: the archive cannot claim cross-agent review readiness until the recommended review has a successful moderated run; in v0.5 do not use gated mode as a release or merge gate by itself. |
+     | `moderation-required` action on `blocked` | Moderate `moderation.md`, then rerun the same gate/check. |
+      | `needs-user` | STOP for the cross-agent claim: surface the P1/P2 `needs-user` moderation row to the user; do not claim cross-agent review readiness until the user confirms or the moderation is revised. |
+     | `satisfied` | Continue. |
+     | `satisfied-with-warning` | Continue only after inspecting `warnings`; carry ordinary limitations into the archive, but surface all-rejected moderation warnings as review-quality flags before claiming readiness. |
+     | `not-enforced` | Continue; report that policy is advisory/manual, not a gated pass. |
+     | `not-required` | Continue; report no recommendation signal fired. |
+     | `off` | Continue; report that cross-review is disabled. |
+   - **WINDOWS V0.5 / PLATFORM BRANCH:** In auto flow execution on Windows, `steadyspec cross-review --change <change-id-or-path> --mode review --include-diff --run-if-needed --json` may start the reviewer, but the primary agent must moderate `moderation.md` before archive can continue. On macOS/Linux, either add `--experimental-posix` and carry the smoke-untested limitation, or run `--advice --json` only and report that reviewer execution was skipped because POSIX smoke is open. Interpret `--run-if-needed --json` by `status`/`action` (`already-satisfied`, `already-satisfied-with-warning`, `ran-reviewer-moderation-required`); do not reuse the `--check-latest` exit-code table for it. Gated mode blocks all-rejected moderation tables instead of treating them as satisfied-with-warning.
+   - **WINDOWS V0.5:** For packet-only review evidence, spot-check or recompute the manifest SHA-256 hash for any design/evidence artifact that carries an archive/readiness claim; packet-only reviewers cannot independently verify those hashes.
+   - **TRACE REQUIRED:** When archive claims cross-agent review, link the specific `cross-agent/<timestamp>-<reviewer>-<mode>/` run and preserve which auxiliary finding IDs were accepted, carried forward, rejected, or routed to `needs-user`.
+6. **WINDOWS V0.5:** If the archive would claim external or cross-agent implementation review, run `steadyspec cross-review --change <change-id-or-path> --mode review --include-diff --check-latest --json` with the same reviewer/mode/include-diff/packet-only scope as the claim. Exit `0` is pass, exit `1` is pass-with-warning, and exits `2`/`3`/`4` are STOP for that claim. Missing, stale, skipped, failed, unstructured, or unmoderated cross-agent runs are not evidence. Inspect JSON `warnings` for exit `1`; ordinary advisory context-boundary warnings may be carried as limitations, but all-rejected moderation warnings are review-quality flags to surface before claiming archive readiness.
 
 ## Rollup trigger check (after gates pass, before write)
 
@@ -95,6 +115,7 @@ The verb's report contains:
 - **Change id** and final archive location
 - **Gate results**: review status / doc-sync touched-docs list / confirmed_by status / completeness verified / durable truth verified
 - **Docs check** (`steadyspec check --phase archive`) result when substrate is docs mode
+- **Cross-review check** result when cross-agent artifacts or claims are present
 - **Attention report**: must-read ownership or risk items preserved in the final record
 - **Rollup**: triggered? digest path if yes
 - **Drift events** carried from evidence.md (summary)

@@ -3,7 +3,28 @@
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
+const { spawnSync } = require("child_process");
 const { runDocsCheckCommand } = require("./docs-check");
+
+const DEFAULT_CROSS_REVIEW_RISKY_PATH_PATTERNS = [
+  "^bin/",
+  "^en/flows/",
+  "^en/runtime/",
+  "^ARTIFACT_CONTRACT\\.md$",
+  "^README\\.md$",
+  "^QUICKSTART\\.md$",
+  "^CHANGELOG\\.md$",
+  "^manifest\\.json$",
+  "^package\\.json$",
+];
+const DEFAULT_GATED_SCOPE_IGNORE_PATTERNS = [
+  "^\\.DS_Store$",
+  "^Thumbs\\.db$",
+  "^\\..*\\.swp$",
+  "^\\..*\\.swo$",
+  "~$",
+  "\\.tmp$",
+];
 
 function parseArgs(argv) {
   const args = {
@@ -12,6 +33,12 @@ function parseArgs(argv) {
     runtime: null,
     substrate: null,
     phase: null,
+    crossReview: null,
+    crossReviewReviewer: null,
+    crossReviewPassEnv: [],
+    crossReviewMinSignals: null,
+    crossReviewPacketOnly: false,
+    crossReviewHooks: null,
     project: process.cwd(),
     force: false,
     dryRun: false,
@@ -59,6 +86,36 @@ function parseArgs(argv) {
       if (!value) throw new Error("--substrate requires a value");
       args.substrate = value;
       i += 1;
+    } else if (arg === "--cross-review") {
+      const value = argv[i + 1];
+      if (!value) throw new Error("--cross-review requires a value");
+      args.crossReview = value;
+      i += 1;
+    } else if (arg === "--cross-review-reviewer") {
+      const value = argv[i + 1];
+      if (!value) throw new Error("--cross-review-reviewer requires a value");
+      args.crossReviewReviewer = value;
+      i += 1;
+    } else if (arg === "--cross-review-pass-env") {
+      const value = argv[i + 1];
+      if (!value) throw new Error("--cross-review-pass-env requires a value");
+      args.crossReviewPassEnv.push(...value.split(",").map((name) => name.trim()).filter(Boolean));
+      i += 1;
+    } else if (arg === "--cross-review-min-signals") {
+      const value = argv[i + 1];
+      if (!value) throw new Error("--cross-review-min-signals requires a value");
+      args.crossReviewMinSignals = Number(value);
+      if (!Number.isInteger(args.crossReviewMinSignals) || args.crossReviewMinSignals <= 0) {
+        throw new Error("--cross-review-min-signals must be a positive integer");
+      }
+      i += 1;
+    } else if (arg === "--cross-review-packet-only") {
+      args.crossReviewPacketOnly = true;
+    } else if (arg === "--cross-review-hooks") {
+      const value = argv[i + 1];
+      if (!value) throw new Error("--cross-review-hooks requires a value");
+      args.crossReviewHooks = value;
+      i += 1;
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
@@ -73,6 +130,27 @@ function parseArgs(argv) {
   if (args.phase && !["proposal", "apply", "verify", "archive"].includes(args.phase)) {
     throw new Error("--phase must be proposal, apply, verify, or archive");
   }
+  if (args.crossReview && !["off", "manual", "advisory", "gated"].includes(args.crossReview)) {
+    throw new Error("--cross-review must be off, manual, advisory, or gated");
+  }
+  if (args.crossReviewReviewer && !["claude", "codex"].includes(args.crossReviewReviewer)) {
+    throw new Error("--cross-review-reviewer must be claude or codex");
+  }
+  if (args.crossReviewHooks && !["off", "ask", "auto"].includes(args.crossReviewHooks)) {
+    throw new Error("--cross-review-hooks must be off, ask, or auto");
+  }
+  if (args.crossReviewHooks && !args.crossReview) {
+    throw new Error("--cross-review-hooks requires --cross-review off|manual|advisory|gated");
+  }
+  if (args.crossReview === "off" && args.crossReviewHooks && args.crossReviewHooks !== "off") {
+    throw new Error("--cross-review off only supports --cross-review-hooks off");
+  }
+  if (args.crossReviewHooks === "auto" && args.crossReview !== "gated") {
+    throw new Error("--cross-review-hooks auto requires --cross-review gated; use hooks ask with manual/advisory mode");
+  }
+  if (!args.crossReview && (args.crossReviewReviewer || args.crossReviewPassEnv.length || args.crossReviewMinSignals !== null || args.crossReviewPacketOnly)) {
+    throw new Error("--cross-review-reviewer, --cross-review-pass-env, --cross-review-min-signals, and --cross-review-packet-only require --cross-review off|manual|advisory|gated");
+  }
   return args;
 }
 
@@ -84,6 +162,8 @@ Install SteadySpec into a project or run deterministic support checks.
 Usage:
   steadyspec init [options]
   steadyspec check <change-id-or-path> --phase <proposal|apply|verify|archive> [--substrate docs] [--json]
+  steadyspec cross-review --change <change-id-or-path> [--reviewer claude] [--mode design|review|debate] [--run|--run-if-needed]
+  steadyspec hooks <install|uninstall|status> [--target claude|codex|both]
 
 Options:
   --runtime <claude|codex>  Override runtime auto-detection.
@@ -95,6 +175,27 @@ Options:
   --dry-run                 Print actions without writing files.
   --phase <phase>           Check phase for docs-mode artifacts.
   --json                    Print machine-readable check results.
+  --cross-review <off|manual|advisory|gated>
+                            Write .steadyspec/cross-review.json for the v0.5
+                            Windows cross-agent lane. advisory emits lightweight
+                            recommendations; gated enforces --gate checks but
+                            reviewer execution remains explicit.
+  --cross-review-reviewer <claude|codex>
+                            Default reviewer for cross-review config.
+  --cross-review-pass-env <names>
+                            Comma-separated env var names to pass to reviewer.
+  --cross-review-min-signals <n>
+                            Minimum recommendation signals required before
+                            advisory/gated mode recommends review. Default: 1,
+                            or 2 for gated mode.
+  --cross-review-packet-only
+                            Inline packet content into reviewer prompts and do
+                            not grant file-read tools. Default for gated mode.
+  --cross-review-hooks <off|ask|auto>
+                            Project-scoped host-hook policy. Default: off. ask
+                            pauses eligible SteadySpec turns for a mode choice;
+                            auto routes explicitly activated turns to the
+                            opposite peer CLI; hooks never run long model tasks.
   --help                    Show this help.
 
 To remove SteadySpec, see QUICKSTART.md "Uninstall" section. There is no
@@ -277,6 +378,10 @@ function promptYesNo(question) {
 
 function substrateStatePath(project) {
   return path.join(project, ".steadyspec", "substrate.json");
+}
+
+function crossReviewStatePath(project) {
+  return path.join(project, ".steadyspec", "cross-review.json");
 }
 
 function ensureSubstrateDir(project, substrate, dryRun) {
@@ -481,6 +586,60 @@ function writeSubstrateState(substrateFile, substrate, dryRun) {
   fs.writeFileSync(substrateFile, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
+function writeCrossReviewState(project, args) {
+  if (!args.crossReview) return;
+  const file = crossReviewStatePath(project);
+  const reviewer = args.crossReviewReviewer || "claude";
+  const passEnv = [...new Set(args.crossReviewPassEnv)];
+  const packetOnly = args.crossReviewPacketOnly || args.crossReview === "gated";
+  const minSignals = args.crossReviewMinSignals || (args.crossReview === "gated" ? 2 : 1);
+  console.log(`cross-review state: ${file}`);
+  if (args.dryRun) return;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const state = {
+    schemaVersion: 1,
+    mode: args.crossReview,
+    reviewer,
+    passEnv,
+    minSignals,
+    packetOnly,
+    hooks: {
+      mode: args.crossReviewHooks || "off",
+      reviewer: "auto",
+      activation: "explicit-steadyspec-or-cross-agent-prompt",
+      events: ["UserPromptSubmit", "Stop"],
+      allowExperimentalDebate: false,
+      activationTtlMs: 21600000,
+      // Any future hook-launched model process must add an explicit per-turn spend/loop limit.
+    },
+    riskyPathPatterns: DEFAULT_CROSS_REVIEW_RISKY_PATH_PATTERNS,
+    scopeIgnorePatterns: args.crossReview === "gated" ? DEFAULT_GATED_SCOPE_IGNORE_PATTERNS : [],
+    boundary: args.crossReview === "advisory"
+      ? `Level 2 advisory; emits recommendations only; hooks.mode:auto requires gated mode; no sandbox or automatic moderation.${packetOnly ? " Packet-only reviewer prompts are enabled." : ""}`
+      : args.crossReview === "gated"
+        ? "Level 3 gated; --gate can block flow claims until review is moderated; an activated hooks.mode:auto turn routes the primary host to the opposite peer CLI, but hooks never launch long reviewer processes; packet-only reviewer prompts are enabled by default; no automatic moderation."
+        : `Level 1 manual; advisory context restrictions; no sandbox or automatic gate.${packetOnly ? " Packet-only reviewer prompts are enabled." : ""}`,
+    createdAt: new Date().toISOString(),
+  };
+  fs.writeFileSync(file, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+}
+
+function writeCrossReviewGitignore(project, args) {
+  if (!args.crossReview || args.crossReview === "off") return;
+  const file = path.join(project, ".gitignore");
+  console.log(`cross-review gitignore: ${file}`);
+  if (args.dryRun) return;
+  const marker = "# SteadySpec local cross-agent run artifacts";
+  const patterns = ["**/cross-agent/"];
+  patterns.push(".steadyspec/runtime/");
+  const existing = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+  const missing = patterns.filter((pattern) => !existing.includes(pattern));
+  if (!missing.length) return;
+  const prefix = existing && !existing.endsWith("\n") ? "\n" : "";
+  const block = `${prefix}${existing ? "\n" : ""}${marker}\n${missing.join("\n")}\n`;
+  fs.appendFileSync(file, block, "utf8");
+}
+
 function printQuickStart(project, plans, substrate) {
   const verbsPath = plans[0].runtime === "claude" ? "/steadyspec:explore" : "(invoke `steadyspec-explore-flow` skill)";
   console.log("");
@@ -495,6 +654,37 @@ function printQuickStart(project, plans, substrate) {
 }
 
 async function main() {
+  if (process.argv[2] === "hooks" || process.argv[2] === "hook-event") {
+    const script = path.join(__dirname, "cross-review-hook.js");
+    if (!fs.existsSync(script)) {
+      console.error("[steadyspec] cross-review-hook.js is not installed; host hook support is unavailable in this build.");
+      process.exitCode = 1;
+      return;
+    }
+    const forwarded = process.argv[2] === "hooks" ? process.argv.slice(3) : ["hook-event", ...process.argv.slice(3)];
+    const result = spawnSync(process.execPath, [script, ...forwarded], { cwd: process.cwd(), stdio: "inherit", windowsHide: true });
+    if (result.error) throw result.error;
+    process.exitCode = result.status === null ? 1 : result.status;
+    return;
+  }
+  if (process.argv[2] === "cross-review") {
+    const script = path.join(__dirname, "cross-review.js");
+    if (!fs.existsSync(script)) {
+      console.error("[steadyspec] cross-review runner is not installed. Expected: " + script);
+      console.error("[steadyspec] Reinstall or update SteadySpec before using `steadyspec cross-review`.");
+      process.exitCode = 1;
+      return;
+    }
+    const result = spawnSync(process.execPath, [script, ...process.argv.slice(3)], {
+      cwd: process.cwd(),
+      stdio: "inherit",
+      windowsHide: true,
+    });
+    if (result.error) throw result.error;
+    process.exitCode = result.status === null ? 1 : result.status;
+    return;
+  }
+
   const args = parseArgs(process.argv);
   const root = path.resolve(__dirname, "..");
   const manifest = readJson(path.join(root, "manifest.json"));
@@ -544,6 +734,8 @@ async function main() {
   }
 
   writeSubstrateState(substrateFile, substrate, args.dryRun);
+  writeCrossReviewState(project, args);
+  writeCrossReviewGitignore(project, args);
 
   if (!args.dryRun) {
     printQuickStart(project, plans, substrate);

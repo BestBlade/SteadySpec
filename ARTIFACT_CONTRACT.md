@@ -69,6 +69,495 @@ into proof are errors.
 
 The checker is a support command, not a sixth governed verb.
 
+## v0.5 Cross-Agent Review Lane
+
+`steadyspec cross-review` is a Level 1 support command for preserving an
+auxiliary reviewer challenge. It is not a sixth governed verb, not a sandbox,
+and not proof that two agents are correct.
+
+The v0.5 path is a single-user Windows lane: one operator, one primary
+agent, and one local auxiliary reviewer. It does not promise team coordination,
+third-party arbitration, merge/release gate authority, or cross-platform
+reviewer execution. In this boundary, two-agent consensus means the auxiliary
+reviewer's preserved output and the primary moderator's decision table converge
+on the next action. A reviewer-original P1/P2 rejection or downgrade requires
+the same peer to re-review the final patch without repeating the objection; if
+they do not converge, the trace stays visible and the claim remains incomplete.
+This convergence rule is a propose/verify/archive flow obligation. `--gate`
+checks the latest run and moderation structure; it does not infer finding
+identity or prove convergence across historical runs.
+This is a flow-level requirement in v0.5. The mechanical gate validates the
+latest run and moderation table but does not infer cross-run finding identity.
+POSIX command resolution exists, but macOS/Linux smoke evidence is a future
+cross-platform support gap rather than a Windows v0.5 blocker. Timeout
+classification and non-empty partial stdout preservation are Windows-tested
+with a controlled fake reviewer; real reviewer partial output remains best
+effort because a reviewer may emit nothing before termination.
+On non-Windows platforms, timeout cleanup is not yet process-tree-proven and
+must be carried as part of the open POSIX smoke gap. macOS/Linux reviewer
+timeouts may leave reviewer child processes running; inspect process trees
+manually after a timeout until cross-platform smoke exists.
+Level 2 advisory, Level 3 gated, and `--run-if-needed` are supported local
+calibration surfaces in v0.5. They should not be described as multi-user
+defaults in v0.5; multi-user coordination, waiver policy, and false-positive
+calibration remain outside this single-user lane.
+`--include-diff` packets are advisory calibration evidence in v0.5, not
+merge/release gate authority, because branch, staged, unstaged, and untracked
+sections are captured with separate git commands until atomic snapshotting
+exists.
+
+Optional project config:
+
+```json
+{
+  "schemaVersion": 1,
+  "mode": "manual",
+  "reviewer": "claude",
+  "passEnv": ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"],
+  "minSignals": 1,
+  "packetOnly": false,
+  "riskyPathPatterns": ["^bin/", "^en/flows/", "^ARTIFACT_CONTRACT\\.md$"],
+  "scopeIgnorePatterns": [],
+  "boundary": "Level 1 manual; advisory context restrictions; no sandbox or automatic gate."
+}
+```
+
+`steadyspec init --cross-review manual` writes this file to
+`.steadyspec/cross-review.json`. `passEnv` contains environment variable names
+only; it must not contain secret values. `minSignals` is the minimum number of
+recommendation signals required before `--advice`, `--gate`, or
+`--run-if-needed` recommends review. `packetOnly` inlines `packet.md` into the
+reviewer prompt and does not grant file-read tools; it reduces context leakage
+but is not an OS sandbox. `riskyPathPatterns` is an array of JavaScript regular
+expression strings matched against `git status --short` paths for the
+`workingTree.publicSurface` advice signal; projects should tune it to their own
+runtime, schema, migration, or public documentation paths. `scopeIgnorePatterns`
+is an array of JavaScript regular expression strings matched against
+repo-relative paths before packet git status, untracked diff sections, advice
+status signals, and scope fingerprints are rendered. Runtime and
+manual/advisory defaults are `[]`; gated init writes a starter OS/editor temp
+list (`^\\.DS_Store$`, `^Thumbs\\.db$`, `^\\..*\\.swp$`, `^\\..*\\.swo$`, `~$`,
+`\\.tmp$`) for first-run stability. Use it only for explicit generated noise,
+not for meaningful source or review artifacts. Common calibration candidates may
+also include generated paths such as `^coverage/`. Tracked branch/staged/unstaged
+diffs remain review scope even when a path would match this status/untracked filter.
+Despite the field name, this is a status/untracked noise filter; it does not
+filter tracked diff content. Packet `Scope Transparency` reports per-pattern
+omission counts so nonzero values can be checked against the intended generated
+noise boundary.
+Command-line flags override config defaults.
+`boundary` is human-readable documentation only; automation must use the
+structured `mode` field.
+
+Gated config example:
+
+```json
+{
+  "schemaVersion": 1,
+  "mode": "gated",
+  "reviewer": "claude",
+  "passEnv": ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"],
+  "minSignals": 2,
+  "packetOnly": true,
+  "riskyPathPatterns": ["^bin/", "^en/flows/", "^ARTIFACT_CONTRACT\\.md$"],
+  "scopeIgnorePatterns": [],
+  "boundary": "Level 3 gated; --gate can block flow claims until review is moderated; reviewer execution requires --run or --run-if-needed; packet-only reviewer prompts are enabled by default; no sandbox or automatic moderation."
+}
+```
+
+Allowed config modes:
+
+- `off`: no project-level cross-review lane; explicit `--reviewer` can still
+  override for a one-off run.
+- `manual`: stores reviewer/env defaults for explicit runs.
+- `advisory`: enables `--advice` to recommend a run from lightweight change
+  signals. It does not invoke a reviewer and does not gate by itself.
+- `gated`: enables `--gate` to turn advisory recommendation signals into a
+  blocking readiness check. It does not invoke a reviewer; it requires an
+  existing successful moderated run when review is recommended.
+
+`minSignals` defaults to `1` for manual/advisory config and to `2` for gated
+init. Raising it remains the v0.5 calibration knob for projects that observe
+too many low-risk advisory/gated recommendations.
+High-risk artifact term matching uses word/phrase boundaries so substrings such
+as `author` and `archival` do not fire `auth` or `archive`; this reduces obvious
+noise but does not replace observed false-positive calibration. The term list is
+SteadySpec-default vocabulary, not a project-trained taxonomy; cross-domain
+projects should tune `riskyPathPatterns` and `minSignals` before using advice or
+gated recommendations as workflow signals.
+Debate mode is visible in `signalDetails`; it contributes to `signalCount` only
+when `--experimental-debate` is present, because non-experimental debate advice
+can inspect scope but cannot execute a reviewer.
+
+Each run writes:
+
+```text
+<change>/cross-agent/<timestamp>-<reviewer>-<mode>/
+  packet.md
+  prompt.md
+  raw.md
+  stdout.partial.txt
+  stderr.partial.txt
+  moderation.md
+  run.json
+  skip.md              # only when review is intentionally skipped
+```
+
+Agent Trace Record requirement: every cross-agent use must preserve who said
+what and how it was resolved. `raw.md` is the auxiliary agent's proposal or
+review, `moderation.md` is the primary agent's per-finding decision, and
+`run.json` records reviewer identity, mode, scope, status, and warnings. Do not
+replace these with a summary-only note. When a flow folds cross-agent output
+into `findings.md`, `proposal.md`, `trust-checkpoint.md`, or `archive.md`, keep
+the finding IDs and source path so a reader can trace each accepted,
+carried-forward, rejected, or `needs-user` direction back to the originating
+agent artifact.
+
+Artifact roles:
+
+- `packet.md`: change artifacts, mode request, advisory context boundary, and
+  optional diff content. With `--include-diff`, diff content covers branch,
+  staged, unstaged, and untracked review scope. Packet paths are repo-relative
+  and local-path-sanitized by default; `--no-sanitize-packet` is a local
+  debugging escape hatch. Sensitive untracked paths and oversized untracked
+  files are listed with an omission reason instead of embedding their contents.
+  Best-effort sensitive filename filtering includes common package and cloud
+  credential files such as `.npmrc`, `.yarnrc`, `.pypirc`, `.netrc`,
+  `.aws/credentials`, `credentials.json`, `service-account*.json`,
+  `terraform.tfvars`, `*.auto.tfvars`, `.secrets/`, `credentials.yml`, and
+  `secrets.yml`; this is disclosure reduction, not a secret-scanning guarantee.
+  Sensitive keyword filtering is limited to hidden or credential-like
+  directories rather than arbitrary `auth` or `token` filenames, so untracked
+  design/source files remain reviewable unless they match a more specific
+  sensitive path pattern. This omission path applies only to untracked file
+  rendering; staged, unstaged, and branch diffs are captured verbatim, so staged
+  or tracked sensitive files can still be embedded in packet diff content. A
+  root-level file such as `api-tokens.json` is not filtered by the default
+  patterns unless a project adds a custom ignore/filter policy.
+  When the SteadySpec package reviews itself, packets may bundle
+  `bin/cross-review.js` as an implementation reference. That self-referential
+  evidence is a snapshot of the runner that generated the packet; after later
+  runner edits, code-level findings are reproducible from the packet, not
+  necessarily from the current working tree.
+  `--include-diff` also compares working-tree status before and after diff
+  capture; if the status changes, packet and `run.json` warnings mark the review
+  scope as potentially non-atomic. The current coherence check does not detect
+  branch-diff base-ref drift, such as a concurrent `git fetch` updating
+  `origin/HEAD` or the resolved base while packet generation is running.
+  The artifact manifest includes generation-time SHA-256 hashes for the artifact
+  text loaded into the packet, so packet-only reviews have a stable snapshot
+  reference that matches the packet body even if a file changes later. The
+  reviewer cannot independently verify those hashes without file tools; they are
+  for moderator audit and stale-packet investigation. Moderators should recompute
+  or spot-check hashes for the artifact(s) that support archive/readiness claims
+  before treating packet-only review as trusted evidence. Non-packet-only
+  reviewers currently have read/search tools but no hash tool, so reviewer prompts
+  ask for content/presence spot checks rather than SHA-256 verification claims.
+  Non-packet-only review depends on working-tree stability between packet
+  generation and reviewer file reads; gated defaults prefer `packetOnly: true`
+  for the stronger snapshot boundary.
+  Packets include `## Scope Transparency`, which reports active
+  `scopeIgnorePatterns`, git-status/untracked path omission counts per pattern,
+  and counts for sensitive, oversized, non-regular, outside-repo, or unreadable
+  untracked diff omissions. This does not let a packet-only reviewer inspect
+  omitted contents, but it gives the reviewer a visible surface for challenging
+  packet completeness and suspicious scope shaping.
+- `prompt.md`: exact prompt supplied to the auxiliary reviewer.
+  With `--packet-only`, this prompt contains the full packet inline and the
+  Claude runner uses `--bare` plus disallowed file/edit/shell tools. This is the
+  preferred gated-mode integrity path, but it does not provide OS-level path
+  isolation.
+  Reviewer prompts require `F1`, `F2`, ... finding IDs for automated checks and
+  ask for a `Boundary Disclosure` section when denied context was attempted,
+  accidentally used, or unavoidable.
+- `raw.md`: reviewer stdout/failure report, never rewritten into durable truth.
+  For `rawSchemaVersion: 1` runs, `## STDOUT` is the stdout extraction marker;
+  if it is missing, latest checks fail closed instead of scanning mixed metadata
+  as reviewer stdout. Legacy runs without `rawSchemaVersion` keep a conservative
+  compatibility fallback after the `Output Format` line. Legacy run artifacts
+  that lack both `rawSchemaVersion` and a recognizable `Output Format` line may
+  be treated as unstructured even if they contain findings elsewhere; recreate
+  those runs with the current runner before using them for gate claims.
+- `stdout.partial.txt` / `stderr.partial.txt`: streamed process output for
+  timeout/interruption audit. On Windows, timeout cleanup attempts to terminate
+  the reviewer process tree with `taskkill /T`; real-process orphan checks
+  remain part of future timeout hardening. On non-Windows platforms, timeout
+  cleanup currently carries the open POSIX process-tree limitation. These files
+  contain only bytes the reviewer process wrote before termination; a reviewer
+  that buffers output internally may still lose findings on timeout. If a
+  timeout preserves structured findings, `run.json.failureClass` may be
+  `reviewer_timeout_with_output`; latest checks can treat the moderated output
+  as pass-with-warning evidence instead of unusable output, but gated mode
+  blocks this warning because timeout-truncated findings may be incomplete.
+  `--max-output-bytes` bounds stdout/stderr kept in `raw.md` and `run.json`; the
+  full reviewer stream still remains in the partial output files when the
+  process wrote more bytes.
+- `moderation.md`: primary-agent decision table; starts as `status: template`
+  and must become `status: complete`. Latest checks read `Finding ID`,
+  `Severity`, and `Moderator Decision` by table header when available, so
+  moderators may add extra columns without changing the decision contract. A
+  moderation table with decision rows but no recognizable header is unreadable
+  and cannot satisfy latest checks or gates; keep the canonical English header
+  labels when customizing columns. The table is also the trace bridge from
+  auxiliary suggestion to durable SteadySpec action: each row should preserve
+  the reviewer finding ID, the primary decision, and the follow-up artifact or
+  reason so later readers can distinguish auxiliary advice from primary-agent
+  acceptance.
+- `run.json`: command metadata, reviewer status, failure class, output format,
+  `rawSchemaVersion`, platform, prompt/output sizes, `scopeFingerprint`,
+  `diffCoherent`, `gitStatusStable`, `diffSectionStatus`, `diffAtomicity`, and
+  environment variable names passed to the reviewer. It must not record
+  environment values. It is a local audit artifact and may contain absolute
+  local paths; generated files include `containsAbsolutePaths: true` plus an
+  inline `_warning` reminding users not to share it without sanitization. In
+  v0.5, `containsAbsolutePaths` is always `true` because `run.json` records
+  `repo`, `changeDir`, `outputParentDir`, and artifact paths as absolute local
+  paths.
+  On non-Windows reviewer execution, `warnings` records that POSIX support is
+  implemented but smoke-untested for v0.5. If a non-Windows reviewer run times
+  out, `warnings` and `raw.md` also record that process-group timeout cleanup
+  remains smoke-untested until cross-platform smoke exists.
+  `gitStatusStable: false`/`diffCoherent: false` means the working tree changed during multi-section
+  diff capture; latest checks treat the run as pass-with-warning evidence.
+  When drift is observed, `run.json` records `diffCoherenceDrift` with added and
+  removed `git status --short` lines so moderators can judge whether the drift
+  affected the reviewed scope. Include-diff runs also record `diffSectionStatus`
+  with per-section status-before/status-after values and SHA-256 content
+  rechecks for branch, staged, unstaged, and untracked diff sections. Its basis
+  is `per-section-status-and-content-recheck`, and its `verificationMethod` is
+  `re-render-git-section-command`; it is stronger than a single
+  before/after status check but still not an atomic filesystem snapshot.
+  `gitStatusStable: true`/`diffCoherent: true` is still only the `diffCoherenceBasis`
+  (`git-status-short-before-after`) for the packet capture window. It means the
+  before/after status checks matched; it does not prove the branch, staged,
+  unstaged, and untracked sections were captured as an atomic snapshot. When a
+  flow requests `--include-diff`, latest checks and gates require
+  that same scope; the scope match is hard, while diff-content authority remains
+  advisory in v0.5.
+  Current `--include-diff` runs record `diffAtomicity:
+  multi-command-status-only`; latest checks treat that as pass-with-warning
+  evidence until a future atomic snapshot path exists.
+  `stdinBytes` records the actual reviewer stdin prompt size; `auditBytes`
+  records packet plus prompt artifact size; `inputBytes` is a deprecated
+  compatibility alias for reviewer stdin size, and new consumers should prefer
+  `stdinBytes`. New run metadata also carries `_deprecatedInputBytes` next to the
+  alias so standalone `run.json` consumers see the deprecation. `--max-prompt-bytes` blocks only `stdinBytes`; it is a
+  runner-side guard, not proof that the reviewer model's real context window can
+  consume the entire prompt.
+  `maxOutputBytes` records the stdout/stderr capture limit used for `raw.md` and
+  `reviewerResult.*CapturedBytes`; `reviewerResult.*Truncated` tells consumers
+  to inspect the partial stream files before treating missing tail content as
+  absence of reviewer evidence. `runArtifactHashes` stores generation-time
+  SHA-256 hashes for `packet.md`, `prompt.md`, `raw.md`, and the initial
+  `moderation.md` template; v0.5 records these slots for future tamper-evidence
+  work, but `--check-latest` does not yet enforce them. `runArtifactHashesNote`
+  repeats that audit-only boundary inside each new `run.json`.
+  Packet-only prompts include the packet inline, while non-packet-only prompts
+  send only the packet path and record large `auditBytes` as a warning instead
+  of blocking reviewer execution.
+
+`--check-latest` ignores dry runs for evidence acceptance, reports
+`status: "dry-run-only"` when only dry-run artifacts are present, and checks the
+latest real run matching the requested reviewer, mode, `--include-diff` setting,
+`--packet-only` setting, and current packet fingerprint:
+
+The packet fingerprint intentionally includes conservative packet-generation
+signals such as implementation-reference and repo-identity warnings. Cross-fork
+or cross-checkout evidence reuse is out of scope for v0.5; when those signals
+change, require a fresh review rather than normalizing them away.
+
+- reviewer status is `success`;
+- failure class is `none`;
+- output format is `findings_table` or `numbered_findings`;
+- raw output reclassifies as `findings_table` or `numbered_findings`;
+  findings-table rows must carry both a finding ID and P1/P2/P3 severity in the
+  same table row;
+  heading-style numbered findings with explicit `Severity:` or `Priority:` P
+  labels are also recognized; loose priority/severity tables without finding
+  headers or labeled finding IDs remain unstructured;
+- moderation is `status: complete`;
+- moderation has at least one decision row, unless the primary moderator records
+  `- No findings: confirmed` after verifying the reviewer produced no findings
+  requiring classification.
+- P1/P2 rejected moderation rows with weak or placeholder `Reason` text make
+  latest checks pass with warning instead of silently becoming high-confidence
+  review evidence. In gated mode, the same weak P1/P2 rejection warning blocks
+  readiness instead of becoming satisfied-with-warning evidence. Short explicit
+  cross-references such as `Duplicate of F3`, `Intentional per D5`, or
+  `See D5 in design` are treated as substantive references rather than weak
+  placeholders. Bare references such as `Per D99` are not sufficient; `per`
+  references need a short justification fragment after the reference. The v0.5
+  heuristic treats rejection reasons shorter than 20 characters as weak unless
+  they match a recognized cross-reference pattern, and also treats placeholder
+  phrases such as `n/a`, `none`, `ok`, `disagree`, `declined`, `won't fix`,
+  `will not fix`, `false positive`, `not needed`, and `cosmetic` as weak.
+- `- No findings: confirmed` conflicts with structured raw reviewer findings;
+  latest checks pass with warning when this bypass shape appears.
+Scope fingerprints include filtered git status. Temporary files, build outputs,
+or other benign working-tree noise can make a previously moderated run stale
+unless the project explicitly lists that generated noise in
+`scopeIgnorePatterns`. Matching repo-relative paths are omitted from packet git
+status, untracked diff sections, advice status signals, and the scope
+fingerprint when the noise appears only through those sections. Tracked
+branch/staged/unstaged diffs and non-ignored changes still require fresh
+evidence. Packet `Scope Transparency` reports the count each pattern omits; a
+surprising nonzero count is a coverage-risk signal, not proof that the omitted
+content was safe.
+
+`--check-latest` exit codes:
+
+- `0`: pass.
+- `1`: pass-with-warning, such as denied-context pattern matches after an
+  otherwise valid review, a moderation table that rejects every finding, weak
+  P1/P2 rejection reasons, a `No findings: confirmed` conflict with structured
+  raw findings, or a moderation table with P1/P2 findings but no accepted or
+  carried-forward P1/P2 rows.
+- `2`: no run found, only dry-run artifacts found, or the latest scoped run was
+  intentionally skipped.
+- `3`: reviewer failed, timed out, or produced no usable output.
+- `4`: moderation is missing or incomplete.
+
+Explicit `--run` exits `0` when the reviewer process produced structured output
+and exits `3` whenever reviewer output is unstructured, even if the reviewer
+process also exited non-zero. It exits `1` for reviewer process failures whose
+output is otherwise structured or empty. `--run-if-needed --json` reports its
+own `exitCode` field and may return `0`, `1`, or `3` depending on whether it
+skipped execution, reused a warning-bearing run, launched a reviewer, or received
+unstructured reviewer output. Existing unusable evidence causes
+`--run-if-needed` to run the reviewer rather than propagate latest-check exit
+code `4`.
+
+Context boundaries are advisory in v0.5. The Claude CLI path uses read-only
+tool flags but does not provide OS-level path isolation.
+`--packet-only` is stronger than the file-read path because it passes the packet
+inline, uses Claude `--bare`, and disallows file/edit/shell tools; it still does
+not sandbox the process or prove the reviewer ignored all local context.
+Claude reviewer runs refuse CLI versions below the tested minimum because
+tool-boundary flags are part of the safety contract in both packet-only and
+non-packet-only modes.
+Gated init writes `packetOnly: true` by default; operators that rely on reviewer
+file spot-checks should either stay in manual/advisory mode during calibration
+or pass `--no-packet-only` for a specific gated run and carry the broader context
+exposure as a limitation.
+The default scrubbed reviewer environment excludes home/config path variables
+such as `HOME`, `USERPROFILE`, and `XDG_CONFIG_HOME`; pass them explicitly only
+when a reviewer CLI truly requires them.
+`TEMP` and `TMP` remain in the scrubbed environment for reviewer CLI
+compatibility. They are not recorded with values in `run.json`, but on some
+platforms their actual runtime values may point under a user profile directory
+and can reveal the OS username to the reviewer process, especially on Windows.
+`--dangerously-inherit-env` is an explicit dangerous escape hatch; prefer
+`--pass-env` with named provider auth variables. The old `--inherit-env` spelling
+is rejected so the risk is visible at the call site. Runs using
+`--dangerously-inherit-env` add a structured warning to `run.json`; gated mode
+blocks that warning so a full-environment reviewer run cannot satisfy gated
+readiness.
+
+Path sanitization reduces accidental local path disclosure in `packet.md` and
+`prompt.md`. It is not a privacy or sandbox guarantee for the full run directory,
+because `run.json` intentionally records local paths for audit/debugging.
+Packet rendering replaces the repo path plus common local path env values
+(`HOME`, `USERPROFILE`, `TEMP`, `TMP`, `APPDATA`, `LOCALAPPDATA`, and
+`XDG_CONFIG_HOME`) when those values appear in packet text.
+When `steadyspec init` enables cross-review, it appends `**/cross-agent/` to
+`.gitignore` so local run artifacts are not staged by accident. Full export
+sanitization remains a separate future policy before sharing complete run
+directories. Custom `--output-dir` locations outside the repository bypass that
+init-time `.gitignore` protection; `run.json` records a warning for those runs.
+
+For flow integration, use:
+
+```bash
+steadyspec cross-review --change <change-id-or-path> --advice --json
+steadyspec cross-review --calibrate-dir <changes-dir> --mode review --include-diff --verbose --json
+steadyspec cross-review --change <change-id-or-path> --gate --json
+steadyspec cross-review --change <change-id-or-path> --run-if-needed --json
+steadyspec cross-review --change <change-id-or-path> --run-if-needed --force --json
+steadyspec cross-review --change <change-id-or-path> --mode review --include-diff --check-latest --json
+```
+
+The advice JSON includes `status`, `recommended`, `policyActive`,
+`adviceActive`, `gateActive`, `configMode`, `reasons`, a `suggestedCommand`
+when signals recommend a run, and `suggestedCommandNotes` for known caveats in
+that command. With `--verbose`, advice/gate/run-if-needed JSON also includes
+`signalDetails` for calibration, including fired signals, matched high-risk
+terms, and high-risk terms removed by explicit negation. Even when config mode is
+`off`, `--advice --verbose --json` reports observed signal details while keeping
+`recommended: false`. Negation filtering is intentionally approximate: it scans
+within a bounded clause window of about 200 characters, so unusually long
+negated clauses can still fire as false positives and should be handled through
+calibration. Calibration JSON from `--calibrate-dir` includes
+`changeCount`, `recommendedCount`, `pathSignalsAvailableCount`,
+`signalCountSummary`, `calibrationNote`, and per-change advice entries.
+Per-change entries include `pathSignalsAvailable` and
+`pathSignalStatusLineCount` so clean or already-committed historical changes do
+not masquerade as zero path risk. It does not invoke reviewers or create run
+artifacts.
+The batch helper is intentionally non-recursive: callers must pass a parent
+directory whose direct children are change directories, such as `.meta/changes`
+or `docs/changes`, rather than a higher-level archive root.
+The gate JSON includes
+`status`, `policyActive`, `recommended`, `latest`, warnings, and errors. In
+`gated` mode, `status: blocked` exits `5` when a recommended review is missing,
+failed, stale for the requested scope, unstructured, or unmoderated. The
+gated check also blocks all-rejected moderation tables, conflicting
+`No findings: confirmed` moderation, and P1/P2 finding sets with no accepted or
+carried-forward P1/P2 rows. It also blocks weak or placeholder P1/P2 rejection
+reasons. It also checks reviewer-original
+P1/P2 severities so a moderation table cannot satisfy the gate by downgrading
+every serious reviewer finding to P3. Latest checks warn when reviewer finding
+IDs are missing from the moderation table, making omitted findings visible as
+pass-with-warning evidence. `needs-user` is a first-class gate stop: if any
+P1/P2 moderation row or reviewer-original P1/P2 row is routed to `needs-user`,
+or if a reviewer-original P1/P2 finding has no moderation row, gate JSON returns
+`status: needs-user`, `action: user-confirmation-required`, `resolutionHint`,
+and exit `5`.
+This conservative P1/P2 policy can
+be stricter than a project ultimately wants when every reviewer P1/P2 is genuinely
+rejected with strong reasons; waiver policy remains future work before gated
+mode becomes a shared workflow default. In gated mode, denied-context warnings also block
+instead of becoming satisfied-with-warning evidence. This blocking is pattern-based and
+best-effort: it covers known Windows home/AppData, WSL/UNC, macOS
+application-support, Unix home, env/key/cert, and prior cross-agent path shapes,
+but novel encodings, line wrapping, or path formats can bypass the scanner. The
+scanner reports "no detected disclosure", not proof of compliance or proof that
+the reviewer ignored denied context.
+scanner matches reviewer home config directories both with and without a trailing
+path separator, including standalone `.claude`, `.codex`, and `.ssh` mentions.
+The denied-context scanner ignores obvious boundary-restatement lines such as
+"I will not access ..." and suppresses a dedicated `Boundary Disclosure` section
+so compliant reviewers are less likely to block gated mode by merely repeating
+the denied paths. Boundary disclosures that report actual or possible access,
+such as "I accidentally read ..." or "I could not avoid ...", remain scannable
+and can produce denied-context warnings; denied-path lines inside the disclosure
+that are not part of an obvious restatement list remain scannable even without
+access verbs. It also filters simple scope-description lines such as "the .codex
+folder was outside scope", but descriptive denied-path mentions that do not match
+those heuristics can still warn or block. Reviewer execution on non-Windows requires
+`--experimental-posix` until cross-platform smoke exists; advice, packet generation, latest
+inspection, and read-only gate checks remain available without that opt-in. The
+run-if-needed JSON includes
+`status`, `action`, `latestBefore`, and `run`. It may invoke a long-running
+reviewer process, but it does not moderate findings; successful reviewer output
+still leaves `moderation.md` at `status: template` until the primary agent
+classifies findings. The latest-check JSON includes `status`,
+`exitCode`, latest run identity, reviewer status, failure class, output format,
+moderation status, decision-row count, warnings, and errors. Flows should treat
+`status: pass-with-warning` as usable evidence with explicit limitations, not as
+  a clean pass. `--run-if-needed --force --json` keeps the advice check but
+ignores an already usable or warning-bearing latest run and invokes the reviewer
+again.
+Gate JSON includes `action: "moderation-required"` when a scoped reviewer run
+exists but the moderation artifact is still incomplete, allowing flows to route
+to moderation instead of treating the block as a missing reviewer run.
+
+Codex reviewer execution requires `--experimental-codex` and emits an explicit
+warning that Codex reviewer version checks are not implemented yet. Debate-mode
+reviewer execution requires `--experimental-debate`; without that flag, debate
+mode is packet-generation only. For the current mode-3 challenge lane, use
+`design` or `review` mode with a challenger prompt; `debate` is still an
+experimental output-mode split.
+
 ## v0.4 Capability Lane
 
 v0.4 adds an optional capability lane for changes where the problem is not only
