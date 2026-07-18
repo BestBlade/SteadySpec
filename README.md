@@ -10,6 +10,76 @@ Long-running work with AI agents has a quiet failure mode: the agent slowly edit
 
 The reference skill pack (`/steadyspec:explore` / `:propose` / `:apply` / `:verify` / `:archive`) wraps a spec workflow with closed-loop orchestration: explore routes attention to active risk, propose records a decision ledger and risk routing, apply executes slice-by-slice with proof-linked decisions and explicit re-slice events, verify runs a trust checkpoint before archive or handoff, and archive runs review + doc-sync + confirmed_by + durable truth gates before writing. It coexists with OpenSpec, plain docs, or issue trackers. The method is substrate-aware: OpenSpec owns its own schema, docs mode can use SteadySpec's native structural contract/checker, and issue trackers remain experimental.
 
+## v0.6 Attention-Preserving Closure
+
+v0.6 adds an optional closure support engine under `verify`; the outward product
+still has exactly five governed verbs. Closure coordinates a fingerprint-bound
+Builder -> proof -> Evaluator loop after a fresh read-only Critic has identified
+gaps. Its purpose is to automate low-risk repair and re-check turns without
+silently changing intent, evidence expectations, or decision ownership.
+
+Enable it explicitly during project installation:
+
+```bash
+steadyspec init --runtime codex --substrate docs --closure manual
+```
+
+This writes `.steadyspec/closure.json` as an intentionally incomplete review
+template. The operator must define proof policies and each change must provide
+the referenced `acceptance-profile.json`; generated templates contain no
+inferred proof commands. `manual` records each transition without auto-routing.
+`auto` may route only declared, mechanically bounded Builder slices. It stops
+for scope expansion, requirement reduction, changed proof strategy, user-visible
+or high-risk semantics, missing evidence, environment failure, recurrence,
+no-progress, maximum-cycle or wall-clock limits, and residual human decisions.
+
+The cycle binds the original intent files, acceptance profile, proof-policy
+identity, exact candidate bytes, and proof evidence. A Critic emits stable
+finding IDs; Builder-before declares paths, authority IDs, proof policies, and a
+completion token; proofs run only operator-configured executable/argv policies;
+the fresh Evaluator binds both `candidateFingerprint` and
+`evidenceBundleFingerprint` and checks requirement completeness, logic,
+edge cases, code quality, test coverage, actual runtime result, and whole intent.
+Same-family agent runs are labelled as structured scrutiny, not independent
+truth. One isolated formatting retry is permitted for malformed Evaluator
+output; a second unusable result blocks on the environment rather than being
+silently repaired.
+
+Evaluator transport has a committed invocation boundary. After proofs produce
+both current fingerprints, write a start record with `schemaVersion`,
+`candidateFingerprint`, `evidenceBundleFingerprint`, `invocationId`, `reviewer`,
+`transport`, and an `expectedRunDir` inside the governed change. Run
+`--evaluator-start <record.json>` before launching that exact external run, then
+import only that directory with `--import-evaluator <run-dir>`. The intervening
+`evaluator-running` state rejects duplicate starts. If transport is interrupted,
+the operator inspects the recorded run and either imports it or explicitly uses
+`--decide reopen|abandon --reason <text>`; the agent cannot silently retry it.
+
+```bash
+steadyspec closure --change <change-id-or-path> --validate-config --json
+steadyspec closure --change <change-id-or-path> --prepare --json
+steadyspec closure --change <change-id-or-path> --evaluator-start <record.json> --json
+steadyspec closure --change <change-id-or-path> --import-evaluator <run-dir> --json
+steadyspec closure --change <change-id-or-path> --status --json
+steadyspec closure --change <change-id-or-path> --check --json
+```
+
+`candidate-ready` means bounded machine readiness for the current candidate,
+current evidence bundle, declared context, and recorded unknowns. It is audit
+input for the ordinary human trust checkpoint: it is not human acceptance,
+truth, correctness outside observed evidence, merge authority, or release
+authority. Non-ready states block an archive recommendation without erasing
+partial progress. Corrupt primary state may be inspected through
+`--recover-previous --reason <text>` only when a separately validated previous
+state exists; terminal reset/abandon and approve/reject/reopen decisions preserve
+lineage and require an explicit reason.
+
+The shipped boundary remains Windows single-user. There is no Builder OS
+sandbox, no general proof side-effect isolation, no POSIX/team support claim,
+and no promise that multiple agents know unprovided reality. See
+[QUICKSTART.md](QUICKSTART.md) for operation and
+[ARTIFACT_CONTRACT.md](ARTIFACT_CONTRACT.md) for the persistent contract.
+
 ## v0.3 Attention & Responsibility Model
 
 v0.3 makes responsibility explicit. Meaningful decisions are recorded in a decision ownership ledger, routed by risk, and reported in attention-ranked form: must-read user-owned/high-risk decisions first, needs-glance shared/medium-risk items next, and low-risk agent-owned decisions collapsed but still auditable. The model is defined in [ARTIFACT_CONTRACT.md](ARTIFACT_CONTRACT.md).
@@ -387,7 +457,7 @@ SteadySpec ships `init` and a docs-mode structural `check`. There is no `update`
 
 ## Stability
 
-v0.4-alpha is alpha. Before 1.0, breaking changes may still happen, but SteadySpec intends to keep these surfaces stable unless [CHANGELOG.md](CHANGELOG.md) says otherwise:
+v0.6 remains pre-1.0. Before 1.0, breaking changes may still happen, but SteadySpec intends to keep these surfaces stable unless [CHANGELOG.md](CHANGELOG.md) says otherwise:
 
 - Outward verb names: `/steadyspec:explore`, `/steadyspec:propose`, `/steadyspec:apply`, `/steadyspec:verify`, `/steadyspec:archive`.
 - Verb-flow SKILL names: `steadyspec-<verb>-flow`.

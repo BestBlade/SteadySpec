@@ -29,6 +29,149 @@ schemaVersion: 1
 Existing artifacts without this marker remain valid input. Workflow scripts must
 treat missing schemaVersion as legacy format, not as corruption.
 
+## v0.6 Closure Lane Artifact Contract
+
+Closure is an optional support engine under the governed `verify` verb. It does
+not add a sixth verb and does not own acceptance, merge, archive, or release
+decisions. The supported public boundary is one operator on Windows. Runtime
+checks do not imply a Builder sandbox, general side-effect isolation, POSIX or
+team support, or knowledge of reality outside the supplied context.
+
+### Opt-in and acceptance profile
+
+Project opt-in is `.steadyspec/closure.json` (`schemaVersion: 1`). It names
+`mode: off|manual|auto`, the per-change acceptance-profile filename, explicit
+limits, and operator-authored proof policies. Generated configuration has
+`generatedTemplate: true`, `reviewRequired: true`, and no proof policies; it is
+not executable evidence until reviewed. Proof policies use direct executable
+and argv fields, scrubbed environment-key names, expected exit codes, timeout,
+declared dependencies/outputs/mutable surfaces, and an evidence contract. No
+command may be inferred from a change artifact or Evaluator response.
+
+Each opted-in change supplies `acceptance-profile.md` for human review and
+`acceptance-profile.json` for the engine. The JSON closes the candidate path
+set and the six dimensions: `requirement-completeness`, `logic-correctness`,
+`edge-cases`, `code-quality`, `test-coverage`, and `actual-runtime-result`.
+Every dimension names required proof-policy/source classes and a coverage
+limit. Required dimensions cannot become `n/a` merely because evidence is
+missing.
+
+### Persistent state and cycle records
+
+The change directory owns the following local audit lineage:
+
+```text
+closure/
+  state.json
+  state.prev.json
+  calibration.json
+  reset-in-progress.json
+  archive/<reset-id>/
+    reset-manifest.json
+    reset-decision.json
+    reset-journal-final.json
+  cycles/<NNN>/
+    candidate.json
+    critic-ref.json
+    builder-before.json
+    builder-completion.json
+    incomplete-repair-inspection.json
+    proofs.json
+    proofs/<policy-id>.stdout.txt
+    proofs/<policy-id>.stderr.txt
+    evidence-manifest.json
+    evaluator-invocation.json
+    evaluator-ref.json
+    verdict.json
+    human-decision-<decision-id>.json
+```
+
+In documentation, `closure/cycles/<NNN>/` denotes this versioned directory;
+the runtime uses a zero-padded numeric cycle. `state.json` is the current
+schema-valid snapshot and `state.prev.json` is the independently inspected
+previous publication. Writes use a same-directory temporary file plus rename.
+A validated previous state may be recovered only through the explicit
+`--recover-previous --reason` route, which archives raw state bytes and records
+a possible lost transition. Invalid previous state fails closed.
+
+`reset-in-progress.json` is a recovery journal, not a completed decision. A
+terminal reset inventories and hashes all source evidence, copies it to a
+same-directory staging tree, verifies exact bytes, and commits the archive with
+one directory rename before deleting live state. While the journal exists, all
+other actions are blocked; rerunning `--reset --reason` resumes the recorded
+operation. `human-decision-<decision-id>.json` uses a canonical ID bound to the
+prior state identity, lineage/cycle, both fingerprints, decision, and reason.
+An exact artifact-before-state or committed retry is reconciled idempotently;
+any mismatch fails closed and never creates agent decision authority.
+
+`candidate.json` binds intent files, acceptance profile, proof-policy identity,
+and exact candidate bytes into `candidateFingerprint`. Builder-before binds
+finding IDs, planned paths/summaries, authority IDs, proof policies, risk class,
+and a completion token. Completion records exact path/hash deltas and finding
+dispositions. An undeclared delta is preserved for an explicit
+approve/reject/reopen decision; approval never skips fresh proof or evaluation.
+
+`evidence-manifest.json` binds proof policy identity, execution result, captured
+stdout/stderr hashes and artifacts, candidate identity, coverage claims, and
+negative-control calibration into `evidenceBundleFingerprint`. Proof output is
+data, never executable instruction. Candidate mutation, policy drift, unknown
+proof result, timeout, truncation, or undeclared output overlap fails closed or
+routes to a visible human/environment state.
+
+### Critic, Builder, and Evaluator contracts
+
+The Critic is read-only and emits stable findings with severity, claim/risk,
+evidence, breaking scenario, alternative, and recommended action. Raw auxiliary
+output is preserved separately from primary moderation. Same-family or
+same-host review is structured scrutiny, not independence proof.
+
+The Builder may address only `open` or `carried-forward` finding IDs and only
+declared candidate paths within the configured auto-file limit. Fixed or
+rejected findings cannot be silently reopened. Auto admission is mechanical;
+it does not prove semantic adequacy.
+
+Before Evaluator transport begins, `evaluator-invocation.json` commits the
+`invocationId`, `reviewer`, `transport`, `expectedRunDir`,
+`candidateFingerprint`, and `evidenceBundleFingerprint`. This changes state
+from `evaluator-required` to `evaluator-running`; a duplicate start is rejected.
+Import accepts only the exact recorded directory, reviewer, and fingerprints.
+If that invocation is interrupted, no agent may infer permission to call it
+again: a human must inspect it and explicitly `reopen` or `abandon`, or import
+the exact completed run.
+
+The resulting fresh Evaluator checks all six dimensions plus whole intent,
+closes existing findings, may add structured findings, declares context and
+independence limits, records unobserved reality/residual unknowns, and emits one
+of exactly:
+
+- `candidate-ready`
+- `fix-required`
+- `needs-user`
+- `blocked-by-environment`
+- `non-convergent`
+
+Malformed Evaluator output may receive one fresh formatting-only retry over the
+unchanged packet and fingerprints; the first output is not fed into the retry.
+A second unusable result is recorded as an environment block, never repaired
+into a semantic verdict by the primary.
+
+### Progress, staleness, and authority
+
+Each cycle records Critic-time open P1/P2 baseline, recurrence signatures,
+verdict history, and progress diagnostics. Legacy state without that baseline
+is explicitly `unknown-legacy-baseline`; it is not reconstructed from later
+Builder dispositions and cannot invent a no-progress breach. Recurrence,
+same-candidate verdict oscillation, configured no-progress, hard maximum-cycle,
+and wall-clock bounds preserve artifacts and route to human inspection.
+
+Any candidate/evidence/policy/fingerprint change makes downstream proof or
+verdict stale. `candidate-ready` means the exact current candidate is ready for
+a human trust checkpoint within recorded coverage. It is not human acceptance,
+truth, correctness outside observed evidence, or merge/release authority. In
+particular it is not merge or release authority. Scope expansion, requirement
+reduction, proof-strategy change, public/high-risk semantics, unresolved value
+or risk judgment, non-convergence, and residual acceptance remain human-owned.
+
 ## Native Docs Substrate Contract
 
 When a project uses `docs/changes/` as its primary substrate, SteadySpec owns a
@@ -442,6 +585,17 @@ exposure as a limitation.
 The default scrubbed reviewer environment excludes home/config path variables
 such as `HOME`, `USERPROFILE`, and `XDG_CONFIG_HOME`; pass them explicitly only
 when a reviewer CLI truly requires them.
+Closure proofs and scrubbed reviewer runs both construct their environment
+through `en/runtime/closure-env.js`. The proof caller uses the shared Windows
+baseline plus policy `envKeys`; the reviewer caller adds only its documented
+CLI compatibility keys, named `--pass-env` keys, and the
+`STEADYSPEC_CROSS_REVIEW_CHILD=1` process marker. Inspection artifacts contain
+key names and their sources, never values. A missing proof `envKeys` name fails
+closed; a missing reviewer `--pass-env` name is recorded in
+`environment.missingExplicitKeys` and emitted as a warning, which prevents that
+run from satisfying a warning-free gate. Windows key lookup is
+case-insensitive while the actual source spelling is preserved once, so a
+single `Path` value is not duplicated as `PATH`.
 `TEMP` and `TMP` remain in the scrubbed environment for reviewer CLI
 compatibility. They are not recorded with values in `run.json`, but on some
 platforms their actual runtime values may point under a user profile directory
@@ -451,7 +605,9 @@ and can reveal the OS username to the reviewer process, especially on Windows.
 is rejected so the risk is visible at the call site. Runs using
 `--dangerously-inherit-env` add a structured warning to `run.json`; gated mode
 blocks that warning so a full-environment reviewer run cannot satisfy gated
-readiness.
+readiness. The shared-helper fixtures prove construction and key-only reporting
+for synthetic inputs; they do not prove OS-level secrecy or sandbox the child
+process.
 
 Path sanitization reduces accidental local path disclosure in `packet.md` and
 `prompt.md`. It is not a privacy or sandbox guarantee for the full run directory,
@@ -550,6 +706,149 @@ again.
 Gate JSON includes `action: "moderation-required"` when a scoped reviewer run
 exists but the moderation artifact is still incomplete, allowing flows to route
 to moderation instead of treating the block as a missing reviewer run.
+
+### Deterministic Claude Workflow Preflight
+
+The installed Claude `verify` and `archive` workflow scripts use a stricter
+read-only carrier than the general skill guidance. They may consume existing
+state only through `--advice --json`, `--gate --json`, and an exact claim-bound
+`--check-latest --json`. They never plan reviewer-launch, force, skip, automatic
+moderation, or experimental execution flags. Advice `suggestedCommand`, gate
+`action`/`resolutionHint`, and every command-shaped JSON field remain report
+data and are never followed automatically.
+
+An explicit implementation-review claim has precedence over policy advice. It
+must bind reviewer, `mode=review`, `includeDiff=true`, packet-only choice, and
+the exact output directory. The explicit source list is what creates the claim;
+`claimRequired` must agree with that list in both directions. Exactly one
+observed candidate artifact parent must normalize to the same output directory;
+missing, duplicate, ambiguous, traversal-bearing, or mismatched scope blocks the
+claim without defaulting to the newest run. Change, artifact, and output
+declarations are repository-relative; explicit claim sources are
+change-relative. Both domains use the same strict lexical spelling rules, but
+the workflow does not pretend they have the same base. Absolute, drive-relative,
+UNC/device, URI, home, encoded-percent, control/format, traversal,
+alternate-data-stream, reserved-device-name, duplicate, and case-only alias
+forms fail closed; slash and harmless dot segments are canonicalized before an
+exact comparison. This is lexical declaration hardening, not existence,
+filesystem identity, or symlink/junction containment proof. In gated mode the
+exact latest check is followed by
+the same scope's read-only gate; gate `not-required` cannot upgrade a failed
+claim check. Without an explicit claim, gated mode runs the gate and other modes
+run advice. Existing artifact directories alone are unbound traces, not claims.
+
+Workflow code validates the planned argv against the reported executed argv,
+requires the exact planned observation count/order/kind, parses one JSON value,
+binds JSON/shell exit semantics and policy config mode, and rejects observed
+reviewer launch or moderation write. A ready latest check or gate must carry an
+exact, current-host native absolute `run.json` identity. Windows ADS, reserved
+device names, illegal characters, UNC/device forms, trailing dot/space, and
+foreign-host path forms fail closed. For an explicit claim, both the reported
+output parent and direct child run path must be under the exact
+`projectRoot + outputDir` plan. `check-latest` may supply only its top-level
+trace; gate readiness may supply only `latest`, whose status/exit pair must be
+`pass/0` or `pass-with-warning/1` as appropriate. A check/gate pair may support
+one claim only when their raw path strings are byte-identical; shadow carriers,
+a same-looking but different trace, and reordered or extra observations block
+instead of being combined. This v0.6.1 correction does not add an observation
+fingerprint to the public cross-review JSON contract, so same-path content
+replacement between observations remains a named residual risk. `needs-user`,
+moderation-required, invalid, missing, skipped, failed, stale, or unstructured
+claim evidence cannot support archive readiness.
+
+Advisory recommendations remain non-blocking limitations. The archive composer
+returns only six fixed arrays of source-attributed narrative items. Every source
+reference must exactly match a code-built allowlist, and extra authority fields
+such as readiness, `runJson`, an archive path, or arbitrary archive Markdown are
+rejected. Workflow code escapes and quotes each narrative line as explicitly
+non-authoritative data, renders all headings and facts, and appends exactly one
+final namespaced machine claim block. Natural-language claim-like prose is not
+treated as a machine claim and is not promised to be semantically classified;
+only that namespaced block is machine-recognized. When included, the block binds
+the exact `run.json`; when no explicit claim was made, it records `Included:
+no`, `Readiness: not-claimed`, and `Run JSON: None`. It also states that this is
+auxiliary evidence, not human acceptance, truth, merge, or release authority.
+
+The `archive` workflow renders exact UTF-8 content, prepares an
+`archive-finalize` transaction, and stops at `ready-for-human-archive` plus
+`needs-user`. Prepare does not write `archive.md`, move a change, or report
+`archived`. The returned archive location is derived in dependency-free code
+from the strict change ID, selected substrate, and exact active change root; a
+gather-agent path is neither accepted nor forwarded. The public docs check
+command remains useful diagnostics, but only the transaction helper's check of
+the bound staging tree can support the filesystem transition.
+
+### Hash-Bound Human Decision Transaction
+
+The existing `steadyspec` executable has a hidden internal support route; it is
+not a sixth methodology verb and is not listed by public help or the workflow
+manifest:
+
+```text
+steadyspec internal human-transaction prepare --kind <intent-expansion|archive-finalize> --change <active-change> --request <request.json> --json
+steadyspec internal human-transaction status --decision-id <id> --json
+steadyspec internal human-transaction commit --decision-id <id> --decision-record .steadyspec/human-transactions/<id>/decision.json --json
+steadyspec internal human-transaction cancel --decision-id <id> --decision-record .steadyspec/human-transactions/<id>/decision.json --json
+```
+
+`pending.json` is immutable and binds the kind, active change/repository and
+helper runtime identity, exact source bytes or manifest, exact operation and
+preview, expected postconditions, one-time decision ID, binding hash, and
+pending hash. Valid prepare writes control-plane transaction state only and
+returns `needs-user`; malformed input fails before a pending record is created.
+An active change root must have a non-reserved basename and an exact regular
+`proposal.md`; an archive container is never an active change. Archive source
+and target roots must also be disjoint in both containment directions.
+The primary thread, not an agent schema answer, obtains the real user response
+and separately persists the exact `decision.json`. `decisionBindingValid`
+proves record/hash binding only. It is not a signature, identity attestation, or
+proof that a named human supplied the file.
+
+`commit.json` is a recoverable journal, not an authority source. Its self-hash
+detects corruption but does not establish provenance. On every read, helper
+code re-derives work paths, target lock identity, runtime identity, before
+observation, and allowed phase from immutable pending state. A journal-supplied
+redirect, changed decision, stale source/target/runtime, path link/alias,
+unknown file constellation, or replay conflict fails closed before an
+unapproved domain mutation. Target-scoped lock owner directories are published
+atomically. A live owner blocks; a hash-valid dead owner can be moved to its
+token-specific quarantine and the exact transaction retried without guessing.
+PID reuse may conservatively block and remains an operational soft boundary.
+
+`intent-expansion` accepts only the active change's exact `proposal.md`, one of
+five declared fields, one code-derived whole-line section, and one insertion.
+The insertion and addition end on line boundaries, the composed after-image is
+revalidated as exact UTF-8, and pending carries the complete field before/after
+bytes and text plus a deterministic one-hunk unified preview for human audit.
+Commit can produce only `before[0:offset] + addition + before[offset:]`; exact
+readback proves old-byte preservation and the bound insertion. It does not
+prove that the new text is semantically expansion rather than narrowing. Apply
+therefore stops after prepare and writes drift evidence only after an exact
+commit postcondition; cancel or uncertain process observation writes no drift
+evidence.
+
+`archive-finalize` accepts direct active changes under `docs/changes`,
+`openspec/changes`, or `.meta/changes`, plus an explicit custom active-change
+path that already contains `proposal.md`. Custom mode still derives only the
+fixed sibling `<base>/archive/<change-id>` target; callers cannot supply an
+arbitrary move target. It binds source and target manifests plus rendered archive bytes,
+builds a same-parent staging tree, runs the bound docs check when required,
+commits the target, atomically detaches the unchanged source, and removes the
+retired tree. Only exact target/archive readback, source/staging/retired absence,
+current pending/approve-decision binding, and a fresh target docs check may
+return filesystem `archived`. That state is not human acceptance, truth, merge,
+publication, or release authority.
+
+Apply/archive workflow code owns the argv and decision path, requires an exact
+non-empty `changeDir` on every resume, and requires exact
+argv/exit/single-JSON/change-root agreement. Before commit or cancel it runs the
+helper's read-only status action and binds decision ID, kind, change ID, and
+change root; a mismatch stops before the mutating action is invoked. Workflow
+code never follows command-shaped output. The host process call and its
+returned stdout remain agent-mediated observations, not proof that a hostile
+host executed no additional command. Missing or conflicting observation routes
+to inspection/recovery with the same decision ID rather than an inferred
+success.
 
 Codex reviewer execution requires `--experimental-codex` and emits an explicit
 warning that Codex reviewer version checks are not implemented yet. Debate-mode
@@ -793,6 +1092,7 @@ Each completed slice in `evidence.md` must use this table shape:
 | Result | <pass|fail|drift|fallback|blocked> |
 | Output Summary | <summary> |
 | Coverage Limit | <what this proof does not prove> |
+| Linked Decisions | <decision ids or None> |
 | Fallback | <fallback or None> |
 | Accepted Debt | <debt or None> |
 ```
@@ -829,12 +1129,59 @@ placeholder text.
 Every Claude workflow script that reads change artifacts must apply a legacy
 evidence migration rule at gather time:
 
-- If `evidence.md` already contains `| Field | Value |`, treat it as structured
-  table evidence.
+- If `evidence.md` already contains `| Field | Value |`, parse recognized table
+  evidence conservatively. Current canonical cell values use a `uri:` plus
+  `encodeURIComponent` codec; an older table-cell encoding remains legacy input
+  and keeps the complete original source in the preserved-source carrier.
 - If the header is absent, treat the content as legacy free-form evidence.
 - Extract what can be extracted without deleting or rewriting the source.
 - Mark missing fields as `evidence-migration-unavailable`.
 - Re-running the adapter must be idempotent.
+
+Apply and verify share one dependency-free normalization contract. Gather must
+return an explicit evidence source status plus the complete content string; a
+truncated, incomplete, or unreadable source blocks apply and forces a verify
+gap. An agent summary is not a replacement for source content. In every source
+status, `evidenceSource.path`, the declared `evidencePath`, and the
+`proposalPath`-derived `evidence.md` target must identify the same path before
+apply implements a slice or verify evaluates readiness. A mismatch stops.
+
+Resumed apply merges canonical evidence by `sliceIndex`. `behavior`, proof
+command/result/summary/coverage, linked decisions, fallback, and accepted debt
+are identity-bearing semantic fields: an exact replay is idempotent, while a
+same-index difference is a conflict and must not overwrite the older row.
+Drift and re-slice events use `(timestamp, slice, type)` identity and follow the
+same exact-replay/conflict rule.
+
+Legacy free-form content is retained in a `json-string-v1` preserved-source
+carrier after the canonical tables. The carrier must round-trip the gathered
+content string exactly and remains untrusted evidence; it cannot satisfy a
+missing canonical field or support an archive recommendation. Here, lossless
+means canonical-field semantic preservation plus exact carrier-string recovery.
+It does not claim raw filesystem-byte identity, atomic file replacement, or
+live Claude host fidelity. Consumed-source accounting is fail-closed: if the
+canonical renderer cannot reproduce the complete input string, the complete
+input is retained in the carrier and the normalized view stays `mixed` rather
+than silently dropping unknown prose, sections, rows, or formatting.
+
+Verify consumes a read-only normalized view and never rewrites evidence.md.
+Legacy, preserved, absent, incomplete, malformed, conflicting, sentinel-bearing,
+or `fallback` evidence forces `evidenceCredibility: gap|blocked` and prevents
+`recommendedNext: archive`. A `fail` or `drift` proof result stops verification
+readiness; a `blocked` result remains unresolved work.
+Apply records every allowed proof result, not only passes, and its final route
+may recommend archive only when every applicable current result is `pass` and
+the re-normalized complete merged evidence view returns `archiveAllowed: true`.
+Prior fallback, non-pass, preserved/mixed source, or migration sentinel cannot
+be hidden by a later passing slice.
+`fallback` and `blocked` remain in apply; `fail` and `drift` stop. Durable
+`requiredNext: stop` outranks docs, remaining-slice, fallback, and blocked
+continue branches. `Overall status: all-passed` is reserved for a non-empty
+all-`pass` slice set;
+fallback or any other non-pass result is `partial`, and an empty set is
+`no-proof`. Apply writes only a conflict-free changed merge, then requires exact
+content-string readback; a mismatch stops instead of reporting the evidence as
+written.
 
 ## Patch Dependency Order
 

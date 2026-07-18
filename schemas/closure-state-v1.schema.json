@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://steadyspec.dev/schemas/closure-state-v1.schema.json",
+  "title": "SteadySpec closure state v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "contractVersion", "lineageId", "change", "mode",
+    "state", "cycle", "nextAction", "inProgressStep", "completedSteps",
+    "candidateFingerprint", "candidateManifest", "evidenceBundleFingerprint",
+    "evidenceManifest", "findings", "builder", "proofs", "evaluator",
+    "counters", "escalations", "decisions", "contextLimits", "createdAt", "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "contractVersion": { "const": "0.6" },
+    "lineageId": { "type": "string", "minLength": 1 },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "profilePath", "configPath"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "profilePath": { "type": "string", "minLength": 1 },
+        "configPath": { "type": "string", "minLength": 1 }
+      }
+    },
+    "mode": { "enum": ["manual", "auto"] },
+    "state": {
+      "enum": [
+        "idle", "critic-required", "builder-required", "builder-in-progress",
+        "proofs-required", "evaluator-required", "evaluator-running",
+        "candidate-ready", "fix-required", "needs-user",
+        "blocked-by-environment", "non-convergent", "abandoned"
+      ]
+    },
+    "cycle": { "type": "integer", "minimum": 0 },
+    "nextAction": { "type": "string", "minLength": 1 },
+    "inProgressStep": { "type": ["string", "null"] },
+    "completedSteps": { "type": "array", "items": { "type": "string" } },
+    "candidateFingerprint": { "anyOf": [{ "$ref": "#/$defs/fingerprint" }, { "type": "null" }] },
+    "candidateManifest": { "type": ["object", "null"] },
+    "evidenceBundleFingerprint": { "anyOf": [{ "$ref": "#/$defs/fingerprint" }, { "type": "null" }] },
+    "evidenceManifest": { "type": ["object", "null"] },
+    "findings": { "type": "array", "items": { "type": "object" } },
+    "builder": { "type": ["object", "null"] },
+    "proofs": { "type": "array", "items": { "type": "object" } },
+    "evaluator": { "type": ["object", "null"] },
+    "counters": { "type": "object" },
+    "escalations": { "type": "array", "items": { "type": "object" } },
+    "decisions": { "type": "array", "items": { "type": "object" } },
+    "contextLimits": { "type": "array", "items": { "type": "string" } },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "fingerprint": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

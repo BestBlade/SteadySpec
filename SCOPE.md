@@ -1,6 +1,6 @@
 # SteadySpec Scope and Boundaries
 
-SteadySpec is a reference skill pack of the anti-drift method described in [METHOD.md](METHOD.md). It provides five outward verbs (`explore` / `propose` / `apply` / `verify` / `archive`), each a small closed-loop that orchestrates anti-drift mechanisms with explicit responsibility routing. To deliver on that promise reliably, the v0.4-alpha release defines specific boundaries. Read this before adopting.
+SteadySpec is a reference skill pack of the anti-drift method described in [METHOD.md](METHOD.md). It provides five outward verbs (`explore` / `propose` / `apply` / `verify` / `archive`), each a small closed-loop that orchestrates anti-drift mechanisms with explicit responsibility routing. To deliver on that promise reliably, the v0.6 release defines specific boundaries. Read this before adopting.
 
 ## Agent capability tiers
 
@@ -9,7 +9,7 @@ SteadySpec relies on agents reading SKILL descriptions, matching them to user in
 | Tier | Agents | Status |
 |------|--------|--------|
 | **Tier 1** | Claude Opus 4.x and above; GPT-5 and above | Full support. Skills auto-trigger on natural language; constraints are followed without explicit reminder. |
-| **Tier 2** | **DeepSeek-V4-Pro** (the affordable open-source baseline that defines Tier 2); Claude Sonnet 4.5 and above; GPT-4o-class; equivalents | **Primary optimization target for v0.4-alpha.** Skills auto-trigger on slash commands and skill descriptions. MUST-prefixed steps are followed reliably. Soft directives may need user reinforcement. |
+| **Tier 2** | **DeepSeek-V4-Pro** (the affordable open-source baseline that defines Tier 2); Claude Sonnet 4.5 and above; GPT-4o-class; equivalents | **Primary optimization target for v0.6.** Skills auto-trigger on slash commands and skill descriptions. MUST-prefixed steps are followed reliably. Soft directives may need user reinforcement. |
 | **Tier 3** | Claude Sonnet < 4.5; Claude Haiku; GPT-3.5 and below; local models under 30B; any model with limited tool-use reliability | **Not promised.** SteadySpec may load skills, but auto-triggering, MUST-step adherence, and failure-mode self-checks are not reliable. Use with explicit user guidance per turn or consider a different methodology. |
 
 If you cannot tell which tier your agent is in, assume Tier 3.
@@ -41,7 +41,7 @@ The lane lets the agent expand directions, draft evidence contracts, pressure-te
 
 ## Single-developer assumption
 
-SteadySpec v0.4-alpha is designed for **one author per change**. The "human" referenced in skills (`steadyspec-human-decision-record`, `steadyspec-strategy-rollup`, `verify-flow`, archive gates) means **future-you or a successor** — someone who needs to re-evaluate decisions without the original context.
+SteadySpec v0.6 is designed for **one author per change**. The "human" referenced in skills (`steadyspec-human-decision-record`, `steadyspec-strategy-rollup`, `verify-flow`, archive gates) means **future-you or a successor** — someone who needs to re-evaluate decisions without the original context.
 
 What this means in practice:
 
@@ -91,4 +91,4 @@ SteadySpec fits when **all** of these are true:
 3. You expect the work to live long enough that future-you (or a successor) will need the records.
 4. You are willing to invoke the five verbs explicitly when the situation calls for them.
 
-If any of those is false, SteadySpec v0.4-alpha is not the right fit. Use a lighter or different tool.
+If any of those is false, SteadySpec v0.6 is not the right fit. Use a lighter or different tool.

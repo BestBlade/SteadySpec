@@ -66,14 +66,24 @@ function validateHooksShape(hooks, file) {
   }
 }
 
+function managedHook(hook) {
+  return Boolean(hook && typeof hook.command === "string" && hook.command.includes(MANAGED_TAG));
+}
+
 function managedEntry(entry) {
-  return Boolean(entry && Array.isArray(entry.hooks) && entry.hooks.some((hook) => typeof hook.command === "string" && hook.command.includes(MANAGED_TAG)));
+  return Boolean(entry && Array.isArray(entry.hooks) && entry.hooks.some(managedHook));
 }
 
 function stripManaged(hooks = {}) {
   const next = {};
   for (const [event, entries] of Object.entries(hooks || {})) {
-    const kept = Array.isArray(entries) ? entries.filter((entry) => !managedEntry(entry)) : [];
+    const kept = Array.isArray(entries)
+      ? entries.flatMap((entry) => {
+        if (!entry || !Array.isArray(entry.hooks)) return [];
+        const remainingHooks = entry.hooks.filter((hook) => !managedHook(hook));
+        return remainingHooks.length ? [{ ...entry, hooks: remainingHooks }] : [];
+      })
+      : [];
     if (kept.length) next[event] = kept;
   }
   return next;

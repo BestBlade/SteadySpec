@@ -16,6 +16,98 @@ steadyspec init
 
 Auto-detects `.claude/` or `.codex/` in your project. Pass `--runtime claude` or `--runtime codex` to override. If both `openspec/` and `docs/changes/` exist, init prompts which substrate is canonical (`--substrate openspec` or `--substrate docs` to bypass the prompt). For docs-mode projects, `init` also installs a structural contract and templates under `.steadyspec/substrates/docs/`.
 
+## Optional v0.6 closure under verify
+
+Closure is opt-in support for long `verify` work; it is not a sixth governed
+verb. Start with manual routing:
+
+```bash
+steadyspec init --runtime codex --substrate docs --closure manual
+```
+
+The generated `.steadyspec/closure.json` is a review-required template with an
+empty `proofPolicies` object. Do not run it as-is. Add only proof commands the
+operator authorizes, using an executable plus argv array (never artifact text or
+a shell string), explicit cwd, timeout, expected exit codes, environment-key
+names, mutable surfaces, and a claim plus coverage limit. Create the referenced
+`acceptance-profile.json` in the change directory with all six dimensions and
+the exact candidate paths. Then validate before preparing state:
+
+```bash
+steadyspec closure --change <change-id-or-path> --validate-config --json
+steadyspec closure --change <change-id-or-path> --dry-run-env --json
+steadyspec closure --change <change-id-or-path> --calibrate <positive-policy-id> --json
+steadyspec closure --change <change-id-or-path> --prepare --json
+```
+
+The normal role sequence is fresh Critic -> bounded Builder -> configured proof
+policies -> fresh Evaluator. The support command persists and validates records;
+it does not edit implementation files. Before starting Evaluator transport,
+create a record whose fingerprints exactly match the `--run-proofs` result and
+whose `expectedRunDir` stays inside the governed change directory:
+
+```json
+{
+  "schemaVersion": 1,
+  "candidateFingerprint": "sha256:<current-candidate>",
+  "evidenceBundleFingerprint": "sha256:<current-evidence-bundle>",
+  "invocationId": "cycle-003-evaluator-1",
+  "reviewer": "claude",
+  "transport": "steadyspec-cross-review",
+  "expectedRunDir": ".meta/changes/<change>/cross-agent/<new-run-dir>"
+}
+```
+
+Persist that record before launching the exact external run. Integrations use
+these transitions in order:
+
+```bash
+steadyspec closure --change <change> --import-critic <review-run-dir> --json
+steadyspec closure --change <change> --builder-before <record.json> --json
+steadyspec closure --change <change> --builder-complete <record.json> --json
+steadyspec closure --change <change> --run-proofs --json
+steadyspec closure --change <change> --evaluator-start <record.json> --json
+# Launch exactly the recorded reviewer/transport into expectedRunDir.
+steadyspec closure --change <change> --import-evaluator <evaluate-run-dir> --json
+steadyspec closure --change <change> --status --json
+steadyspec closure --change <change> --check --json
+```
+
+Interpret the JSON `state` and `action`, not exit code or prose alone:
+
+| State | Meaning / next owner |
+|-------|----------------------|
+| `critic-required` | Run a fresh read-only Critic bound to the printed candidate fingerprint. |
+| `builder-required` / `builder-in-progress` | Complete only the declared, token-bound repair slice. |
+| `proofs-required` | Run only operator-configured proof policies. |
+| `evaluator-required` | Write and import the matching evaluator-start record before starting transport. |
+| `evaluator-running` | Inspect the exact `expectedRunDir`; do not duplicate the invocation. Import that run or let a human explicitly reopen/abandon. |
+| `candidate-ready` | Continue the ordinary human trust checkpoint; this is bounded readiness, not acceptance. |
+| `needs-user` | Scope, authority, evidence, or semantic choice requires a human decision. |
+| `blocked-by-environment` | Repair transport/runtime prerequisites; do not reinterpret missing output. |
+| `non-convergent` | Inspect recurrence/progress/limits and let the human decide whether to reopen. |
+| `stale` | Candidate or evidence identity changed; prepare or rerun the requested stage. |
+
+For an inspected incomplete Builder delta, the human may choose `approve`,
+`reject`, or `reopen`; approval still requires fresh proofs and evaluation.
+Other human stops use a fingerprint-bound reason:
+
+```bash
+steadyspec closure --change <change> --decide approve --reason "<why the inspected incomplete delta is authorized>" --json
+steadyspec closure --change <change> --decide reject --reason "<why the inspected incomplete delta is rejected>" --json
+steadyspec closure --change <change> --decide reopen --reason "<why this remains authorized>" --json
+steadyspec closure --change <change> --decide abandon --reason "<why work stops>" --json
+steadyspec closure --change <change> --recover-previous --reason "<corrupt-primary inspection>" --json
+steadyspec closure --change <change> --reset --reason "<new lineage reason>" --json
+```
+
+`auto` mode reduces repeated low-risk direction turns; it does not authorize
+requirement narrowing, proof-strategy changes, public/high-risk semantics,
+acceptance, merge, or release. Every `candidate-ready` verdict remains bounded
+machine evidence for human audit, with context limits and residual unknowns.
+Current support is Windows single-user; no Builder sandbox, general side-effect
+isolation, POSIX/team behavior, or unobserved-reality guarantee is claimed.
+
 ## The five verbs
 
 Run any of these once to enter spec-aware mode for the session. The agent stays SteadySpec-aware until the session ends.

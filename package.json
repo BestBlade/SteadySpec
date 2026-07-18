@@ -1,6 +1,6 @@
 {
   "name": "steadyspec",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Anti-drift methodology packaged as a software SDD reference implementation.",
   "bin": {
     "steadyspec": "bin/init.js"
@@ -29,6 +29,7 @@
   "homepage": "https://github.com/BestBlade/SteadySpec#readme",
   "files": [
     "bin/",
+    "schemas/",
     "en/",
     "zh/",
     "recipes/",

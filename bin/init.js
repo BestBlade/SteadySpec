@@ -39,6 +39,7 @@ function parseArgs(argv) {
     crossReviewMinSignals: null,
     crossReviewPacketOnly: false,
     crossReviewHooks: null,
+    closure: null,
     project: process.cwd(),
     force: false,
     dryRun: false,
@@ -116,6 +117,11 @@ function parseArgs(argv) {
       if (!value) throw new Error("--cross-review-hooks requires a value");
       args.crossReviewHooks = value;
       i += 1;
+    } else if (arg === "--closure") {
+      const value = argv[i + 1];
+      if (!value) throw new Error("--closure requires a value");
+      args.closure = value;
+      i += 1;
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
@@ -138,6 +144,9 @@ function parseArgs(argv) {
   }
   if (args.crossReviewHooks && !["off", "ask", "auto"].includes(args.crossReviewHooks)) {
     throw new Error("--cross-review-hooks must be off, ask, or auto");
+  }
+  if (args.closure && !["off", "manual", "auto"].includes(args.closure)) {
+    throw new Error("--closure must be off, manual, or auto");
   }
   if (args.crossReviewHooks && !args.crossReview) {
     throw new Error("--cross-review-hooks requires --cross-review off|manual|advisory|gated");
@@ -162,7 +171,8 @@ Install SteadySpec into a project or run deterministic support checks.
 Usage:
   steadyspec init [options]
   steadyspec check <change-id-or-path> --phase <proposal|apply|verify|archive> [--substrate docs] [--json]
-  steadyspec cross-review --change <change-id-or-path> [--reviewer claude] [--mode design|review|debate] [--run|--run-if-needed]
+  steadyspec cross-review --change <change-id-or-path> [--reviewer claude] [--mode design|review|debate|evaluate] [--run|--run-if-needed]
+  steadyspec closure --change <change-id-or-path> --prepare|--status|--run-proofs|--check [--json]
   steadyspec hooks <install|uninstall|status> [--target claude|codex|both]
 
 Options:
@@ -196,6 +206,10 @@ Options:
                             pauses eligible SteadySpec turns for a mode choice;
                             auto routes explicitly activated turns to the
                             opposite peer CLI; hooks never run long model tasks.
+  --closure <off|manual|auto>
+                            Write .steadyspec/closure.json for the optional v0.6
+                            verification closure lane. The generated config is
+                            a review template and never infers proof commands.
   --help                    Show this help.
 
 To remove SteadySpec, see QUICKSTART.md "Uninstall" section. There is no
@@ -382,6 +396,10 @@ function substrateStatePath(project) {
 
 function crossReviewStatePath(project) {
   return path.join(project, ".steadyspec", "cross-review.json");
+}
+
+function closureStatePath(project) {
+  return path.join(project, ".steadyspec", "closure.json");
 }
 
 function ensureSubstrateDir(project, substrate, dryRun) {
@@ -624,6 +642,31 @@ function writeCrossReviewState(project, args) {
   fs.writeFileSync(file, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
+function writeClosureState(project, args) {
+  if (!args.closure) return;
+  const file = closureStatePath(project);
+  console.log(`closure state: ${file}`);
+  if (args.dryRun) return;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const state = {
+    schemaVersion: 1,
+    mode: args.closure,
+    acceptanceProfile: "acceptance-profile.json",
+    limits: {
+      maxCycles: 5,
+      wallClockMs: 3600000,
+      maxAutoFiles: 3,
+      recurrenceLimit: 2,
+      noProgressCycles: 3,
+    },
+    proofPolicies: {},
+    generatedTemplate: true,
+    reviewRequired: args.closure !== "off",
+    boundary: "Windows single-user; proof commands remain operator-controlled; closure verdict is not human acceptance.",
+  };
+  fs.writeFileSync(file, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+}
+
 function writeCrossReviewGitignore(project, args) {
   if (!args.crossReview || args.crossReview === "off") return;
   const file = path.join(project, ".gitignore");
@@ -654,6 +697,18 @@ function printQuickStart(project, plans, substrate) {
 }
 
 async function main() {
+  if (process.argv[2] === "internal" && process.argv[3] === "human-transaction") {
+    const script = path.join(__dirname, "human-decision-transaction.js");
+    if (!fs.existsSync(script)) {
+      console.error("[steadyspec] internal human-decision transaction support is not installed.");
+      process.exitCode = 1;
+      return;
+    }
+    const result = spawnSync(process.execPath, [script, ...process.argv.slice(4)], { cwd: process.cwd(), stdio: "inherit", windowsHide: true });
+    if (result.error) throw result.error;
+    process.exitCode = result.status === null ? 1 : result.status;
+    return;
+  }
   if (process.argv[2] === "hooks" || process.argv[2] === "hook-event") {
     const script = path.join(__dirname, "cross-review-hook.js");
     if (!fs.existsSync(script)) {
@@ -680,6 +735,19 @@ async function main() {
       stdio: "inherit",
       windowsHide: true,
     });
+    if (result.error) throw result.error;
+    process.exitCode = result.status === null ? 1 : result.status;
+    return;
+  }
+  if (process.argv[2] === "closure") {
+    const script = path.join(__dirname, "closure.js");
+    if (!fs.existsSync(script)) {
+      console.error("[steadyspec] closure support is not installed. Expected: " + script);
+      console.error("[steadyspec] Reinstall or update SteadySpec before using `steadyspec closure`.");
+      process.exitCode = 1;
+      return;
+    }
+    const result = spawnSync(process.execPath, [script, ...process.argv.slice(3)], { cwd: process.cwd(), stdio: "inherit", windowsHide: true });
     if (result.error) throw result.error;
     process.exitCode = result.status === null ? 1 : result.status;
     return;
@@ -735,6 +803,7 @@ async function main() {
 
   writeSubstrateState(substrateFile, substrate, args.dryRun);
   writeCrossReviewState(project, args);
+  writeClosureState(project, args);
   writeCrossReviewGitignore(project, args);
 
   if (!args.dryRun) {

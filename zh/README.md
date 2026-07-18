@@ -8,6 +8,16 @@
 
 参考技能包（`/steadyspec:explore` / `:propose` / `:apply` / `:verify` / `:archive`）用闭环编排包裹了一套规格工作流：explore 把注意力路由到活跃风险，propose 记录决策归属账本和风险路由，apply 按垂直切片执行并把 proof 连接到决策，verify 在归档或交接前跑信任检查点，archive 跑产出-意图审查 + 文档同步 + confirmed_by + 持久真相门之后再写归档。它可以跟 OpenSpec、纯文档或 issue tracker 共存——方法是介质无关的，这个包只是一个实现。
 
+## v0.6 注意力保护型闭环
+
+v0.6 在 `verify` 下面增加了一个可选的闭环支持引擎；SteadySpec 对外仍然只有五个治理动词。它把一次新鲜、只读的 Critic 审查，受约束的 Builder 修复，操作员配置的 proof，以及重新启动的新鲜 Evaluator 串成有界循环。候选、证据和角色输出都绑定指纹，目的是减少人在多轮机械验收和回调上的注意力消耗，而不是把机器结论升级成真理。
+
+Evaluator 传输必须先登记、后启动：在 `evaluator-required` 状态写入同时绑定候选与证据指纹、`invocationId`、reviewer、transport 和 `expectedRunDir` 的记录，再执行 `--evaluator-start`，状态才进入 `evaluator-running`。此后只能导入这一次精确运行；不得重复启动。传输被中断时，由人检查记录并明确选择导入、`--decide reopen` 或 `--decide abandon`，Agent 不能自行重试并把它当成同一次验收。
+
+`auto` 模式只能路由已声明、低风险且机械边界明确的修复。范围扩大、需求缩减、proof 策略变化、公共或高风险语义、环境失败、无法收敛、证据缺口和残余未知仍要交给人。`candidate-ready` 只表示当前候选、证据包、已声明上下文和未知项在这个边界内就绪；它不是人的接受、合并或发布授权，也不证明未观测现实中的正确性。
+
+当前支持边界是 Windows 单用户。没有 Builder 操作系统沙箱、通用副作用或 proof 隔离、POSIX 就绪、团队工作流，也没有“多 Agent 共识即真理”的承诺。源代码树验证和本仓库 dogfood 已经存在，但在最终发布声明前，仍必须通过一次全新的 `npm pack` 安装 smoke。
+
 ## v0.3 注意力与责任模型
 
 v0.3 让责任显性化。重要决策会进入决策归属账本，按风险路由，并以注意力分层的方式报告：必须看的用户归属/高风险决策优先，需要瞥一眼的共享/中风险项其次，低风险 agent 自主决策可以折叠但仍可审计。模型细节见 [ARTIFACT_CONTRACT.md](../ARTIFACT_CONTRACT.md)。
@@ -110,7 +120,7 @@ SteadySpec 提供 `init` 和 docs 模式结构化 `check`。没有 `update` 或 
 
 ## 稳定性
 
-v0.4-alpha 是 alpha。1.0 之前仍可能有破坏性变更，但 SteadySpec 打算保持以下表面稳定，除非 [CHANGELOG.md](CHANGELOG.md) 明确说打破：
+v0.6 仍处于 1.0 之前。1.0 之前仍可能有破坏性变更，但 SteadySpec 打算保持以下表面稳定，除非 [CHANGELOG.md](CHANGELOG.md) 明确说打破：
 
 - 对外动词名：`/steadyspec:explore`、`/steadyspec:propose`、`/steadyspec:apply`、`/steadyspec:verify`、`/steadyspec:archive`。
 - 动词流 SKILL 名：`steadyspec-<verb>-flow`。

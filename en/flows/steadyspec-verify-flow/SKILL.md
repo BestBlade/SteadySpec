@@ -22,6 +22,9 @@ The trust checkpoint for SteadySpec v0.3. This skill is an orchestration of prim
 4. Proof signals that were claimed passed, failed, missing, blocked, fallback, or accepted as debt.
 5. Any v0.4 capability-lane artifacts: direction map, selection findings, evidence contract, mainline decision section, parked directions, rejected directions, and source labels for qualitative evidence.
 6. Any cross-agent review artifacts under `cross-agent/`, especially `run.json`, `raw.md`, and `moderation.md`.
+7. If `.steadyspec/closure.json` exists, the acceptance profile,
+   `closure/state.json`, current cycle records, and `steadyspec closure
+   --change <change-id-or-path> --check --json` output.
 
 ## Checkpoint gates
 
@@ -43,6 +46,36 @@ For each completed slice, compare the proof signal to the claim it supports.
 - Missing proof is a gap even if the implementation looks plausible.
 
 If all slices are already complete and the runtime supports it, verify-flow may use the apply workflow's `mode: "verify"` behavior to re-run proof signals without implementing new code.
+
+#### Optional v0.6 closure lane
+
+Closure is a support engine under `verify`, not a sixth governed verb. It is
+inactive unless the project has explicitly written `.steadyspec/closure.json`
+and the change has its referenced acceptance profile. When active, inspect it
+before recommending archive:
+
+```bash
+steadyspec closure --change <change-id-or-path> --check --json
+```
+
+Interpret the JSON rather than prose or exit code alone:
+
+| State/status | Verify action |
+|--------------|---------------|
+| `candidate-ready` | Continue the ordinary human trust checkpoint. This is bounded machine readiness, not acceptance, correctness, truth, merge authority, or release authority. |
+| `critic-required` | Run a fresh read-only Critic, preserve structured finding IDs, and import that exact run. |
+| `builder-required` / `builder-in-progress` | Complete only the fingerprint-bound Builder slice; never infer completion after interruption. |
+| `proofs-required` | Run only operator-declared policies through `steadyspec closure --run-proofs`. |
+| `evaluator-required` | Run a fresh Evaluator bound to both printed fingerprints and import its structured verdict. |
+| `stale` | Run `--prepare`; do not reuse prior proof or verdict evidence. |
+| `needs-user` / `blocked-by-environment` / `non-convergent` | STOP automation and surface the recorded decision, environment, or progress boundary. |
+| no closure config | Continue ordinary verify and state that closure was not opted in. |
+
+Auto mode may route repeated low-risk Builder/proof/Evaluator turns, but it may
+not narrow requirements, change proof strategy, accept user-visible semantic
+changes, reset/abandon evidence, or convert consensus into truth. Preserve every
+cycle and its residual unknowns in the trust checkpoint. A non-ready closure
+state blocks an `archive` recommendation without erasing partial progress.
 
 If the v0.4 capability lane exists, also check:
 

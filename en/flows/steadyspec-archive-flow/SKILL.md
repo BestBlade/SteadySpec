@@ -25,7 +25,39 @@ One of SteadySpec's five outward verbs: explore -> propose -> apply -> verify ->
 
 ## Gates (must pass in order; any STOP halts archive write)
 
-archive-flow runs five gates. Each gate has a real check, not a polite suggestion. If any gate fails, the verb reports the failure and does not write the archive.
+Before the five ordinary archive gates, archive-flow applies the optional v0.6
+closure pre-gate. This is still the `archive` verb; `closure` remains a
+deterministic support command under `verify`, not a sixth governed verb.
+
+### Gate 0: optional v0.6 closure pre-gate
+
+1. If `.steadyspec/closure.json` does not exist, record `closure: not opted in`
+   and continue the ordinary archive lifecycle unchanged.
+2. If the config exists, run:
+
+   ```text
+   steadyspec closure --change <change-id-or-path> --check --json
+   ```
+
+3. Continue to Gate 1 only when the current status is `candidate-ready` for the
+   current candidate and evidence bundle. This is bounded machine readiness;
+   it only permits the existing human-owned trust and archive gates to run. It
+   is not acceptance, correctness, truth, merge authority, release authority,
+   or permission to auto-archive.
+4. For `stale`, `critic-required`, `builder-required`, `proofs-required`,
+   `evaluator-required`, `fix-required`, `needs-user`,
+   `blocked-by-environment`, `non-convergent`, an invalid/missing state, or any
+   non-zero/ambiguous check result: STOP before writing or moving archive
+   truth. Report the returned `state`, `action`, fingerprints, and residual
+   unknowns, then route back to `steadyspec-verify-flow`.
+
+Archive never launches or repairs the closure loop itself. That separation
+keeps archive deterministic about durable truth while verify owns the bounded
+Critic/Builder/proof/Evaluator progression.
+
+archive-flow then runs five ordinary gates. Each gate has a real check, not a
+polite suggestion. If any gate fails, the verb reports the failure and does not
+write the archive.
 
 ### Gate 1: review-against-intent
 

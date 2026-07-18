@@ -2,7 +2,9 @@
 
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 const os = require("os");
+const crypto = require("crypto");
 const { execSync, spawnSync } = require("child_process");
 
 const ALLOWED_ROOT_FILES = new Set([
@@ -18,7 +20,7 @@ const ALLOWED_ROOT_FILES = new Set([
   ".gitignore",
   "LICENSE",
 ]);
-const ALLOWED_ROOT_DIRS = new Set(["bin", "design", "docs", "en", "scripts", "zh", "recipes"]);
+const ALLOWED_ROOT_DIRS = new Set(["bin", "design", "docs", "en", "scripts", "zh", "recipes", "schemas"]);
 const IGNORED_DEV_DIRS = new Set([".git", ".meta", "node_modules"]);
 const IGNORED_ROOT_DEV_DIRS = new Set([".git", ".meta", "node_modules", ".agents", ".codex", ".claude", ".steadyspec"]);
 const FORBIDDEN_NAMES = new Set([
@@ -319,20 +321,20 @@ function checkDocsSubstrateContract(root) {
 function requireText(root, file, text, label = text) {
   const content = readText(path.join(root, file));
   if (!content.includes(text)) {
-    fail(`${file} missing v0.5 release surface: ${label}`);
+    fail(`${file} missing release surface: ${label}`);
   }
 }
 
 function requirePattern(root, file, pattern, label) {
   const content = readText(path.join(root, file));
   if (!pattern.test(content)) {
-    fail(`${file} missing v0.5 release surface: ${label}`);
+    fail(`${file} missing release surface: ${label}`);
   }
 }
 
-function checkV05ReleaseSurface(root, manifest, pkg) {
-  if (pkg.version !== "0.5.0" || manifest.version !== "0.5.0") {
-    fail("v0.5 release surface requires package.json and manifest.json version 0.5.0");
+function checkReleaseSurface(root, manifest, pkg) {
+  if (pkg.version !== "0.6.0" || manifest.version !== "0.6.0") {
+    fail("v0.6 release surface requires package.json and manifest.json version 0.6.0");
   }
 
   requireText(root, "CHANGELOG.md", "## 0.4.0 (alpha)");
@@ -605,6 +607,36 @@ function checkV05CrossReview(root) {
   if (installedClaude.theme !== "dark" || !installedClaude.hooks.Stop.some((entry) => entry.hooks.some((hook) => hook.command === "third-party hook"))) {
     fail("steadyspec hook adapter install must preserve sibling Claude settings and hooks");
   }
+  const managedStopHook = installedClaude.hooks.Stop
+    .flatMap((entry) => entry.hooks)
+    .find((hook) => typeof hook.command === "string" && hook.command.includes("steadyspec-cross-agent-hook-v1"));
+  if (!managedStopHook) fail("steadyspec hook adapter install fixture did not create the managed Stop hook");
+  installedClaude.hooks.Stop = [
+    {
+      matcher: "mixed-entry-fixture",
+      fixtureMetadata: { owner: "third-party" },
+      hooks: [
+        { type: "command", command: "third-party hook", timeout: 3 },
+        managedStopHook,
+      ],
+    },
+    {
+      matcher: "sibling-entry-fixture",
+      fixtureMetadata: { owner: "sibling" },
+      hooks: [{ type: "command", command: "sibling hook", timeout: 4 }],
+    },
+  ];
+  fs.writeFileSync(path.join(hookHome, ".claude", "settings.json"), JSON.stringify(installedClaude, null, 2), "utf8");
+  hookResult = spawnSync(process.execPath, [path.join(root, "bin", "cross-review-hook.js"), "install", "--target", "claude", "--json"], {
+    cwd: hookRepo, env: { ...process.env, STEADYSPEC_HOME: hookHome, CODEX_HOME: path.join(hookHome, ".codex") }, encoding: "utf8", timeout: 30000,
+  });
+  const reinstalledMixedClaude = readJson(path.join(hookHome, ".claude", "settings.json"));
+  const mixedStopEntries = reinstalledMixedClaude.hooks.Stop.filter((entry) => entry.matcher === "mixed-entry-fixture");
+  const mixedThirdPartyCount = mixedStopEntries.flatMap((entry) => entry.hooks).filter((hook) => hook.command === "third-party hook").length;
+  const managedStopCount = reinstalledMixedClaude.hooks.Stop.flatMap((entry) => entry.hooks).filter((hook) => typeof hook.command === "string" && hook.command.includes("steadyspec-cross-agent-hook-v1")).length;
+  if (hookResult.status !== 0 || mixedStopEntries.length !== 1 || mixedThirdPartyCount !== 1 || managedStopCount !== 1 || mixedStopEntries[0].fixtureMetadata?.owner !== "third-party") {
+    fail("steadyspec hook adapter reinstall must preserve non-managed hooks and metadata inside a mixed entry without duplicating the managed hook");
+  }
   spawnSync("git", ["init"], { cwd: hookRepo, encoding: "utf8" });
   fs.mkdirSync(path.join(hookRepo, ".steadyspec"), { recursive: true });
   fs.mkdirSync(path.join(hookRepo, "docs", "changes", "001-hook-fixture"), { recursive: true });
@@ -673,8 +705,21 @@ function checkV05CrossReview(root) {
     cwd: hookRepo, env: { ...process.env, STEADYSPEC_HOME: hookHome, CODEX_HOME: path.join(hookHome, ".codex") }, encoding: "utf8", timeout: 30000,
   });
   const uninstalledClaude = readJson(path.join(hookHome, ".claude", "settings.json"));
-  if (hookResult.status !== 0 || uninstalledClaude.theme !== "dark" || !uninstalledClaude.hooks.Stop.some((entry) => entry.hooks.some((hook) => hook.command === "third-party hook"))) {
-    fail("steadyspec hook adapter uninstall must preserve sibling Claude settings and hooks");
+  const uninstalledMixedEntries = uninstalledClaude.hooks.Stop.filter((entry) => entry.matcher === "mixed-entry-fixture");
+  const uninstalledSiblingEntries = uninstalledClaude.hooks.Stop.filter((entry) => entry.matcher === "sibling-entry-fixture");
+  const uninstalledThirdPartyCount = uninstalledClaude.hooks.Stop.flatMap((entry) => entry.hooks).filter((hook) => hook.command === "third-party hook").length;
+  const uninstalledSiblingCount = uninstalledClaude.hooks.Stop.flatMap((entry) => entry.hooks).filter((hook) => hook.command === "sibling hook").length;
+  const uninstalledManagedCount = uninstalledClaude.hooks.Stop.flatMap((entry) => entry.hooks).filter((hook) => typeof hook.command === "string" && hook.command.includes("steadyspec-cross-agent-hook-v1")).length;
+  if (hookResult.status !== 0
+      || uninstalledClaude.theme !== "dark"
+      || uninstalledMixedEntries.length !== 1
+      || uninstalledMixedEntries[0].fixtureMetadata?.owner !== "third-party"
+      || uninstalledThirdPartyCount !== 1
+      || uninstalledSiblingEntries.length !== 1
+      || uninstalledSiblingEntries[0].fixtureMetadata?.owner !== "sibling"
+      || uninstalledSiblingCount !== 1
+      || uninstalledManagedCount !== 0) {
+    fail("steadyspec hook adapter uninstall must remove only managed hooks while preserving mixed-entry and sibling-entry hooks and metadata exactly once");
   }
   fs.rmSync(hookHome, { recursive: true, force: true });
   fs.rmSync(hookRepo, { recursive: true, force: true });
@@ -2396,6 +2441,20 @@ function checkCrossReviewContracts(root) {
   if (result.status !== 5 || json.status !== "blocked" || !json.errors.some((error) => error.includes("warnings without an explicit gate policy"))) {
     fail("cross-review --gate unrecognized warning contract changed");
   }
+  unknownWarningRunJson.warnings = ["review scope may be non-atomic: working tree changed during diff capture across branch/staged/unstaged/untracked sections"];
+  fs.writeFileSync(unknownWarningRunJsonFile, JSON.stringify(unknownWarningRunJson, null, 2), "utf8");
+  result = runCrossReview(root, tmp, ["--change", "001-contract", "--mode", "design", "--output-dir", unknownWarningDir, "--gate", "--json"]);
+  json = parseJsonOutput(result, "cross-review gated exact diff-scope warning policy check");
+  if (result.status !== 0 || json.status !== "satisfied-with-warning" || !json.warnings.some((warning) => warning.startsWith("review scope may be non-atomic"))) {
+    fail("cross-review --gate must recognize the exact emitted diff-scope warning as an explicit passable debt while unknown warnings remain blocking");
+  }
+  unknownWarningRunJson.warnings = ["review scope may be non-atomic: working tree changed during diff capture across branch/staged/unstaged/untracked sections; credential exposure unknown"];
+  fs.writeFileSync(unknownWarningRunJsonFile, JSON.stringify(unknownWarningRunJson, null, 2), "utf8");
+  result = runCrossReview(root, tmp, ["--change", "001-contract", "--mode", "design", "--output-dir", unknownWarningDir, "--gate", "--json"]);
+  json = parseJsonOutput(result, "cross-review gated diff-scope near-match warning check");
+  if (result.status !== 5 || json.status !== "blocked" || !json.errors.some((error) => error.includes("warnings without an explicit gate policy"))) {
+    fail("cross-review --gate must fail closed when an exact passable warning prefix carries an unknown suffix");
+  }
 
   result = runCrossReview(root, tmp, ["--change", "001-contract", "--run-if-needed", "--json"]);
   json = parseJsonOutput(result, "cross-review run-if-needed warning check");
@@ -2475,7 +2534,1740 @@ function checkCrossReviewContracts(root) {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
-function main() {
+function checkV06ClosureContracts(root) {
+  const required = [
+    "bin/closure.js",
+    "bin/closure-fixtures.js",
+    "en/runtime/closure-env.js",
+    "schemas/closure-state-v1.schema.json",
+    "schemas/acceptance-profile-v1.schema.json",
+    "schemas/closure-config-v1.schema.json",
+  ];
+  for (const relative of required) if (!fs.existsSync(path.join(root, relative))) fail(`v0.6 closure file missing: ${relative}`);
+  for (const relative of required.filter((name) => name.endsWith(".json"))) {
+    const schema = readJson(path.join(root, relative));
+    if (schema.$schema !== "https://json-schema.org/draft/2020-12/schema") fail(`${relative} must declare JSON Schema draft 2020-12`);
+  }
+  const publicSurfaces = {
+    "README.md": ["## v0.6 Attention-Preserving Closure", "--evaluator-start", "evaluator-running", "not human acceptance"],
+    "QUICKSTART.md": ["## Optional v0.6 closure under verify", "--evaluator-start", "evaluator-running", "expectedRunDir", "--decide reopen"],
+    "ARTIFACT_CONTRACT.md": ["## v0.6 Closure Lane Artifact Contract", "reset-in-progress.json", "evaluator-invocation.json", "human-decision-<decision-id>.json", "not merge or release authority"],
+    "zh/README.md": ["## v0.6 注意力保护型闭环", "--evaluator-start", "evaluator-running", "不是人的接受、合并或发布授权"],
+    "zh/QUICKSTART.md": ["## 可选的 v0.6 verify 闭环", "--evaluator-start", "evaluator-running", "--decide approve", "--decide reopen"],
+  };
+  for (const [relative, anchors] of Object.entries(publicSurfaces)) {
+    const text = readText(path.join(root, relative));
+    for (const anchor of anchors) if (!text.includes(anchor)) fail(`${relative} missing v0.6 public closure surface: ${anchor}`);
+  }
+  const initText = readText(path.join(root, "bin/init.js"));
+  for (const expected of ["--closure", "closure.js", "writeClosureState", "wallClockMs", "proofPolicies"]) {
+    if (!initText.includes(expected)) fail(`bin/init.js missing v0.6 closure surface: ${expected}`);
+  }
+  const runnerText = readText(path.join(root, "bin/cross-review.js"));
+  for (const expected of ["evaluate", "evaluator_json", "candidateFingerprint", "evidenceBundleFingerprint", "targetBaselineFingerprint", "--target-baseline-fingerprint", "parseEvaluatorOutput", "buildScrubbedEnv"]) {
+    if (!runnerText.includes(expected)) fail(`bin/cross-review.js missing v0.6 evaluate surface: ${expected}`);
+  }
+  const result = spawnSync(process.execPath, [path.join(root, "bin/closure-fixtures.js")], { cwd: root, encoding: "utf8", timeout: 120000, windowsHide: true });
+  if (result.status !== 0) fail(`v0.6 closure fixtures failed: ${(result.stderr || result.stdout || "unknown failure").trim()}`);
+  if (!/synthetic full-cycle fixture/i.test(result.stdout || "")) fail("v0.6 closure fixture coverage boundary output changed");
+  if (process.platform === "win32") {
+    const real = spawnSync(process.execPath, [path.join(root, "bin/closure-fixtures.js"), "--windows-real-smoke", "--json"], { cwd: root, encoding: "utf8", timeout: 120000, windowsHide: true });
+    if (real.status !== 0) fail(`v0.6 Windows real interruption smoke failed: ${(real.stderr || real.stdout || "unknown failure").trim()}`);
+    let observation;
+    try { observation = JSON.parse(real.stdout); } catch (error) { fail(`v0.6 Windows real interruption smoke returned invalid JSON: ${error.message}`); }
+    if (observation.status !== "passed"
+      || !observation.observed
+      || observation.observed.proofProcessDeath.taskkillTreeSucceeded !== true
+      || observation.observed.proofProcessDeath.uncertainMarkerPreserved !== true
+      || observation.observed.proofProcessDeath.automaticReplay !== false
+      || observation.observed.resetRenameContention.sharingViolationObserved !== true
+      || observation.observed.resetRenameContention.contentionPoint !== "journaled-staging-preservation-rename"
+      || observation.observed.resetRenameContention.resetIdPreserved !== true
+      || !(observation.observed.resetRenameContention.archiveFilesVerified > 0)
+      || observation.observed.evaluatorTransportDeath.reopen.taskkillTreeSucceeded !== true
+      || observation.observed.evaluatorTransportDeath.reopen.duplicateStartRejected !== true
+      || observation.observed.evaluatorTransportDeath.reopen.completionInferred !== false
+      || observation.observed.evaluatorTransportDeath.reopen.decisionBoundToInvocation !== true
+      || observation.observed.evaluatorTransportDeath.reopen.terminalState !== "critic-required"
+      || observation.observed.evaluatorTransportDeath.abandon.taskkillTreeSucceeded !== true
+      || observation.observed.evaluatorTransportDeath.abandon.duplicateStartRejected !== true
+      || observation.observed.evaluatorTransportDeath.abandon.completionInferred !== false
+      || observation.observed.evaluatorTransportDeath.abandon.decisionBoundToInvocation !== true
+      || observation.observed.evaluatorTransportDeath.abandon.terminalState !== "abandoned") {
+      fail("v0.6 Windows real interruption observation contract changed");
+    }
+  } else {
+    warn("v0.6 Windows real interruption smoke skipped on this platform; no POSIX or cross-platform readiness is inferred.");
+  }
+
+  const lifecycleSurfaces = {
+    "en/flows/steadyspec-verify-flow/SKILL.md": ["steadyspec closure --change", "candidate-ready", "not acceptance"],
+    "en/flows/steadyspec-archive-flow/SKILL.md": ["Gate 0: optional v0.6 closure pre-gate", "closure: not opted in", "STOP before writing or moving archive", "not acceptance"],
+    "en/runtime/codex/agents/steadyspec-verify-flow.yaml": ["closure --change", "blocks an archive recommendation", "never acceptance"],
+    "en/runtime/codex/agents/steadyspec-archive-flow.yaml": ["closure --change", "stop before writing or moving archive truth", "never human acceptance"],
+    "en/runtime/claude/workflows/steadyspec-verify.js": ["closure-status", "bounded readiness only"],
+    "en/runtime/claude/workflows/steadyspec-archive.js": ["closure-archive-gate", "not acceptance or release authority"],
+  };
+  for (const [relative, anchors] of Object.entries(lifecycleSurfaces)) {
+    const text = readText(path.join(root, relative));
+    for (const anchor of anchors) if (!text.includes(anchor)) fail(`${relative} missing v0.6 closure lifecycle surface: ${anchor}`);
+  }
+
+  const installRepo = fs.mkdtempSync(path.join(os.tmpdir(), "steadyspec-v06-codex-install-"));
+  try {
+    const install = spawnSync(process.execPath, [
+      path.join(root, "bin", "init.js"),
+      "--runtime", "codex",
+      "--substrate", "docs",
+      "--closure", "manual",
+      "--force",
+    ], { cwd: installRepo, encoding: "utf8", timeout: 30000, windowsHide: true });
+    if (install.status !== 0) fail(`v0.6 Codex lifecycle install fixture failed: ${install.stderr || install.stdout}`);
+    const installedConfig = readJson(path.join(installRepo, ".steadyspec", "closure.json"));
+    if (installedConfig.mode !== "manual" || !/not human acceptance/i.test(installedConfig.boundary || "")) fail("installed v0.6 closure config must preserve manual mode and human authority");
+    const installedSurfaces = {
+      ".codex/skills/steadyspec-verify-flow/agents/openai.yaml": ["closure --change", "never acceptance"],
+      ".codex/skills/steadyspec-archive-flow/SKILL.md": ["Gate 0: optional v0.6 closure pre-gate", "STOP before writing or moving archive"],
+      ".codex/skills/steadyspec-archive-flow/agents/openai.yaml": ["stop before writing or moving archive truth", "never human acceptance"],
+    };
+    for (const [relative, anchors] of Object.entries(installedSurfaces)) {
+      const text = readText(path.join(installRepo, relative));
+      for (const anchor of anchors) if (!text.includes(anchor)) fail(`installed ${relative} missing v0.6 closure lifecycle surface: ${anchor}`);
+    }
+  } finally {
+    fs.rmSync(installRepo, { recursive: true, force: true });
+  }
+}
+
+function checkActiveV06Identity(root, pkg) {
+  if (pkg.version !== "0.6.0") fail("active v0.6 identity check requires package version 0.6.0");
+  const contracts = {
+    "README.md": {
+      current: "v0.6 remains pre-1.0.",
+      stale: ["v0.4-alpha is alpha."],
+      historical: "## v0.4 Docs Contract And Capability Lane",
+    },
+    "SCOPE.md": {
+      current: "the v0.6 release defines specific boundaries",
+      stale: ["the v0.4-alpha release defines", "Primary optimization target for v0.4-alpha", "SteadySpec v0.4-alpha is designed", "SteadySpec v0.4-alpha is not the right fit"],
+      historical: "## v0.4 capability lane boundary",
+    },
+    "zh/README.md": {
+      current: "v0.6 仍处于 1.0 之前。",
+      stale: ["v0.4-alpha 是 alpha。"],
+      historical: "## v0.4 文档合同与能力通道",
+    },
+    "zh/SCOPE.md": {
+      current: "v0.6 明确了具体的边界",
+      stale: ["v0.4-alpha 明确了具体的边界", "v0.4-alpha 主要优化目标", "SteadySpec v0.4-alpha 是为", "SteadySpec v0.4-alpha 就不是正确选择"],
+      historical: "## v0.4 能力通道边界",
+    },
+  };
+  for (const [relative, contract] of Object.entries(contracts)) {
+    const text = readText(path.join(root, relative));
+    if (!text.includes(contract.current)) fail(`${relative} must identify the active product boundary with its exact v0.6 anchor`);
+    for (const stale of contract.stale) if (text.includes(stale)) fail(`${relative} still contains stale active identity: ${stale}`);
+    if (!text.includes(contract.historical)) fail(`${relative} must preserve its legitimate v0.4 historical capability anchor`);
+  }
+}
+
+function evidenceEntryFixture(overrides = {}) {
+  return {
+    sliceIndex: "2",
+    behavior: "resumed behavior",
+    proofCommand: "npm test -- resumed",
+    result: "pass",
+    outputSummary: "resumed proof passed",
+    coverageLimit: "fixture only",
+    linkedDecisionIds: "D2",
+    fallback: "None",
+    acceptedDebt: "None",
+    ...overrides,
+  };
+}
+
+function checkCrossReviewWorkflowPreflight(root) {
+  const begin = "// BEGIN CROSS REVIEW PREFLIGHT PURE";
+  const end = "// END CROSS REVIEW PREFLIGHT PURE";
+  const verifyPath = path.join(root, "en/runtime/claude/workflows/steadyspec-verify.js");
+  const archivePath = path.join(root, "en/runtime/claude/workflows/steadyspec-archive.js");
+  const verifyText = readText(verifyPath);
+  const archiveText = readText(archivePath);
+  const extract = (text, relative) => {
+    const start = text.indexOf(begin);
+    const finish = text.indexOf(end);
+    if (start < 0 || finish < 0 || finish <= start) fail(`${relative} missing the cross-review preflight pure helper block`);
+    return text.slice(start + begin.length, finish).trim();
+  };
+  const verifyBlock = extract(verifyText, "steadyspec-verify.js");
+  const archiveBlock = extract(archiveText, "steadyspec-archive.js");
+  if (verifyBlock !== archiveBlock) fail("verify and archive cross-review preflight pure helper blocks must be byte-equivalent");
+  const archiveRenderBegin = "// BEGIN ARCHIVE RENDER PURE";
+  const archiveRenderEnd = "// END ARCHIVE RENDER PURE";
+  const archiveRenderStart = archiveText.indexOf(archiveRenderBegin);
+  const archiveRenderFinish = archiveText.indexOf(archiveRenderEnd);
+  if (archiveRenderStart < 0 || archiveRenderFinish < 0 || archiveRenderFinish <= archiveRenderStart) {
+    fail("steadyspec-archive.js missing the deterministic archive render pure helper block");
+  }
+  const archiveRenderBlock = archiveText.slice(archiveRenderStart + archiveRenderBegin.length, archiveRenderFinish).trim();
+
+  for (const [text, relative] of [[verifyText, "steadyspec-verify.js"], [archiveText, "steadyspec-archive.js"]]) {
+    for (const anchor of [
+      "crossReviewState: CROSS_REVIEW_STATE_SCHEMA",
+      "buildCrossReviewCommandPlan(",
+      "parseCrossReviewExecution(command, execution)",
+      "combineCrossReviewObservations(crossReviewPlan, crossReviewParsed)",
+      "Do not start a reviewer and do not write or edit moderation.",
+    ]) {
+      if (!text.includes(anchor)) fail(`${relative} missing cross-review preflight integration: ${anchor}`);
+    }
+    if (/label:\s*['\"]cross-review[^'\"]*(?:run|moderation|reviewer)/i.test(text)) {
+      fail(`${relative} cross-review preflight must not expose a reviewer-launch or moderation-write agent label`);
+    }
+  }
+  for (const anchor of ["crossReviewVerifyDecision(crossReviewPreflight, checkpoint.recommendedNext)", "| Cross-Review Readiness |", "crossReview: {"]) {
+    if (!verifyText.includes(anchor)) fail(`verify cross-review code override/report missing: ${anchor}`);
+  }
+  for (const anchor of ["if (crossReviewPreflight.mustStopArchive)", "buildCrossReviewArchiveClaimBlock(", "ARCHIVE_COMPOSITION_SCHEMA", "renderArchiveDocument(", "status: 'ready-for-human-archive'", "requiredTransactionKind: 'archive-finalize'", "error: 'cross-review-archive-claim-invalid'"]) {
+    if (!archiveText.includes(anchor)) fail(`archive cross-review guard/report missing: ${anchor}`);
+  }
+  const archivePreflightIndex = archiveText.indexOf("if (crossReviewPreflight.mustStopArchive)");
+  const archiveGate1Index = archiveText.indexOf("phase('Gate1-Review')");
+  const archiveClaimGuardIndex = archiveText.indexOf("const crossReviewArchiveGuard =");
+  const archiveRenderIndex = archiveText.indexOf("const renderedArchive = renderArchiveDocument(");
+  if (archivePreflightIndex < 0 || archiveGate1Index < 0 || archivePreflightIndex > archiveGate1Index) {
+    fail("archive cross-review preflight stop must precede Gate 1");
+  }
+  if (archiveClaimGuardIndex < 0 || archiveRenderIndex < 0 || archiveClaimGuardIndex > archiveRenderIndex) {
+    fail("archive cross-review claim guard must precede deterministic archive rendering");
+  }
+  if (archiveText.includes("label: 'write-archive-file'")) fail("archive workflow must not write archive bytes outside the bounded helper");
+  for (const anchor of ["const archived = ['committed', 'already-committed'].includes(transaction.status)", "transaction.decisionBindingValid === true", "transaction.domainMutation === 'archive-finalized'", "post.activeSourceAbsent === true", "post.stagingAbsent === true", "post.retiredAbsent === true", "post.docsCheckPassed === true", "status: 'archived', filesystemState: 'archived'"]) {
+    if (!archiveText.includes(anchor)) fail(`archive terminal transaction guard missing: ${anchor}`);
+  }
+  if (archiveText.includes("--mode docs") || !archiveText.includes("--substrate docs") || !archiveText.includes("deriveArchivePathPlan(") || archiveText.includes("context.archiveLocation")) {
+    fail("archive workflow must derive its target in code and surface the executable docs-substrate check syntax");
+  }
+
+  const sandbox = { process: { platform: process.platform } };
+  vm.runInNewContext(`${verifyBlock}\n${archiveRenderBlock}\nthis.crossReviewApi = { buildCrossReviewCommandPlan, parseCrossReviewExecution, mapCrossReviewObservation, combineCrossReviewObservations, crossReviewVerifyDecision, buildCrossReviewArchiveClaimBlock, canonicalizeCrossReviewDeclaredPath, canonicalizeCrossReviewHostRoot, crossReviewExpectedOutputParent, crossReviewRunJsonIdentity, crossReviewArgvIsReadOnly, deriveArchivePathPlan, validateArchiveComposition, renderArchiveDocument, archiveMarkerCount };`, sandbox, { timeout: 1000 });
+  const api = sandbox.crossReviewApi;
+  const hostRepoRoot = process.platform === "win32" ? "C:\\repo" : "/repo";
+  const baseState = {
+    configReadStatus: "present",
+    configMode: "advisory",
+    reviewer: "claude",
+    packetOnly: true,
+    artifactDirs: [],
+    explicitClaimSources: [],
+    claimRequired: false,
+    claimScope: { complete: false, reviewer: "", mode: "", includeDiff: false, packetOnly: false, outputDir: "" },
+    errors: [],
+  };
+  const claimedState = {
+    ...baseState,
+    artifactDirs: ["changes/fixture/cross-agent"],
+    claimRequired: true,
+    explicitClaimSources: ["evidence.md"],
+    claimScope: { complete: true, reviewer: "claude", mode: "review", includeDiff: true, packetOnly: true, outputDir: "changes/fixture/cross-agent" },
+  };
+  const planKinds = (state) => api.buildCrossReviewCommandPlan("changes/fixture", state, hostRepoRoot).commands.map((entry) => entry.kind).join(",");
+  if (planKinds({ ...claimedState, configMode: "gated" }) !== "check-latest,gate"
+    || planKinds(claimedState) !== "check-latest,advice"
+    || planKinds({ ...baseState, configMode: "gated" }) !== "gate"
+    || planKinds(baseState) !== "advice") {
+    fail("cross-review preflight command precedence changed");
+  }
+  const incompletePlan = api.buildCrossReviewCommandPlan("changes/fixture", { ...claimedState, claimScope: { ...claimedState.claimScope, complete: false } }, hostRepoRoot);
+  if (incompletePlan.commands.length !== 0 || incompletePlan.precondition.readiness !== "claim-blocked" || !incompletePlan.precondition.mustStopArchive) {
+    fail("incomplete explicit cross-review scope must block without a defaulted latest check");
+  }
+  const invalidClaimStates = [
+    { ...claimedState, explicitClaimSources: [] },
+    { ...baseState, claimRequired: false, explicitClaimSources: ["evidence.md"] },
+    { ...claimedState, explicitClaimSources: ["evidence.md", "evidence.md"] },
+    { ...claimedState, explicitClaimSources: ["Evidence.md", "evidence.md"] },
+    { ...claimedState, explicitClaimSources: ["evidence.md", "./evidence.md"] },
+    { ...claimedState, explicitClaimSources: ["dir/evidence.md", "dir\\evidence.md"] },
+    { ...claimedState, explicitClaimSources: ["../evidence.md"] },
+    { ...claimedState, artifactDirs: [] },
+    { ...claimedState, artifactDirs: ["changes/fixture/cross-agent", "changes/fixture/other"] },
+    { ...claimedState, artifactDirs: ["changes/fixture/other"] },
+    { ...claimedState, artifactDirs: ["changes/fixture/../fixture/cross-agent"] },
+    { ...claimedState, claimScope: { ...claimedState.claimScope, outputDir: "changes/fixture/../fixture/cross-agent" } },
+    { ...claimedState, artifactDirs: ["Changes/fixture/cross-agent"] },
+    { ...claimedState, artifactDirs: ["\\\\server\\share\\cross-agent"], claimScope: { ...claimedState.claimScope, outputDir: "\\\\server\\share\\cross-agent" } },
+    { ...claimedState, artifactDirs: ["C:\\repo\\cross-agent"], claimScope: { ...claimedState.claimScope, outputDir: "C:\\repo\\cross-agent" } },
+    { ...claimedState, artifactDirs: ["changes/fixture/%2e%2e/cross-agent"], claimScope: { ...claimedState.claimScope, outputDir: "changes/fixture/%2e%2e/cross-agent" } },
+    { ...claimedState, artifactDirs: ["changes/fixture/NUL"] , claimScope: { ...claimedState.claimScope, outputDir: "changes/fixture/NUL" } },
+  ];
+  for (const state of invalidClaimStates) {
+    const invalidPlan = api.buildCrossReviewCommandPlan("changes/fixture", state, hostRepoRoot);
+    if (invalidPlan.commands.length !== 0 || !invalidPlan.precondition || !invalidPlan.precondition.mustStopArchive) {
+      fail("ambiguous, mismatched, missing, or traversal-bearing explicit claim scope must fail closed");
+    }
+  }
+  const canonicalClaimPlan = api.buildCrossReviewCommandPlan("changes\\fixture", {
+    ...claimedState,
+    artifactDirs: ["changes\\fixture\\cross-agent\\"],
+    explicitClaimSources: [".\\evidence.md"],
+    claimScope: { ...claimedState.claimScope, outputDir: "changes/fixture/./cross-agent" },
+  }, hostRepoRoot);
+  if (canonicalClaimPlan.precondition
+    || canonicalClaimPlan.commands[0].argv[3] !== "changes/fixture"
+    || !canonicalClaimPlan.commands[0].argv.includes("changes/fixture/cross-agent")
+    || canonicalClaimPlan.claimSources[0] !== "evidence.md") {
+    fail("declared cross-review paths must use bounded relative lexical canonicalization");
+  }
+  const unboundRootPlan = api.buildCrossReviewCommandPlan("changes/fixture", claimedState, ".");
+  if (!unboundRootPlan.precondition || !unboundRootPlan.precondition.mustStopArchive || unboundRootPlan.commands.length !== 0) {
+    fail("an explicit cross-review claim must bind its output parent to a native absolute project root");
+  }
+  for (const bad of [" x", "x ", "x\nnext", "x\u202enext", "file://x", "~/x", "/x", "C:x", "C:\\x", "\\\\?\\C:\\x", "a/../b", "a:x", "a?x", "a<x", "a>x", "a|x", "a*x", "a\"x", "NUL", "x."]) {
+    if (api.canonicalizeCrossReviewDeclaredPath(bad, "fixture").ok) fail(`unsafe declared path was accepted: ${JSON.stringify(bad)}`);
+  }
+  for (const state of [baseState, { ...baseState, configMode: "gated" }, claimedState, { ...claimedState, configMode: "gated" }]) {
+    for (const command of api.buildCrossReviewCommandPlan("changes/fixture", state, hostRepoRoot).commands) {
+      if (!api.crossReviewArgvIsReadOnly(command.argv) || command.argv.some((arg) => ["--run", "--run-if-needed", "--force", "--skip-reason"].includes(arg))) {
+        fail("cross-review workflow planned a reviewer-launch or mutation flag");
+      }
+    }
+  }
+
+  const executionFor = (command, json, exitCode) => ({
+    executedArgv: Array.from(command.argv),
+    exitCode,
+    stdout: JSON.stringify(json),
+    stderr: "",
+    reviewerLaunched: false,
+    moderationWritten: false,
+  });
+  const parseOne = (command, json, exitCode) => api.parseCrossReviewExecution(command, executionFor(command, json, exitCode));
+  const advicePlan = api.buildCrossReviewCommandPlan("changes/fixture", baseState, hostRepoRoot);
+  const adviceCommand = advicePlan.commands[0];
+  const adviceJson = { schemaVersion: 1, status: "recommended", recommended: true, configMode: "advisory", suggestedCommand: "steadyspec cross-review --run" };
+  const adviceCombined = api.combineCrossReviewObservations(advicePlan, [parseOne(adviceCommand, adviceJson, 0)]);
+  if (adviceCombined.readiness !== "not-required" || adviceCombined.action !== "advisory-recommended" || advicePlan.commands.some((command) => command.argv.includes("--run"))) {
+    fail("advice suggestedCommand must remain non-executable report data");
+  }
+  const tampered = executionFor(adviceCommand, adviceJson, 0);
+  tampered.executedArgv.push("--run-if-needed");
+  if (api.parseCrossReviewExecution(adviceCommand, tampered).valid) fail("executed argv drift must invalidate cross-review preflight");
+  if (api.parseCrossReviewExecution(adviceCommand, executionFor(adviceCommand, { ...adviceJson, exitCode: 5 }, 0)).valid) {
+    fail("advice JSON exitCode, when present, must match the observed process exit");
+  }
+
+  const claimPlan = api.buildCrossReviewCommandPlan("changes/fixture", { ...claimedState, configMode: "gated" }, hostRepoRoot);
+  const checkCommand = claimPlan.commands[0];
+  const gateCommand = claimPlan.commands[1];
+  const claimOutputParent = checkCommand.expectedOutputParent;
+  const hostSeparator = process.platform === "win32" ? "\\" : "/";
+  const runA = `${claimOutputParent}${hostSeparator}run-a${hostSeparator}run.json`;
+  const runB = `${claimOutputParent}${hostSeparator}run-b${hostSeparator}run.json`;
+  const checkCases = [
+    [{ schemaVersion: 1, status: "no-run", exitCode: 2, parentDir: claimOutputParent, warnings: [], errors: ["missing"] }, 2, "claim-blocked"],
+    [{ schemaVersion: 1, status: "failed", exitCode: 3, parentDir: claimOutputParent, warnings: [], errors: ["latest raw reviewer output is unstructured"] }, 3, "claim-blocked"],
+    [{ schemaVersion: 1, status: "failed", exitCode: 4, parentDir: claimOutputParent, warnings: [], errors: ["moderation is incomplete"] }, 4, "moderation-required"],
+    [{ schemaVersion: 1, status: "pass-with-warning", exitCode: 1, parentDir: claimOutputParent, moderationP12NeedsUserRows: 1, warnings: ["needs-user"], errors: [] }, 1, "needs-user"],
+  ];
+  for (const [json, exitCode, readiness] of checkCases) {
+    if (api.mapCrossReviewObservation(parseOne(checkCommand, json, exitCode)).readiness !== readiness) {
+      fail(`cross-review check-latest mapping changed for ${json.status}/${exitCode}`);
+    }
+  }
+  const gateCases = [
+    [{ schemaVersion: 1, status: "satisfied", exitCode: 0, configMode: "gated", warnings: [], errors: [], latest: { status: "pass", exitCode: 0, parentDir: claimOutputParent, runJson: runA } }, 0, "ready"],
+    [{ schemaVersion: 1, status: "satisfied-with-warning", exitCode: 0, configMode: "gated", warnings: ["bounded"], errors: [], latest: { status: "pass-with-warning", exitCode: 1, parentDir: claimOutputParent, runJson: runA } }, 0, "ready-with-warning"],
+    [{ schemaVersion: 1, status: "blocked", action: "moderation-required", exitCode: 5, configMode: "gated", warnings: [], errors: [], latest: { status: "failed", exitCode: 4, parentDir: claimOutputParent, runJson: runA } }, 5, "moderation-required"],
+    [{ schemaVersion: 1, status: "needs-user", action: "user-confirmation-required", exitCode: 5, configMode: "gated", warnings: [], errors: [], latest: { status: "pass-with-warning", exitCode: 1, parentDir: claimOutputParent, runJson: runA } }, 5, "needs-user"],
+    [{ schemaVersion: 1, status: "not-required", exitCode: 0, configMode: "gated", warnings: [], errors: [] }, 0, "not-required"],
+  ];
+  for (const [json, exitCode, readiness] of gateCases) {
+    if (api.mapCrossReviewObservation(parseOne(gateCommand, json, exitCode)).readiness !== readiness) {
+      fail(`cross-review gate mapping changed for ${json.status}/${exitCode}`);
+    }
+  }
+  if (api.parseCrossReviewExecution(gateCommand, executionFor(gateCommand, {
+    schemaVersion: 1,
+    status: "not-enforced",
+    exitCode: 0,
+    configMode: "gated",
+  }, 0)).valid
+    || api.parseCrossReviewExecution(gateCommand, executionFor(gateCommand, {
+      schemaVersion: 1,
+      status: "not-enforced",
+      exitCode: 0,
+      configMode: "advisory",
+    }, 0)).valid) {
+    fail("a planned gated observation must reject not-enforced status and config-mode drift");
+  }
+  if (api.mapCrossReviewObservation(parseOne(checkCommand, {
+    schemaVersion: 1,
+    status: "pass",
+    exitCode: 0,
+    warnings: [],
+    errors: [],
+  }, 0)).readiness !== "invalid"
+    || api.mapCrossReviewObservation(parseOne(gateCommand, {
+      schemaVersion: 1,
+      status: "satisfied",
+      exitCode: 0,
+      configMode: "gated",
+      warnings: [],
+      errors: [],
+    }, 0)).readiness !== "invalid") {
+    fail("ready check-latest and gate observations must carry an exact run.json trace");
+  }
+  const noRun = parseOne(checkCommand, { schemaVersion: 1, status: "no-run", exitCode: 2, parentDir: claimOutputParent, warnings: [], errors: ["missing"] }, 2);
+  const notRequired = parseOne(gateCommand, { schemaVersion: 1, status: "not-required", exitCode: 0, configMode: "gated", warnings: [], errors: [] }, 0);
+  const noUpgrade = api.combineCrossReviewObservations(claimPlan, [noRun, notRequired]);
+  if (noUpgrade.readiness !== "claim-blocked" || noUpgrade.claimAllowed || !noUpgrade.mustStopArchive) {
+    fail("gate not-required must not upgrade a failed explicit claim check");
+  }
+  const warningCheck = parseOne(checkCommand, { schemaVersion: 1, status: "pass-with-warning", exitCode: 1, parentDir: claimOutputParent, warnings: ["bounded"], errors: [], runJson: runA }, 1);
+  const warningGate = parseOne(gateCommand, { schemaVersion: 1, status: "satisfied-with-warning", exitCode: 0, configMode: "gated", warnings: ["bounded"], errors: [], latest: { status: "pass-with-warning", exitCode: 1, parentDir: claimOutputParent, runJson: runA } }, 0);
+  const warningUpgrade = api.combineCrossReviewObservations(claimPlan, [warningCheck, warningGate]);
+  if (warningUpgrade.readiness !== "ready-with-warning" || !warningUpgrade.claimAllowed || warningUpgrade.runJson !== runA) {
+    fail("gated warning policy must bind a warning-bearing explicit claim to its exact trace");
+  }
+  const driftedWarningGate = parseOne(gateCommand, { schemaVersion: 1, status: "satisfied-with-warning", exitCode: 0, configMode: "gated", warnings: ["bounded"], errors: [], latest: { status: "pass-with-warning", exitCode: 1, parentDir: claimOutputParent, runJson: runB } }, 0);
+  const traceDrift = api.combineCrossReviewObservations(claimPlan, [warningCheck, driftedWarningGate]);
+  if (traceDrift.readiness !== "invalid" || traceDrift.claimAllowed || !traceDrift.mustStopArchive || traceDrift.action !== "cross-review-observation-trace-drift") {
+    fail("check-latest and gate must not combine different run.json identities into a readiness claim");
+  }
+  const shadowGate = api.parseCrossReviewExecution(gateCommand, executionFor(gateCommand, {
+    schemaVersion: 1,
+    status: "satisfied",
+    exitCode: 0,
+    configMode: "gated",
+    runJson: runA,
+    warnings: [],
+    errors: [],
+    latest: { status: "failed", exitCode: 4, parentDir: claimOutputParent, runJson: runB },
+  }, 0));
+  const mismatchedLatestGate = parseOne(gateCommand, {
+    schemaVersion: 1,
+    status: "satisfied",
+    exitCode: 0,
+    configMode: "gated",
+    warnings: [],
+    errors: [],
+    latest: { status: "failed", exitCode: 4, parentDir: claimOutputParent, runJson: runA },
+  }, 0);
+  if (shadowGate.valid || api.mapCrossReviewObservation(mismatchedLatestGate).readiness !== "invalid") {
+    fail("gate readiness must use only its latest carrier and bind latest status/exitCode/runJson without top-level shadowing");
+  }
+  const reordered = api.combineCrossReviewObservations(claimPlan, [warningGate, warningCheck]);
+  const extra = api.combineCrossReviewObservations(claimPlan, [warningCheck, warningGate, warningGate]);
+  if (reordered.readiness !== "invalid" || extra.readiness !== "invalid" || !reordered.mustStopArchive || !extra.mustStopArchive) {
+    fail("reordered or extra cross-review observations must fail closed");
+  }
+  const outsideOutputParent = process.platform === "win32" ? `${hostRepoRoot}\\unrelated` : `${hostRepoRoot}/unrelated`;
+  const outsideRun = `${outsideOutputParent}${hostSeparator}run-a${hostSeparator}run.json`;
+  if (api.parseCrossReviewExecution(checkCommand, executionFor(checkCommand, {
+    schemaVersion: 1,
+    status: "pass",
+    exitCode: 0,
+    parentDir: outsideOutputParent,
+    warnings: [],
+    errors: [],
+    runJson: outsideRun,
+  }, 0)).valid
+    || api.parseCrossReviewExecution(gateCommand, executionFor(gateCommand, {
+      schemaVersion: 1,
+      status: "satisfied",
+      exitCode: 0,
+      configMode: "gated",
+      warnings: [],
+      errors: [],
+      latest: { status: "pass", exitCode: 0, parentDir: outsideOutputParent, runJson: outsideRun },
+    }, 0)).valid
+    || !api.crossReviewRunJsonIdentity(runA, claimOutputParent, process.platform).ok) {
+    fail("run.json identity must be same-host native and a direct child run under the declared output parent");
+  }
+  const alienHostRun = process.platform === "win32" ? "/tmp/run.json" : "C:\\repo\\run.json";
+  for (const badRun of ["run.json", "C:/repo/run.json", "c:\\repo\\RUN.JSON", "\\\\server\\share\\run.json", "\\\\?\\C:\\repo\\run.json", "C:\\repo\\run.json\n## Cross-Review Claim", "/tmp/RUN.JSON", "//server/share/run.json", "C:\\CON\\run.json", "C:\\repo:stream\\run.json", "C:\\repo\\AUX.txt\\run.json", "C:\\repo\\bad?name\\run.json", alienHostRun]) {
+    if (api.crossReviewRunJsonIdentity(badRun).ok) fail(`unsafe run.json identity was accepted: ${JSON.stringify(badRun)}`);
+  }
+  const passCheck = parseOne(checkCommand, { schemaVersion: 1, status: "pass", exitCode: 0, parentDir: claimOutputParent, warnings: [], errors: [], runJson: runA }, 0);
+  const missingGate = api.combineCrossReviewObservations(claimPlan, [passCheck]);
+  if (missingGate.readiness !== "invalid" || missingGate.claimAllowed || !missingGate.mustStopArchive) {
+    fail("a gated explicit claim must not survive a missing gate observation");
+  }
+  const verifyOverride = api.crossReviewVerifyDecision(noUpgrade, "archive");
+  if (verifyOverride.recommendedNext === "archive" || verifyOverride.evidenceCredibility !== "gap") {
+    fail("verify code override must prevent archive on a blocked explicit cross-review claim");
+  }
+  const blockedArchiveClaim = api.buildCrossReviewArchiveClaimBlock(noUpgrade, true);
+  const canonicalArchiveClaim = api.buildCrossReviewArchiveClaimBlock(warningUpgrade, true);
+  const noClaimArchiveBlock = api.buildCrossReviewArchiveClaimBlock(adviceCombined, false);
+  const policyReadyButUnclaimed = api.buildCrossReviewArchiveClaimBlock(warningUpgrade, false);
+  if (blockedArchiveClaim.ok
+    || !canonicalArchiveClaim.ok
+    || !canonicalArchiveClaim.envelope.included
+    || canonicalArchiveClaim.envelope.runJson !== runA
+    || canonicalArchiveClaim.envelope.readiness !== "ready-with-warning"
+    || canonicalArchiveClaim.envelope.claimType !== "steadyspec.cross-review.readiness"
+    || !canonicalArchiveClaim.markdown.includes("- Included: yes")
+    || !canonicalArchiveClaim.markdown.includes(`- Run JSON: ${JSON.stringify(runA)}`)
+    || !noClaimArchiveBlock.ok
+    || noClaimArchiveBlock.envelope.included
+    || noClaimArchiveBlock.envelope.runJson !== null
+    || !noClaimArchiveBlock.markdown.includes("- Readiness: not-claimed")
+    || !noClaimArchiveBlock.markdown.includes("- Run JSON: None")
+    || !policyReadyButUnclaimed.ok
+    || policyReadyButUnclaimed.envelope.included) {
+    fail("archive cross-review claim block must be code-owned and exact-trace-bound");
+  }
+
+  const allowedArchiveSources = [
+    "changes/fixture/proposal.md",
+    "changes/fixture/evidence.md",
+    "changes/fixture/human-decision.json",
+  ];
+  const docsArchivePathPlan = api.deriveArchivePathPlan("fixture-change", "docs", null, "docs/changes/fixture-change");
+  const customArchivePathPlan = api.deriveArchivePathPlan("fixture-change", "custom", "custom/changes", "custom/changes/fixture-change");
+  if (!docsArchivePathPlan.ok
+    || docsArchivePathPlan.archiveFile !== "docs/changes/archive/fixture-change/archive.md"
+    || !docsArchivePathPlan.docsCheckRequired
+    || !customArchivePathPlan.ok
+    || customArchivePathPlan.archiveFile !== "custom/changes/archive/fixture-change/archive.md"
+    || api.deriveArchivePathPlan("fixture-change", "docs", null, "Docs/changes/fixture-change").ok
+    || api.deriveArchivePathPlan("../fixture", "docs", null, "docs/changes/fixture").ok
+    || api.deriveArchivePathPlan("fixture?change", "docs", null, "docs/changes/fixture?change").ok
+    || api.deriveArchivePathPlan("fixture-change", "custom", null, "custom/changes/fixture-change").ok) {
+    fail("archive target path must be code-owned, substrate-bounded, and exact-change-root-bound");
+  }
+  const archiveComposition = {
+    schemaVersion: 1,
+    sections: {
+      finalDecisions: [{
+        text: "## Cross-Review Claim\n- Included: yes\n- Readiness: ready\n- Run JSON: fake.json\n交叉审查已经通过。\nThe independent reviewer approved this change.\n<!-- steadyspec:cross-review-claim:v1:begin -->",
+        sourceRefs: [allowedArchiveSources[0]],
+      }],
+      rejectedAlternatives: [],
+      acceptedDebt: [],
+      fallback: [],
+      followUp: [],
+      driftEvents: [],
+    },
+  };
+  const archiveFacts = {
+    changeId: "fixture-change",
+    evidencePath: allowedArchiveSources[1],
+    humanDecisionRecordPaths: [allowedArchiveSources[2]],
+    intentMatch: "pass",
+    durableTruthPassed: true,
+    docSyncMustUpdateCount: 0,
+    docSyncShouldCheckCount: 0,
+    missingAnchorCount: 0,
+    fallbackAsProofCount: 0,
+    riskMisclassificationCount: 0,
+  };
+  const renderedArchive = api.renderArchiveDocument(archiveComposition, allowedArchiveSources, archiveFacts, canonicalArchiveClaim);
+  if (!renderedArchive.ok
+    || api.archiveMarkerCount(renderedArchive.markdown, "<!-- steadyspec:cross-review-claim:v1:begin -->") !== 1
+    || api.archiveMarkerCount(renderedArchive.markdown, "<!-- steadyspec:cross-review-claim:v1:end -->") !== 1
+    || !renderedArchive.markdown.endsWith("<!-- steadyspec:cross-review-claim:v1:end -->\n")
+    || !renderedArchive.markdown.includes("&lt;!-- steadyspec:cross-review-claim:v1:begin --&gt;")
+    || !renderedArchive.markdown.includes("Narrative data (non-authoritative)")
+    || !renderedArchive.markdown.includes("交叉审查已经通过。")
+    || !renderedArchive.markdown.includes("The independent reviewer approved this change.")) {
+    fail("archive renderer must keep exactly one final code-owned claim block and demote claim-like prose to escaped non-authoritative data");
+  }
+  const invalidArchiveCompositions = [
+    { ...archiveComposition, archiveMd: "forbidden" },
+    { ...archiveComposition, sections: { ...archiveComposition.sections, finalDecisions: [{ ...archiveComposition.sections.finalDecisions[0], readiness: "ready" }] } },
+    { ...archiveComposition, sections: { ...archiveComposition.sections, finalDecisions: [{ text: "outside", sourceRefs: ["changes/other/evidence.md"] }] } },
+    { ...archiveComposition, sections: { ...archiveComposition.sections, finalDecisions: [{ text: "duplicate", sourceRefs: [allowedArchiveSources[0], allowedArchiveSources[0]] }] } },
+    { ...archiveComposition, sections: { ...archiveComposition.sections, finalDecisions: [{ text: "unsafe\u2028text", sourceRefs: [allowedArchiveSources[0]] }] } },
+  ];
+  for (const invalidComposition of invalidArchiveCompositions) {
+    if (api.renderArchiveDocument(invalidComposition, allowedArchiveSources, archiveFacts, canonicalArchiveClaim).ok) {
+      fail("archive renderer accepted composer-owned authority fields, untrusted sources, duplicate sources, or unsafe text");
+    }
+  }
+  const unclaimedArchive = api.renderArchiveDocument(archiveComposition, allowedArchiveSources, archiveFacts, noClaimArchiveBlock);
+  if (!unclaimedArchive.ok
+    || !unclaimedArchive.markdown.includes("- Included: no")
+    || !unclaimedArchive.markdown.includes("- Readiness: not-claimed")
+    || !unclaimedArchive.markdown.includes("- Run JSON: None")) {
+    fail("archive renderer must preserve the code-owned no-claim envelope");
+  }
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "steadyspec-workflow-preflight-"));
+  const changeDir = path.join(tmp, "changes", "001-preflight");
+  const fakeBin = path.join(tmp, "fake-bin");
+  const marker = path.join(tmp, "reviewer-launched.txt");
+  fs.mkdirSync(changeDir, { recursive: true });
+  fs.mkdirSync(path.join(tmp, ".steadyspec"), { recursive: true });
+  fs.mkdirSync(fakeBin, { recursive: true });
+  fs.writeFileSync(path.join(changeDir, "proposal.md"), "# Intent\n\nChange authentication and public API behavior.\n", "utf8");
+  fs.writeFileSync(path.join(fakeBin, "fake-claude.js"), `require("fs").writeFileSync(${JSON.stringify(marker)}, "launched")\n`, "utf8");
+  fs.writeFileSync(path.join(fakeBin, "claude.cmd"), "@echo off\r\nnode \"%~dp0fake-claude.js\" %*\r\n", "utf8");
+  fs.writeFileSync(path.join(fakeBin, "claude"), "#!/bin/sh\nnode \"$(dirname \"$0\")/fake-claude.js\" \"$@\"\n", "utf8");
+  fs.chmodSync(path.join(fakeBin, "claude"), 0o755);
+  spawnSync("git", ["init"], { cwd: tmp, encoding: "utf8", timeout: 30000 });
+  const env = { Path: `${fakeBin}${path.delimiter}${process.env.Path || process.env.PATH || ""}`, PATH: `${fakeBin}${path.delimiter}${process.env.PATH || process.env.Path || ""}` };
+  const parseProductionResult = (command, result, label) => {
+    const parsed = api.parseCrossReviewExecution(command, {
+      executedArgv: Array.from(command.argv),
+      exitCode: result.status,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      reviewerLaunched: fs.existsSync(marker),
+      moderationWritten: false,
+    });
+    if (!parsed.valid) fail(`${label} was rejected by the production workflow parser: ${parsed.errors.join(", ")}`);
+    return parsed;
+  };
+  fs.writeFileSync(path.join(tmp, ".steadyspec", "cross-review.json"), JSON.stringify({ schemaVersion: 1, mode: "advisory", reviewer: "claude" }), "utf8");
+  const realAdvicePlan = api.buildCrossReviewCommandPlan("changes/001-preflight", baseState, tmp);
+  let result = runCrossReview(root, tmp, Array.from(realAdvicePlan.commands[0].argv).slice(2), { env });
+  if (result.status !== 0) fail(`workflow advice preflight fixture failed: ${result.stderr || result.stdout}`);
+  parseProductionResult(realAdvicePlan.commands[0], result, "workflow advice preflight fixture");
+  fs.writeFileSync(path.join(tmp, ".steadyspec", "cross-review.json"), JSON.stringify({ schemaVersion: 1, mode: "gated", reviewer: "claude" }), "utf8");
+  const realGatePlan = api.buildCrossReviewCommandPlan("changes/001-preflight", { ...baseState, configMode: "gated" }, tmp);
+  result = runCrossReview(root, tmp, Array.from(realGatePlan.commands[0].argv).slice(2), { env });
+  if (![0, 5].includes(result.status)) fail(`workflow gate preflight fixture failed: ${result.stderr || result.stdout}`);
+  parseProductionResult(realGatePlan.commands[0], result, "workflow gate preflight fixture");
+  const docsArchiveCheck = spawnSync(process.execPath, [path.join(root, "bin/init.js"), "check", "changes/001-preflight", "--phase", "archive", "--substrate", "docs", "--json"], {
+    cwd: tmp,
+    encoding: "utf8",
+    timeout: 30000,
+  });
+  if (/Unknown argument/.test(String(docsArchiveCheck.stderr || "")) || !String(docsArchiveCheck.stdout || "").trim().startsWith("{")) {
+    fail(`archive docs-check handoff command is not executable by the installed CLI parser: ${docsArchiveCheck.stderr || docsArchiveCheck.stdout}`);
+  }
+  const realClaimState = {
+    ...claimedState,
+    artifactDirs: ["changes/001-preflight/cross-agent"],
+    claimScope: { ...claimedState.claimScope, outputDir: "changes/001-preflight/cross-agent" },
+  };
+  const realClaimPlan = api.buildCrossReviewCommandPlan("changes/001-preflight", realClaimState, tmp);
+  result = runCrossReview(root, tmp, Array.from(realClaimPlan.commands[0].argv).slice(2), { env });
+  if (result.status !== 2) fail(`workflow latest preflight missing-run fixture changed: ${result.stderr || result.stdout}`);
+  parseProductionResult(realClaimPlan.commands[0], result, "workflow latest preflight missing-run fixture");
+  if (fs.existsSync(marker)) fail("read-only workflow preflight commands launched the fake reviewer");
+}
+
+function checkEvidenceContinuityWorkflows(root) {
+  const begin = "// BEGIN EVIDENCE CONTINUITY PURE";
+  const end = "// END EVIDENCE CONTINUITY PURE";
+  const applyText = readText(path.join(root, "en/runtime/claude/workflows/steadyspec-apply.js"));
+  const verifyText = readText(path.join(root, "en/runtime/claude/workflows/steadyspec-verify.js"));
+  const extract = (relative) => {
+    const text = relative.endsWith("steadyspec-apply.js") ? applyText : verifyText;
+    const start = text.indexOf(begin);
+    const finish = text.indexOf(end);
+    if (start < 0 || finish < 0 || finish <= start) fail(`${relative} missing the evidence continuity pure helper block`);
+    return text.slice(start + begin.length, finish).trim();
+  };
+  const applyBlock = extract("en/runtime/claude/workflows/steadyspec-apply.js");
+  const verifyBlock = extract("en/runtime/claude/workflows/steadyspec-verify.js");
+  if (applyBlock !== verifyBlock) fail("apply and verify evidence continuity pure helper blocks must be byte-equivalent");
+  for (const anchor of ["evidenceSource: EVIDENCE_SOURCE_SCHEMA", "evidenceSourcePathPolicy(context.evidenceSource, context.evidencePath, context.proposalPath)", "error: 'evidence-source-identity-mismatch'", "normalizeEvidenceDocument(context.evidenceSource)", "EVIDENCE_RESULT_VALUES.includes(s.proofResult)", "mergeEvidenceDocument(", "const mergedEvidencePolicy = evidenceVerificationPolicy(evidenceMerge.view)", "evidenceOverallStatusForSlices(evidenceMerge.view.slices)", "mergedEvidencePolicy,", "evidenceReadbackMatches(evidenceMd.evidenceMd, diskEvidence?.evidenceMd)", "error: 'evidence-merge-conflict'"]) {
+    if (!applyText.includes(anchor)) fail(`apply evidence continuity integration missing: ${anchor}`);
+  }
+  if (applyText.includes("migrateEvidenceFormat(null)")) fail("apply must normalize the gathered evidence source instead of classifying a null placeholder");
+  for (const anchor of ["evidenceSource: EVIDENCE_SOURCE_SCHEMA", "evidenceSourcePathPolicy(context.evidenceSource, context.evidencePath, context.proposalPath)", "error: 'evidence-source-identity-mismatch'", "normalizeEvidenceDocument(context.evidenceSource)", "evidenceVerificationPolicy(evidenceView)", "if (evidencePolicy.evidenceCredibility !== 'pass')", "checkpoint.recommendedNext = evidencePolicy.requiredNext"]) {
+    if (!verifyText.includes(anchor)) fail(`verify evidence continuity integration missing: ${anchor}`);
+  }
+  if (verifyText.includes("label: 'write-evidence'")) fail("verify evidence normalization must remain read-only");
+  const identityCheckIndex = applyText.indexOf("const evidenceIdentity = evidenceSourcePathPolicy(");
+  const implementationIndex = applyText.indexOf("{ label: `slice-${slice.index}-implement`");
+  const conflictReturnIndex = applyText.indexOf("error: 'evidence-merge-conflict'");
+  const evidenceWriteIndex = applyText.indexOf("{ label: 'write-evidence'");
+  const readbackReturnIndex = applyText.indexOf("error: 'evidence-readback-mismatch'");
+  const evidenceSuccessIndex = applyText.indexOf("log(`evidence.md written to ${evidencePath}`)");
+  if (identityCheckIndex < 0 || implementationIndex < 0 || identityCheckIndex > implementationIndex) {
+    fail("apply must bind evidence source identity before any slice implementation");
+  }
+  if (conflictReturnIndex < 0 || evidenceWriteIndex < 0 || conflictReturnIndex > evidenceWriteIndex) {
+    fail("apply evidence conflict stop must precede the evidence write");
+  }
+  if (readbackReturnIndex < 0 || evidenceSuccessIndex < 0 || readbackReturnIndex > evidenceSuccessIndex) {
+    fail("apply evidence readback stop must precede the evidence success claim");
+  }
+  const sandbox = {};
+  vm.runInNewContext(`${applyBlock}\nthis.evidenceApi = { normalizeEvidenceDocument, mergeEvidenceDocument, renderEvidenceDocument, evidenceOverallStatusForSlices, evidenceVerificationPolicy, applyEvidenceRouting, evidenceReadbackMatches, evidenceSourcePathPolicy, encodeEvidenceCell, decodeEvidenceCell };`, sandbox, { timeout: 1000 });
+  const api = sandbox.evidenceApi;
+  const oldEvidence = [
+    "# Evidence Record: fixture",
+    "",
+    "schemaVersion: 1",
+    "",
+    "## Slice 1: original behavior",
+    "",
+    "| Field | Value |",
+    "|-------|-------|",
+    "| Proof Command | npm test -- original |",
+    "| Result | fallback |",
+    "| Output Summary | original fallback |",
+    "| Coverage Limit | original limit |",
+    "| Linked Decisions | D1 |",
+    "| Fallback | use old path |",
+    "| Accepted Debt | original debt |",
+    "",
+    "## Drift Event Log",
+    "",
+    "| Timestamp | Slice | Type | Action |",
+    "|-----------|-------|------|--------|",
+    "| 2026-07-18 00:00:00 | 1 | intent | preserved action |",
+    "",
+    "## Re-slice Event Log",
+    "",
+    "| Timestamp | Slice | Type | Risk | Owner | Impact |",
+    "|-----------|-------|------|------|-------|--------|",
+    "| None | None | None | None | None | No re-slice events recorded |",
+    "",
+  ].join("\n");
+  const source = { path: "evidence.md", status: "present", content: oldEvidence, complete: true, truncated: false, readError: "" };
+  const initialView = api.normalizeEvidenceDocument(source);
+  const merged = api.mergeEvidenceDocument(initialView, [evidenceEntryFixture()], [], []);
+  if (!merged.ok || !merged.changed || typeof merged.text !== "string") fail("evidence continuity resumed merge must produce a changed canonical document");
+  const mergedView = api.normalizeEvidenceDocument({ ...source, content: merged.text });
+  const original = mergedView.slices.find((entry) => entry.sliceIndex === "1");
+  const resumed = mergedView.slices.find((entry) => entry.sliceIndex === "2");
+  if (!original || !resumed || original.fallback !== "use old path" || original.acceptedDebt !== "original debt" || original.linkedDecisionIds !== "D1" || mergedView.driftEvents.length !== 1) {
+    fail("evidence continuity merge lost an existing slice, decision, fallback, debt, or drift event");
+  }
+  const replay = api.mergeEvidenceDocument(mergedView, [evidenceEntryFixture()], [], []);
+  if (!replay.ok || replay.changed || replay.text !== merged.text) fail("evidence continuity replay must be byte-idempotent");
+  const conflict = api.mergeEvidenceDocument(mergedView, [evidenceEntryFixture({ behavior: "conflicting behavior" })], [], []);
+  if (conflict.ok || conflict.changed || conflict.text !== null || !conflict.conflicts.some((entry) => entry.kind === "slice-conflict")) {
+    fail("evidence continuity must fail closed on same-index semantic conflicts");
+  }
+  const cleanView = {
+    sourceStatus: "present",
+    sourceFormat: "canonical-v1",
+    sourceText: "",
+    sourcePath: "changes/fixture/evidence.md",
+    slices: [],
+    driftEvents: [],
+    reSliceEvents: [],
+    preservedSources: [],
+    gaps: [],
+    warnings: [],
+    conflicts: [],
+    blockingErrors: [],
+  };
+  const normalizedForResult = (resultValue, overrides = {}) => {
+    const text = api.renderEvidenceDocument({ ...cleanView, slices: [evidenceEntryFixture({ sliceIndex: "1", result: resultValue, ...overrides })] }, "fixture");
+    return api.normalizeEvidenceDocument({ path: "changes/fixture/evidence.md", status: "present", content: text, complete: true, truncated: false, readError: "" });
+  };
+  const resultExpectations = {
+    pass: ["pass", true, "archive"],
+    fallback: ["gap", false, "continue"],
+    fail: ["blocked", false, "stop"],
+    drift: ["blocked", false, "stop"],
+    blocked: ["gap", false, "continue"],
+  };
+  for (const [resultValue, expected] of Object.entries(resultExpectations)) {
+    const policy = api.evidenceVerificationPolicy(normalizedForResult(resultValue));
+    if (policy.evidenceCredibility !== expected[0] || policy.archiveAllowed !== expected[1] || policy.requiredNext !== expected[2]) {
+      fail(`evidence verification policy changed for ${resultValue} proof results`);
+    }
+  }
+  const applyRouteExpectations = {
+    pass: ["archive", "all-applicable-proofs-pass", 0],
+    fallback: ["continue", "fallback-is-not-proof", 1],
+    fail: ["stop", "non-passing-proof", 1],
+    drift: ["stop", "non-passing-proof", 1],
+    blocked: ["continue", "blocked-proof", 1],
+  };
+  const archiveReadyPolicy = { evidenceCredibility: "pass", archiveAllowed: true, requiredNext: "archive", gaps: [] };
+  for (const [resultValue, expected] of Object.entries(applyRouteExpectations)) {
+    const routing = api.applyEvidenceRouting([{ proofResult: resultValue }], 1, 1, false, null, archiveReadyPolicy);
+    if (routing.route !== expected[0] || routing.reason !== expected[1] || routing.remainingCount !== expected[2]) {
+      fail(`apply final routing changed for ${resultValue} proof results`);
+    }
+  }
+  const emptyRouting = api.applyEvidenceRouting([], 0, 0, false, null, archiveReadyPolicy);
+  if (emptyRouting.route !== "continue" || emptyRouting.reason !== "no-current-proof-results") {
+    fail("apply must not recommend archive without current applicable pass results");
+  }
+  const overallStatusExpectations = {
+    pass: "all-passed",
+    fallback: "partial",
+    fail: "partial",
+    drift: "partial",
+    blocked: "partial",
+  };
+  for (const [resultValue, expectedStatus] of Object.entries(overallStatusExpectations)) {
+    const rendered = api.renderEvidenceDocument({ ...cleanView, slices: [evidenceEntryFixture({ sliceIndex: "1", result: resultValue })] }, "fixture");
+    if (api.evidenceOverallStatusForSlices([{ result: resultValue }]) !== expectedStatus || !rendered.includes(`- Overall status: ${expectedStatus}`)) {
+      fail(`evidence rendered overall status changed for ${resultValue} proof results`);
+    }
+  }
+  const emptyRendered = api.renderEvidenceDocument({ ...cleanView, slices: [] }, "fixture");
+  if (api.evidenceOverallStatusForSlices([]) !== "no-proof" || !emptyRendered.includes("- Overall status: no-proof")) {
+    fail("empty evidence must not claim all proofs passed");
+  }
+  const sentinelPolicy = api.evidenceVerificationPolicy(normalizedForResult("pass", { coverageLimit: "evidence-migration-unavailable:coverageLimit" }));
+  if (sentinelPolicy.evidenceCredibility !== "blocked" || sentinelPolicy.archiveAllowed !== false || !sentinelPolicy.gaps.some((gap) => gap.includes("coverageLimit@slice-1"))) {
+    fail("evidence migration sentinel must block archive readiness");
+  }
+  const specialCells = ["literal<br>tag", "slash\\|pipe", "line one\nline two", "100%", "中文 | \\ <br>", "  surrounding space  "];
+  for (const value of specialCells) {
+    if (api.decodeEvidenceCell(api.encodeEvidenceCell(value)) !== value) {
+      fail(`evidence cell codec must round-trip special characters: ${JSON.stringify(value)}`);
+    }
+  }
+  const canonicalText = api.renderEvidenceDocument({ ...cleanView, slices: [evidenceEntryFixture({ sliceIndex: "1", result: "pass" })] }, "fixture");
+  const mixedText = `${canonicalText}\n## Local Raw Notes\n\nDO NOT LOSE THIS\n`;
+  const mixedView = api.normalizeEvidenceDocument({ path: "changes/fixture/evidence.md", status: "present", content: mixedText, complete: true, truncated: false, readError: "" });
+  const mixedMerged = api.mergeEvidenceDocument(mixedView, [evidenceEntryFixture({ sliceIndex: "2" })], [], [], "fixture");
+  const mixedRoundTrip = api.normalizeEvidenceDocument({ path: "changes/fixture/evidence.md", status: "present", content: mixedMerged.text, complete: true, truncated: false, readError: "" });
+  if (!mixedMerged.ok || !mixedRoundTrip.preservedSources.includes(mixedText) || !mixedRoundTrip.preservedSources.some((sourceText) => sourceText.includes("DO NOT LOSE THIS")) || api.evidenceVerificationPolicy(mixedRoundTrip).archiveAllowed !== false) {
+    fail("mixed canonical evidence must preserve all unconsumed source content and remain a verification gap");
+  }
+  const mergedRouteFromPrior = (priorView, expectedRoute, label) => {
+    const composed = api.mergeEvidenceDocument(priorView, [evidenceEntryFixture({ sliceIndex: "2", result: "pass" })], [], [], "fixture");
+    if (!composed.ok) fail(`merged evidence route fixture failed to compose: ${label}`);
+    const policy = api.evidenceVerificationPolicy(composed.view);
+    const routing = api.applyEvidenceRouting([{ proofResult: "pass" }], 1, 1, false, null, policy);
+    if (routing.route !== expectedRoute || (expectedRoute === "archive") !== (policy.archiveAllowed === true)) {
+      fail(`apply final route ignored durable merged evidence policy: ${label}`);
+    }
+    return { composed, policy, routing };
+  };
+  mergedRouteFromPrior(normalizedForResult("pass"), "archive", "prior-pass-plus-current-pass");
+  mergedRouteFromPrior(normalizedForResult("fallback"), "continue", "prior-fallback-plus-current-pass");
+  for (const resultValue of ["fail", "drift"]) {
+    mergedRouteFromPrior(normalizedForResult(resultValue), "stop", `prior-${resultValue}-plus-current-pass`);
+  }
+  mergedRouteFromPrior(normalizedForResult("blocked"), "continue", "prior-blocked-plus-current-pass");
+  mergedRouteFromPrior(mixedView, "continue", "prior-mixed-plus-current-pass");
+  const sentinelPrior = normalizedForResult("pass", { coverageLimit: "evidence-migration-unavailable:coverageLimit" });
+  mergedRouteFromPrior(sentinelPrior, "stop", "prior-sentinel-plus-current-pass");
+  const durableStopPolicies = [
+    api.evidenceVerificationPolicy(normalizedForResult("fail")),
+    api.evidenceVerificationPolicy(sentinelPrior),
+  ];
+  for (const stopPolicy of durableStopPolicies) {
+    const stopCombinations = [
+      [[{ proofResult: "fallback" }], 1, 1, false, null],
+      [[{ proofResult: "blocked" }], 1, 1, false, null],
+      [[{ proofResult: "pass" }], 2, 1, false, null],
+      [[{ proofResult: "pass" }], 1, 1, false, "fail"],
+      [[], 0, 0, false, null],
+    ];
+    for (const args of stopCombinations) {
+      const routing = api.applyEvidenceRouting(...args, stopPolicy);
+      if (routing.route !== "stop" || routing.reason !== "merged-evidence-not-archive-ready") {
+        fail("durable stop policy must outrank all current continue branches");
+      }
+    }
+  }
+  const priorFallbackPolicy = api.evidenceVerificationPolicy(normalizedForResult("fallback"));
+  const blockedOverGap = api.applyEvidenceRouting([{ proofResult: "blocked" }], 1, 1, false, null, priorFallbackPolicy);
+  if (blockedOverGap.route !== "continue" || blockedOverGap.reason !== "blocked-proof") {
+    fail("durable gap plus current blocked proof must remain unresolved apply work, not stop");
+  }
+  const malformedEventText = canonicalText.replace(
+    "|-----------|-------|------|--------|\n| None | None | None | No drift events recorded |",
+    "|-----------|-------|------|--------|\n| uri:2026-07-18 | uri:1 | uri:intent |",
+  );
+  const malformedEventView = api.normalizeEvidenceDocument({ path: "changes/fixture/evidence.md", status: "present", content: malformedEventText, complete: true, truncated: false, readError: "" });
+  if (!malformedEventView.blockingErrors.some((error) => error.includes("malformed-evidence-event-row")) || api.mergeEvidenceDocument(malformedEventView, [], [], [], "fixture").ok) {
+    fail("malformed evidence event rows must block resumed evidence writes");
+  }
+  const pathMatch = api.evidenceSourcePathPolicy(
+    { path: "changes\\fixture\\evidence.md" },
+    "changes/fixture/evidence.md",
+    "changes/fixture/proposal.md",
+  );
+  const pathMismatch = api.evidenceSourcePathPolicy(
+    { path: "changes/other/evidence.md" },
+    "changes/fixture/evidence.md",
+    "changes/fixture/proposal.md",
+  );
+  if (!pathMatch.ok || pathMismatch.ok || !pathMismatch.errors.includes("evidence-source-path-mismatch")) {
+    fail("evidence source identity must bind source, declared target, and proposal-derived target");
+  }
+  const legacyText = "Legacy proof notes\r\n| Result | banana |\r\nFallback was manual.";
+  const legacyView = api.normalizeEvidenceDocument({ path: "evidence.md", status: "present", content: legacyText, complete: true, truncated: false, readError: "" });
+  const legacyMerged = api.mergeEvidenceDocument(legacyView, [evidenceEntryFixture()], [], []);
+  const legacyRoundTrip = api.normalizeEvidenceDocument({ path: "evidence.md", status: "present", content: legacyMerged.text, complete: true, truncated: false, readError: "" });
+  const legacyPolicy = api.evidenceVerificationPolicy(legacyRoundTrip);
+  if (!legacyMerged.ok || !legacyRoundTrip.preservedSources.includes(legacyText) || !legacyRoundTrip.gaps.some((gap) => gap.includes("evidence-migration-unavailable")) || legacyPolicy.evidenceCredibility !== "gap" || legacyPolicy.archiveAllowed !== false) {
+    fail("legacy evidence must round-trip losslessly as untrusted preserved source and force a verification gap");
+  }
+  const incomplete = api.normalizeEvidenceDocument({ path: "evidence.md", status: "present", content: oldEvidence, complete: false, truncated: true, readError: "truncated" });
+  if (api.mergeEvidenceDocument(incomplete, [evidenceEntryFixture()], [], []).ok) fail("incomplete evidence source must block merge");
+  if (api.evidenceReadbackMatches("intended", "different") || !api.evidenceReadbackMatches("same", "same")) fail("evidence readback equality contract changed");
+}
+
+function packedSmokeProcess(command, args, cwd, timeout = 120000) {
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: "utf8",
+    timeout,
+    windowsHide: true,
+    maxBuffer: 20 * 1024 * 1024,
+  });
+  if (result.error) throw new Error(`${path.basename(command)} failed to start: ${result.error.message}`);
+  return result;
+}
+
+function packedSmokeFailure(label, result) {
+  const detail = (result.stderr || result.stdout || `exit ${result.status}`).trim();
+  return new Error(`${label} failed with exit ${result.status}: ${detail}`);
+}
+
+function parsePackedSmokeJson(label, result) {
+  try {
+    return JSON.parse((result.stdout || "").trim());
+  } catch (error) {
+    throw new Error(`${label} did not emit one JSON value: ${error.message}; stdout=${(result.stdout || "").trim()}`);
+  }
+}
+
+function locateNpmCliForPackedSmoke() {
+  const candidates = [];
+  if (process.env.npm_execpath) candidates.push(process.env.npm_execpath);
+  candidates.push(path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"));
+  const where = packedSmokeProcess("where.exe", ["npm.cmd"], process.cwd(), 10000);
+  if (where.status === 0) {
+    for (const line of (where.stdout || "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean)) {
+      candidates.push(path.join(path.dirname(line), "node_modules", "npm", "bin", "npm-cli.js"));
+    }
+  }
+  const npmCli = candidates.find((candidate) => candidate && fs.existsSync(candidate));
+  if (!npmCli) throw new Error("cannot locate npm-cli.js for the fresh packed-install smoke");
+  return npmCli;
+}
+
+function runInstalledShim(shim, args, cwd, timeout = 30000) {
+  const commandProcessor = process.env.ComSpec || process.env.COMSPEC;
+  if (!commandProcessor || !fs.existsSync(commandProcessor)) throw new Error("Windows command processor is unavailable for installed .cmd shim smoke");
+  return packedSmokeProcess(commandProcessor, ["/d", "/s", "/c", "call", shim, ...args], cwd, timeout);
+}
+
+function writePackedSmokeJson(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+async function checkHumanTransactionWorkflowIntegration(root) {
+  const begin = "// BEGIN HUMAN DECISION TRANSACTION OBSERVATION PURE";
+  const end = "// END HUMAN DECISION TRANSACTION OBSERVATION PURE";
+  const applyText = readText(path.join(root, "en/runtime/claude/workflows/steadyspec-apply.js"));
+  const archiveText = readText(path.join(root, "en/runtime/claude/workflows/steadyspec-archive.js"));
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  for (const entry of fs.readdirSync(path.join(root, "en/runtime/claude/workflows")).filter((name) => name.endsWith(".js"))) {
+    const source = readText(path.join(root, "en/runtime/claude/workflows", entry)).replace(/^export\s+const\s+meta\s*=/m, "const meta =");
+    try { new AsyncFunction("args", "agent", "log", "phase", source); } catch (error) { fail(`${entry} fails whole-workflow async host parsing: ${error.message}`); }
+  }
+  const extract = (text, label) => {
+    const start = text.indexOf(begin);
+    const finish = text.indexOf(end);
+    if (start < 0 || finish < 0 || finish <= start) fail(`${label} missing human transaction observation pure block`);
+    return text.slice(start + begin.length, finish).trim();
+  };
+  const applyBlock = extract(applyText, "apply workflow");
+  const archiveBlock = extract(archiveText, "archive workflow");
+  if (applyBlock !== archiveBlock) fail("apply/archive human transaction observation pure blocks must be byte-equivalent");
+  const sandbox = {};
+  vm.runInNewContext(`${applyBlock}\nthis.txApi={humanTransactionArgv,validateHumanTransactionObservation};`, sandbox, { timeout: 1000 });
+  const id = "a".repeat(32);
+  const argv = Array.from(sandbox.txApi.humanTransactionArgv("commit", "intent-expansion", "", "", id));
+  if (argv.join("\n") !== ["steadyspec", "internal", "human-transaction", "commit", "--decision-id", id, "--decision-record", `.steadyspec/human-transactions/${id}/decision.json`, "--json"].join("\n")) fail("workflow transaction argv is not code-owned");
+  const result = {
+    schemaVersion: 1, contractVersion: 1, status: "committed", action: "proposal-readback-passed-write-drift-evidence", exitCode: 0,
+    kind: "intent-expansion", changeId: "change-b", changeRoot: ".meta/changes/change-b", decisionId: id, pendingPath: `.steadyspec/human-transactions/${id}/pending.json`, bindingHash: `sha256:${"1".repeat(64)}`,
+    pendingHash: `sha256:${"2".repeat(64)}`, decisionBindingValid: true, domainMutation: "proposal-insertion-committed", postconditions: { passed: true }, errors: [], warnings: [],
+  };
+  const observation = { executedArgv: argv, exitCode: 0, stdout: JSON.stringify(result), stderr: "", requestPath: "", requestReadback: "", extraCommands: false };
+  const expected = { argv, kind: "intent-expansion", changeId: "change-b", changeRoot: ".meta/changes/change-b", decisionId: id, requestPath: "" };
+  if (!sandbox.txApi.validateHumanTransactionObservation(observation, expected).ok) fail("valid workflow transaction observation was rejected");
+  if (sandbox.txApi.validateHumanTransactionObservation({ ...observation, extraCommands: true }, expected).ok) fail("workflow transaction parser accepted extra commands");
+  if (sandbox.txApi.validateHumanTransactionObservation(observation, { ...expected, changeId: "change-a", changeRoot: ".meta/changes/change-a" }).ok) fail("workflow transaction parser accepted a cross-change resume result");
+  if (sandbox.txApi.validateHumanTransactionObservation(observation, { ...expected, changeRoot: "" }).ok) fail("workflow transaction parser accepted an unbound empty change root");
+
+  const liveRepo = fs.mkdtempSync(path.join(os.tmpdir(), "steadyspec-workflow-live-output-"));
+  try {
+    const liveId = "live-output";
+    const liveRoot = `.meta/changes/${liveId}`;
+    const proposal = Buffer.from("# Proposal\n\n## Boundary\n\n### In Scope\n- original\n\n### Out of Scope\n- excluded\n", "utf8");
+    const proposalFile = path.join(liveRepo, ...liveRoot.split("/"), "proposal.md");
+    fs.mkdirSync(path.dirname(proposalFile), { recursive: true });
+    fs.writeFileSync(proposalFile, proposal);
+    const start = proposal.indexOf(Buffer.from("### In Scope"));
+    const finish = proposal.indexOf(Buffer.from("### Out of Scope"));
+    const requestRelative = ".steadyspec/request.json";
+    writePackedSmokeJson(path.join(liveRepo, ...requestRelative.split("/")), { schemaVersion: 1, proposalPath: `${liveRoot}/proposal.md`, fieldId: "boundary.inScope", fieldSectionStartByte: start, fieldSectionEndByte: finish, insertionOffsetByte: finish, additionBase64: Buffer.from("- live\n").toString("base64") });
+    const liveArgv = Array.from(sandbox.txApi.humanTransactionArgv("prepare", "intent-expansion", liveRoot, requestRelative, ""));
+    const processResult = spawnSync(process.execPath, [path.join(root, "bin/human-decision-transaction.js"), "prepare", "--kind", "intent-expansion", "--change", liveRoot, "--request", requestRelative, "--json"], { cwd: liveRepo, encoding: "utf8", timeout: 30000, windowsHide: true });
+    const parsed = sandbox.txApi.validateHumanTransactionObservation({ executedArgv: liveArgv, exitCode: processResult.status, stdout: processResult.stdout, stderr: processResult.stderr, requestPath: requestRelative, requestReadback: fs.readFileSync(path.join(liveRepo, ...requestRelative.split("/")), "utf8"), extraCommands: false }, { action: "prepare", argv: liveArgv, kind: "intent-expansion", changeId: liveId, changeRoot: liveRoot, requestPath: requestRelative, requestJson: readJson(path.join(liveRepo, ...requestRelative.split("/"))) });
+    if (!parsed.ok || parsed.result.status !== "needs-user") fail(`real helper output failed workflow parser: ${parsed.errors.join(", ")}`);
+  } finally {
+    fs.rmSync(liveRepo, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
+
+  const resumeRepo = fs.mkdtempSync(path.join(os.tmpdir(), "steadyspec-workflow-resume-"));
+  try {
+    const helper = path.join(root, "bin", "human-decision-transaction.js");
+    const { recordHash } = require(helper);
+    const writeResume = (relative, bytes) => {
+      const file = path.join(resumeRepo, ...relative.split("/"));
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, bytes);
+    };
+    const runHelper = (args) => spawnSync(process.execPath, [helper, ...args], { cwd: resumeRepo, encoding: "utf8", timeout: 30000, windowsHide: true });
+    const approve = (pending) => {
+      const decision = {
+        schemaVersion: 1, contractVersion: 1, recordType: "human-decision",
+        decisionId: pending.decisionId, kind: pending.kind, pendingHash: pending.pendingHash,
+        bindingHash: pending.bindingHash, decision: "approve-exact-transaction",
+        reason: "workflow identity preflight fixture", confirmedBy: "fixture-human",
+        confirmedAt: "2026-07-18T00:00:00.000Z", confirmationRef: "workflow-resume-fixture", decisionHash: "",
+      };
+      decision.decisionHash = recordHash(decision, "decisionHash");
+      writePackedSmokeJson(path.join(resumeRepo, ...pending.expectedDecisionPath.split("/")), decision);
+    };
+    const prepareIntentResume = () => {
+      const id = "resume-change-b";
+      const changeRoot = `.meta/changes/${id}`;
+      const proposal = Buffer.from("# Proposal\n\n## Boundary\n\n### In Scope\n- original\n\n### Out of Scope\n- excluded\n", "utf8");
+      writeResume(`${changeRoot}/proposal.md`, proposal);
+      const start = proposal.indexOf(Buffer.from("### In Scope"));
+      const finish = proposal.indexOf(Buffer.from("### Out of Scope"));
+      const requestPath = ".steadyspec/requests/workflow-resume-intent.json";
+      writePackedSmokeJson(path.join(resumeRepo, ...requestPath.split("/")), {
+        schemaVersion: 1, proposalPath: `${changeRoot}/proposal.md`, fieldId: "boundary.inScope",
+        fieldSectionStartByte: start, fieldSectionEndByte: finish, insertionOffsetByte: finish,
+        additionBase64: Buffer.from("- must-not-apply\n").toString("base64"),
+      });
+      const prepared = runHelper(["prepare", "--kind", "intent-expansion", "--change", id, "--request", requestPath, "--json"]);
+      const result = JSON.parse(prepared.stdout);
+      if (prepared.status !== 2 || result.status !== "needs-user") fail("workflow resume intent fixture did not prepare");
+      const pending = readJson(path.join(resumeRepo, ...result.pendingPath.split("/")));
+      approve(pending);
+      return { id, changeRoot, proposal, pending };
+    };
+    const prepareArchiveResume = () => {
+      const id = "resume-archive-b";
+      const sourceRoot = `.meta/changes/${id}`;
+      const targetRoot = `.meta/changes/archive/${id}`;
+      writeResume(`${sourceRoot}/proposal.md`, Buffer.from("# Proposal\n", "utf8"));
+      const requestPath = ".steadyspec/requests/workflow-resume-archive.json";
+      writePackedSmokeJson(path.join(resumeRepo, ...requestPath.split("/")), {
+        schemaVersion: 1, sourceRoot, targetRoot, archiveBase64: Buffer.from("# Archive\n").toString("base64"),
+        substrate: "meta", docsCheckRequired: false,
+      });
+      const prepared = runHelper(["prepare", "--kind", "archive-finalize", "--change", id, "--request", requestPath, "--json"]);
+      const result = JSON.parse(prepared.stdout);
+      if (prepared.status !== 2 || result.status !== "needs-user") fail("workflow resume archive fixture did not prepare");
+      const pending = readJson(path.join(resumeRepo, ...result.pendingPath.split("/")));
+      approve(pending);
+      return { id, sourceRoot, targetRoot, pending };
+    };
+    const compile = (text) => new AsyncFunction("args", "agent", "log", "phase", text.replace(/^export\s+const\s+meta\s*=/m, "const meta ="));
+    const processAgent = (calls) => async (prompt) => {
+      const marker = "EXACT ARGV JSON:";
+      const markerAt = prompt.indexOf(marker);
+      const argvLine = markerAt < 0 ? "" : prompt.slice(markerAt + marker.length).split(/\r?\n/).map((line) => line.trim()).find((line) => line.startsWith("["));
+      const executedArgv = JSON.parse(argvLine || "null");
+      if (!Array.isArray(executedArgv) || executedArgv.slice(0, 3).join("/") !== "steadyspec/internal/human-transaction") fail("workflow resume fixture observed non-code-owned argv");
+      calls.push(executedArgv);
+      const child = runHelper(executedArgv.slice(3));
+      return { executedArgv, exitCode: child.status, stdout: child.stdout, stderr: child.stderr, requestPath: "", requestReadback: "", extraCommands: false };
+    };
+    const noop = () => {};
+    const intent = prepareIntentResume();
+    const intentWorkflow = compile(applyText);
+    let calls = [];
+    let workflowResult = await intentWorkflow({ changeId: "resume-change-a", projectRoot: resumeRepo, transactionAction: "commit", transactionDecisionId: intent.pending.decisionId }, processAgent(calls), noop, noop);
+    if (workflowResult.error !== "intent-transaction-resume-invalid" || calls.length !== 0) fail("apply resume without changeDir did not fail before helper execution");
+    calls = [];
+    workflowResult = await intentWorkflow({ changeId: "resume-change-a", changeDir: ".meta/changes", projectRoot: resumeRepo, transactionAction: "commit", transactionDecisionId: intent.pending.decisionId }, processAgent(calls), noop, noop);
+    if (workflowResult.error !== "intent-transaction-identity-preflight-failed" || calls.length !== 1 || calls[0][3] !== "status") fail("apply cross-change resume did not stop after the read-only identity preflight");
+    if (!fs.readFileSync(path.join(resumeRepo, ...intent.changeRoot.split("/"), "proposal.md")).equals(intent.proposal) || fs.existsSync(path.join(resumeRepo, ".steadyspec", "human-transactions", intent.pending.decisionId, "commit.json"))) fail("apply cross-change resume mutated the bound change before identity rejection");
+
+    const archive = prepareArchiveResume();
+    const archiveWorkflow = compile(archiveText);
+    calls = [];
+    workflowResult = await archiveWorkflow({ changeId: "resume-archive-a", projectRoot: resumeRepo, transactionAction: "commit", transactionDecisionId: archive.pending.decisionId }, processAgent(calls), noop, noop);
+    if (workflowResult.error !== "archive-transaction-resume-invalid" || calls.length !== 0) fail("archive resume without changeDir did not fail before helper execution");
+    calls = [];
+    workflowResult = await archiveWorkflow({ changeId: "resume-archive-a", changeDir: ".meta/changes", projectRoot: resumeRepo, transactionAction: "commit", transactionDecisionId: archive.pending.decisionId }, processAgent(calls), noop, noop);
+    if (workflowResult.error !== "archive-transaction-identity-preflight-failed" || calls.length !== 1 || calls[0][3] !== "status") fail("archive cross-change resume did not stop after the read-only identity preflight");
+    if (!fs.existsSync(path.join(resumeRepo, ...archive.sourceRoot.split("/"))) || fs.existsSync(path.join(resumeRepo, ...archive.targetRoot.split("/"))) || fs.existsSync(path.join(resumeRepo, ".steadyspec", "human-transactions", archive.pending.decisionId, "commit.json"))) fail("archive cross-change resume mutated the bound change before identity rejection");
+  } finally {
+    fs.rmSync(resumeRepo, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
+  for (const anchor of ["reason: 'intent-expansion-transaction-pending'", "No drift evidence was written.", "resumedIntentTransaction", "post.oldBytesPreserved === true", "post.onlyBoundInsertion === true", "transaction.domainMutation === 'proposal-insertion-committed'", "proposal-insertion-committed-evidence-not-complete"]) {
+    if (!applyText.includes(anchor)) fail(`apply transaction integration missing: ${anchor}`);
+  }
+  if (applyText.includes("patch-intent:")) fail("apply still records an expansion as drift before exact transaction commit");
+  for (const anchor of ["archiveTransactionRequest", "transactionStatus: 'needs-user'", "invokeHumanTransaction(", "transaction.domainMutation === 'archive-finalized'", "post.retiredAbsent === true", "filesystemState: 'archived'", "filesystem archived only; not human acceptance"]) {
+    if (!archiveText.includes(anchor)) fail(`archive transaction integration missing: ${anchor}`);
+  }
+  const renderIndex = archiveText.indexOf("const renderedArchive = renderArchiveDocument(");
+  const prepareIndex = archiveText.indexOf("const archiveTransactionRequest =");
+  if (renderIndex < 0 || prepareIndex < renderIndex) fail("archive transaction prepare must bind the deterministic rendered archive bytes");
+}
+
+function checkHumanDecisionTransactions(root) {
+  const helper = path.join(root, "bin", "human-decision-transaction.js");
+  const router = path.join(root, "bin", "init.js");
+  if (!fs.existsSync(helper)) fail("human-decision transaction helper is missing");
+  const { recordHash } = require(helper);
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "steadyspec-human-transaction-"));
+  const run = (args, env = {}) => {
+    const result = spawnSync(process.execPath, [helper, ...args], {
+      cwd: repo,
+      encoding: "utf8",
+      env: { ...process.env, ...env },
+      timeout: 30000,
+      windowsHide: true,
+    });
+    let json = null;
+    try { json = JSON.parse(String(result.stdout || "").trim()); } catch (error) { /* asserted by caller */ }
+    return { ...result, json };
+  };
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  const write = (relative, bytes) => {
+    const file = path.join(repo, ...relative.split("/"));
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, bytes);
+    return file;
+  };
+  const read = (relative) => fs.readFileSync(path.join(repo, ...relative.split("/")));
+  const intentFixture = (id, addition = "- added expansion\n") => {
+    const proposalRelative = `.meta/changes/${id}/proposal.md`;
+    const proposal = Buffer.from("# Proposal\n\n## Boundary\n\n### In Scope\n- original\n\n### Out of Scope\n- excluded\n", "utf8");
+    write(proposalRelative, proposal);
+    const start = proposal.indexOf(Buffer.from("### In Scope"));
+    const end = proposal.indexOf(Buffer.from("### Out of Scope"));
+    const requestRelative = `.steadyspec/requests/${id}.json`;
+    const request = {
+      schemaVersion: 1,
+      proposalPath: proposalRelative,
+      fieldId: "boundary.inScope",
+      fieldSectionStartByte: start,
+      fieldSectionEndByte: end,
+      insertionOffsetByte: end,
+      additionBase64: Buffer.from(addition, "utf8").toString("base64"),
+    };
+    writePackedSmokeJson(path.join(repo, ...requestRelative.split("/")), request);
+    return { id, proposalRelative, proposal, requestRelative, request, after: Buffer.concat([proposal.subarray(0, end), Buffer.from(addition), proposal.subarray(end)]) };
+  };
+  const archiveFixture = (id, substrate = "meta") => {
+    const base = substrate === "docs" ? "docs/changes" : ".meta/changes";
+    const sourceRoot = `${base}/${id}`;
+    write(`${sourceRoot}/proposal.md`, Buffer.from("# Archive fixture\n", "utf8"));
+    const archive = Buffer.from(`# Archive: ${id}\n`, "utf8");
+    const targetRoot = `${base}/archive/${id}`;
+    const requestRelative = `.steadyspec/requests/${id}-archive.json`;
+    writePackedSmokeJson(path.join(repo, ...requestRelative.split("/")), {
+      schemaVersion: 1,
+      sourceRoot,
+      targetRoot,
+      archiveBase64: archive.toString("base64"),
+      substrate,
+      docsCheckRequired: substrate === "docs",
+    });
+    return { id, sourceRoot, targetRoot, archive, requestRelative };
+  };
+  const pendingFor = (result) => {
+    assert(result.json && /^[a-f0-9]{32}$/.test(result.json.decisionId || ""), "prepare did not return a decision id");
+    return JSON.parse(read(result.json.pendingPath).toString("utf8"));
+  };
+  const decisionFor = (pending, decision = "approve-exact-transaction", changes = {}) => {
+    const record = {
+      schemaVersion: 1,
+      contractVersion: 1,
+      recordType: "human-decision",
+      decisionId: pending.decisionId,
+      kind: pending.kind,
+      pendingHash: pending.pendingHash,
+      bindingHash: pending.bindingHash,
+      decision,
+      reason: "exact fixture authorization",
+      confirmedBy: "fixture-human",
+      confirmedAt: "2026-07-18T00:00:00.000Z",
+      confirmationRef: "validate-fixture",
+      decisionHash: "",
+      ...changes,
+    };
+    record.decisionHash = recordHash(record, "decisionHash");
+    writePackedSmokeJson(path.join(repo, ...pending.expectedDecisionPath.split("/")), record);
+    return record;
+  };
+  const prepareIntent = (fixture) => run(["prepare", "--kind", "intent-expansion", "--change", fixture.id, "--request", fixture.requestRelative, "--json"]);
+  const prepareArchive = (fixture) => run(["prepare", "--kind", "archive-finalize", "--change", fixture.id, "--request", fixture.requestRelative, "--json"]);
+  const commit = (pending, env = {}) => run(["commit", "--decision-id", pending.decisionId, "--decision-record", pending.expectedDecisionPath, "--json"], env);
+  const cancel = (pending) => run(["cancel", "--decision-id", pending.decisionId, "--decision-record", pending.expectedDecisionPath, "--json"]);
+  try {
+    write(".steadyspec/requests/malformed.json", Buffer.from('{"schemaVersion":1,"schemaVersion":1}', "utf8"));
+    let result = run(["prepare", "--kind", "intent-expansion", "--change", "missing", "--request", ".steadyspec/requests/malformed.json", "--json"]);
+    assert(result.status === 2 && result.json && result.json.status === "invalid", "duplicate-key request did not fail closed");
+    assert(!fs.existsSync(path.join(repo, ".steadyspec", "human-transactions")), "malformed request created transaction state");
+
+    write(".meta/changes/archive/old-change/archive.md", Buffer.from("# old archive\n", "utf8"));
+    writePackedSmokeJson(path.join(repo, ".steadyspec", "requests", "reserved-archive.json"), {
+      schemaVersion: 1, sourceRoot: ".meta/changes/archive", targetRoot: ".meta/changes/archive/archive",
+      archiveBase64: Buffer.from("# impossible\n").toString("base64"), substrate: "meta", docsCheckRequired: false,
+    });
+    result = run(["prepare", "--kind", "archive-finalize", "--change", "archive", "--request", ".steadyspec/requests/reserved-archive.json", "--json"]);
+    assert(result.status === 2 && result.json.status === "invalid" && !fs.existsSync(path.join(repo, ".steadyspec", "human-transactions")), "reserved archive directory was treated as an active change");
+    write(".meta/changes/not-active/readme.md", Buffer.from("not a change\n", "utf8"));
+    result = run(["prepare", "--kind", "archive-finalize", "--change", "not-active", "--request", ".steadyspec/requests/reserved-archive.json", "--json"]);
+    assert(result.status === 2 && result.json.status === "invalid" && !fs.existsSync(path.join(repo, ".steadyspec", "human-transactions")), "directory without exact proposal.md was treated as an active change");
+
+    const linkedTarget = path.join(repo, ".meta", "changes", "linked-target");
+    const linkedChange = path.join(repo, ".meta", "changes", "linked-change");
+    fs.mkdirSync(linkedTarget, { recursive: true });
+    fs.writeFileSync(path.join(linkedTarget, "proposal.md"), Buffer.from("# linked\n", "utf8"));
+    try {
+      fs.symlinkSync(linkedTarget, linkedChange, process.platform === "win32" ? "junction" : "dir");
+      result = run(["prepare", "--kind", "archive-finalize", "--change", "linked-change", "--request", ".steadyspec/requests/reserved-archive.json", "--json"]);
+      assert(result.status === 2 && result.json.status === "invalid" && !fs.existsSync(path.join(repo, ".steadyspec", "human-transactions")), "linked active change root was accepted");
+    } catch (error) {
+      if (!error || !["EPERM", "EACCES", "ENOTSUP"].includes(error.code)) throw error;
+      warn(`human-decision symlink/junction negative skipped: ${error.code}`);
+    }
+
+    fs.mkdirSync(path.join(repo, ".steadyspec", "human-transactions", "f".repeat(32)), { recursive: true });
+
+    const intent = intentFixture("intent-ok");
+    result = prepareIntent(intent);
+    assert(result.status === 2 && result.json.status === "needs-user" && result.json.domainMutation === "none", "valid intent prepare did not stop for a user");
+    assert(read(intent.proposalRelative).equals(intent.proposal), "intent prepare mutated the proposal");
+    const pending = pendingFor(result);
+    assert(pending.change.id === intent.id && pending.change.rootPath === `.meta/changes/${intent.id}`, "pending did not bind exact change identity");
+    const preview = pending.preview && pending.preview.exactUnifiedPreview;
+    assert(preview && preview.format === "steadyspec-exact-unified-insertion-v1" && Buffer.from(preview.fieldBeforeBase64, "base64").equals(intent.proposal.subarray(intent.request.fieldSectionStartByte, intent.request.fieldSectionEndByte)) && preview.fieldAfterUtf8.includes("added expansion") && preview.unifiedDiffUtf8.includes("+ - added expansion".replace("+ ", "+")), "intent pending lacks exact contextual unified preview");
+    const pendingBytes = read(result.json.pendingPath);
+    const pendingTime = fs.statSync(path.join(repo, ...result.json.pendingPath.split("/"))).mtimeMs;
+    const duplicate = prepareIntent(intent);
+    assert(duplicate.status === 2 && duplicate.json.decisionId === pending.decisionId, "duplicate prepare did not reuse the binding");
+    assert(read(result.json.pendingPath).equals(pendingBytes) && fs.statSync(path.join(repo, ...result.json.pendingPath.split("/"))).mtimeMs === pendingTime, "duplicate prepare rewrote immutable pending state");
+
+    decisionFor(pending, "approve-exact-transaction", { bindingHash: `sha256:${"0".repeat(64)}` });
+    result = commit(pending);
+    assert(result.status === 3 && result.json.status === "replay-conflict" && read(intent.proposalRelative).equals(intent.proposal), "mismatched decision changed the proposal");
+    decisionFor(pending);
+    result = commit(pending);
+    assert(result.status === 0 && result.json.status === "committed" && result.json.action === "proposal-readback-passed-write-drift-evidence", "intent commit did not prove the exact insertion");
+    assert(read(intent.proposalRelative).equals(intent.after), "intent commit bytes differ from before+addition+after");
+    const commitRelative = `.steadyspec/human-transactions/${pending.decisionId}/commit.json`;
+    const terminalBytes = read(commitRelative);
+    const terminalTime = fs.statSync(path.join(repo, ...commitRelative.split("/"))).mtimeMs;
+    const proposalTime = fs.statSync(path.join(repo, ...intent.proposalRelative.split("/"))).mtimeMs;
+    result = commit(pending);
+    assert(result.status === 0 && result.json.status === "already-committed", "intent commit replay was not idempotent");
+    result = run(["status", "--decision-id", pending.decisionId, "--json"]);
+    assert(result.status === 0 && result.json.status === "already-committed", "status did not revalidate committed postconditions");
+    assert(read(commitRelative).equals(terminalBytes) && fs.statSync(path.join(repo, ...commitRelative.split("/"))).mtimeMs === terminalTime && fs.statSync(path.join(repo, ...intent.proposalRelative.split("/"))).mtimeMs === proposalTime, "terminal replay/status performed a write");
+    decisionFor(pending, "cancel");
+    result = run(["status", "--decision-id", pending.decisionId, "--json"]);
+    assert(result.status === 3 && result.json.status === "replay-conflict" && result.json.decisionBindingValid === false, "committed status accepted a replaced cancel decision");
+    decisionFor(pending);
+
+    const escapedField = intentFixture("intent-field-escape", "- escaped\n");
+    escapedField.request.fieldSectionStartByte = 0;
+    escapedField.request.fieldSectionEndByte = escapedField.proposal.length;
+    escapedField.request.insertionOffsetByte = escapedField.proposal.indexOf(Buffer.from("- excluded"));
+    writePackedSmokeJson(path.join(repo, ...escapedField.requestRelative.split("/")), escapedField.request);
+    result = prepareIntent(escapedField);
+    assert(result.status === 2 && result.json.status === "invalid" && read(escapedField.proposalRelative).equals(escapedField.proposal), "intent field range escaped the code-derived section");
+
+    const midLine = intentFixture("intent-mid-line", "- mid line\n");
+    midLine.request.insertionOffsetByte = midLine.proposal.indexOf(Buffer.from("original")) + 2;
+    writePackedSmokeJson(path.join(repo, ...midLine.requestRelative.split("/")), midLine.request);
+    result = prepareIntent(midLine);
+    assert(result.status === 2 && result.json.status === "invalid" && read(midLine.proposalRelative).equals(midLine.proposal), "mid-line insertion offset was accepted");
+
+    const cjkId = "intent-mid-codepoint";
+    const cjkProposalRelative = `.meta/changes/${cjkId}/proposal.md`;
+    const cjkProposal = Buffer.from("# Proposal\n\n## Boundary\n\n### In Scope\n- 中文\n\n### Out of Scope\n- excluded\n", "utf8");
+    write(cjkProposalRelative, cjkProposal);
+    const cjkStart = cjkProposal.indexOf(Buffer.from("### In Scope"));
+    const cjkEnd = cjkProposal.indexOf(Buffer.from("### Out of Scope"));
+    const cjkRequestRelative = `.steadyspec/requests/${cjkId}.json`;
+    writePackedSmokeJson(path.join(repo, ...cjkRequestRelative.split("/")), { schemaVersion: 1, proposalPath: cjkProposalRelative, fieldId: "boundary.inScope", fieldSectionStartByte: cjkStart, fieldSectionEndByte: cjkEnd, insertionOffsetByte: cjkProposal.indexOf(Buffer.from("中", "utf8")) + 1, additionBase64: Buffer.from("- invalid\n").toString("base64") });
+    result = run(["prepare", "--kind", "intent-expansion", "--change", cjkId, "--request", cjkRequestRelative, "--json"]);
+    assert(result.status === 2 && result.json.status === "invalid" && read(cjkProposalRelative).equals(cjkProposal), "mid-codepoint insertion produced a pending transaction");
+
+    const unsafeIntent = intentFixture("intent-unsafe", "- visual\u202ereversal\n");
+    result = prepareIntent(unsafeIntent);
+    assert(result.status === 2 && result.json.status === "invalid" && read(unsafeIntent.proposalRelative).equals(unsafeIntent.proposal), "unsafe directionality text entered a pending preview");
+
+    const arbitrary = intentFixture("intent-arbitrary", "- arbitrary\n");
+    write(`.meta/changes/${arbitrary.id}/notes.md`, arbitrary.proposal);
+    arbitrary.request.proposalPath = `.meta/changes/${arbitrary.id}/notes.md`;
+    writePackedSmokeJson(path.join(repo, ...arbitrary.requestRelative.split("/")), arbitrary.request);
+    result = prepareIntent(arbitrary);
+    assert(result.status === 2 && result.json.status === "invalid", "intent transaction accepted a non-proposal carrier");
+
+    const cancelled = intentFixture("intent-cancel", "- cancelled\n");
+    const cancelledPending = pendingFor(prepareIntent(cancelled));
+    decisionFor(cancelledPending, "cancel");
+    result = cancel(cancelledPending);
+    assert(result.status === 0 && result.json.status === "cancelled" && read(cancelled.proposalRelative).equals(cancelled.proposal), "cancel mutated the proposal");
+    const cancelJournal = read(`.steadyspec/human-transactions/${cancelledPending.decisionId}/commit.json`);
+    result = cancel(cancelledPending);
+    assert(result.status === 0 && result.json.status === "already-cancelled" && read(`.steadyspec/human-transactions/${cancelledPending.decisionId}/commit.json`).equals(cancelJournal), "cancel replay was not no-write idempotent");
+
+    const stale = intentFixture("intent-stale", "- stale\n");
+    const stalePending = pendingFor(prepareIntent(stale));
+    decisionFor(stalePending);
+    fs.appendFileSync(path.join(repo, ...stale.proposalRelative.split("/")), "external drift\n", "utf8");
+    result = run(["status", "--decision-id", stalePending.decisionId, "--json"]);
+    assert(result.status === 3 && result.json.status === "stale", "pending status did not surface proposal drift");
+    result = commit(stalePending);
+    assert(result.status === 3 && result.json.status === "stale" && !fs.existsSync(path.join(repo, `.steadyspec/human-transactions/${stalePending.decisionId}/commit.json`)), "stale intent started a commit journal");
+
+    const locked = intentFixture("intent-lock", "- locked\n");
+    const lockedPending = pendingFor(prepareIntent(locked));
+    decisionFor(lockedPending);
+    const lockKey = crypto.createHash("sha256").update(`${lockedPending.change.rootPath}\n${lockedPending.binding.operation.proposalPath}`, "utf8").digest("hex");
+    const lockName = `target-${lockKey}`;
+    const lockRelative = `.steadyspec/human-transactions/.locks/${lockName}.lock`;
+    const writeLockOwner = (pid, token) => {
+      const owner = { schemaVersion: 1, recordType: "transaction-lock-owner", lockName, pid, createdAt: "2026-07-18T00:00:00.000Z", runtimeIdentity: lockedPending.runtimeIdentity, token, ownerHash: "" };
+      owner.ownerHash = recordHash(owner, "ownerHash");
+      fs.mkdirSync(path.join(repo, ...lockRelative.split("/")), { recursive: true });
+      writePackedSmokeJson(path.join(repo, ...lockRelative.split("/"), "owner.json"), owner);
+    };
+    writeLockOwner(process.pid, "1".repeat(32));
+    result = commit(lockedPending);
+    assert(result.status === 4 && result.json.status === "recovery-required" && read(locked.proposalRelative).equals(locked.proposal), "lock contention changed the domain");
+    fs.rmSync(path.join(repo, ...lockRelative.split("/")), { recursive: true });
+    writeLockOwner(2147483647, "2".repeat(32));
+    result = commit(lockedPending);
+    assert(result.status === 0 && result.json.status === "committed" && read(locked.proposalRelative).equals(locked.after), "dead lock owner was not safely reclaimed for exact recovery");
+
+    const redirected = intentFixture("intent-journal-redirect", "- authorized only here\n");
+    const redirectedPending = pendingFor(prepareIntent(redirected));
+    decisionFor(redirectedPending);
+    write(`.meta/changes/${redirected.id}/other.md`, redirected.proposal);
+    result = commit(redirectedPending, { STEADYSPEC_INTERNAL_TRANSACTION_FAULT: "intent-validated" });
+    assert(result.status === 4, "redirect fixture did not stop after journal creation");
+    const redirectedJournalPath = `.steadyspec/human-transactions/${redirectedPending.decisionId}/commit.json`;
+    const redirectedJournal = JSON.parse(read(redirectedJournalPath).toString("utf8"));
+    redirectedJournal.workPaths = {
+      proposal: `.meta/changes/${redirected.id}/other.md`,
+      temp: `.meta/changes/${redirected.id}/.other.md.after.tmp`,
+      backup: `.meta/changes/${redirected.id}/.other.md.before.bak`,
+    };
+    redirectedJournal.commitHash = recordHash(redirectedJournal, "commitHash");
+    writePackedSmokeJson(path.join(repo, ...redirectedJournalPath.split("/")), redirectedJournal);
+    result = commit(redirectedPending);
+    assert(result.status === 3 && result.json.status === "replay-conflict" && read(`.meta/changes/${redirected.id}/other.md`).equals(redirected.proposal) && read(redirected.proposalRelative).equals(redirected.proposal), "self-hashed journal redirected the approved target");
+
+    const faultedIntent = intentFixture("intent-fault", "- recovered\n");
+    const faultedIntentPending = pendingFor(prepareIntent(faultedIntent));
+    decisionFor(faultedIntentPending);
+    result = commit(faultedIntentPending, { STEADYSPEC_INTERNAL_TRANSACTION_FAULT: "intent-backup-created" });
+    assert(result.status === 4 && result.json.status === "recovery-required" && result.json.domainMutation === "possible-partial-inspect-journal", "intent fault output hid possible partial domain mutation");
+    result = commit(faultedIntentPending);
+    assert(result.status === 0 && result.json.status === "committed" && read(faultedIntent.proposalRelative).equals(faultedIntent.after), "intent fault retry did not recover exact bytes");
+
+    const hardIntent = intentFixture("intent-hard-crash", "- hard recovered\n");
+    const hardIntentPending = pendingFor(prepareIntent(hardIntent));
+    decisionFor(hardIntentPending);
+    result = commit(hardIntentPending, { STEADYSPEC_INTERNAL_TRANSACTION_CRASH: "intent-backup-created" });
+    assert(result.status === 86 && !result.json, "intent hard-crash fixture did not terminate the owner process");
+    result = commit(hardIntentPending);
+    assert(result.status === 0 && result.json.status === "committed" && read(hardIntent.proposalRelative).equals(hardIntent.after), "intent exact retry did not reclaim a dead owner lock");
+
+    const prepareCrash = intentFixture("intent-prepare-crash", "- prepare recovered\n");
+    result = run(["prepare", "--kind", "intent-expansion", "--change", prepareCrash.id, "--request", prepareCrash.requestRelative, "--json"], { STEADYSPEC_INTERNAL_TRANSACTION_CRASH: "prepare-candidate-written" });
+    assert(result.status === 86 && read(prepareCrash.proposalRelative).equals(prepareCrash.proposal), "prepare hard crash mutated the proposal");
+    result = prepareIntent(prepareCrash);
+    assert(result.status === 2 && result.json.status === "needs-user", "prepare did not recover after an unpublished candidate directory crash");
+
+    const archive = archiveFixture("archive-ok");
+    const archivePending = pendingFor(prepareArchive(archive));
+    assert(fs.existsSync(path.join(repo, ...archive.sourceRoot.split("/"))) && !fs.existsSync(path.join(repo, ...archive.targetRoot.split("/"))), "archive prepare mutated source or target");
+    decisionFor(archivePending);
+    result = commit(archivePending);
+    assert(result.status === 0 && result.json.status === "committed" && result.json.action === "archived" && result.json.postconditions.filesystemState === "archived", "archive commit did not reach filesystem archived");
+    assert(!fs.existsSync(path.join(repo, ...archive.sourceRoot.split("/"))) && read(`${archive.targetRoot}/archive.md`).equals(archive.archive), "archive terminal filesystem is incorrect");
+    const archiveJournal = read(`.steadyspec/human-transactions/${archivePending.decisionId}/commit.json`);
+    result = commit(archivePending);
+    assert(result.status === 0 && result.json.status === "already-committed" && read(`.steadyspec/human-transactions/${archivePending.decisionId}/commit.json`).equals(archiveJournal), "archive replay was not no-write idempotent");
+
+    const faultedArchive = archiveFixture("archive-fault");
+    const faultedArchivePending = pendingFor(prepareArchive(faultedArchive));
+    decisionFor(faultedArchivePending);
+    result = commit(faultedArchivePending, { STEADYSPEC_INTERNAL_TRANSACTION_FAULT: "archive-before-source-retire" });
+    assert(result.status === 4 && result.json.domainMutation === "possible-partial-inspect-journal" && fs.existsSync(path.join(repo, ...faultedArchive.sourceRoot.split("/"))) && fs.existsSync(path.join(repo, ...faultedArchive.targetRoot.split("/"))), "archive interruption did not preserve both auditable sides or disclose partial mutation");
+    const recoveryStatus = run(["status", "--decision-id", faultedArchivePending.decisionId, "--json"]);
+    assert(recoveryStatus.status === 4 && recoveryStatus.json.status === "recovery-required", "in-progress archive status was not recovery-required");
+    result = commit(faultedArchivePending);
+    assert(result.status === 0 && result.json.status === "committed" && !fs.existsSync(path.join(repo, ...faultedArchive.sourceRoot.split("/"))), "archive retry did not recover to the exact terminal state");
+
+    const mutatedArchive = archiveFixture("archive-target-mutation");
+    const mutatedArchivePending = pendingFor(prepareArchive(mutatedArchive));
+    decisionFor(mutatedArchivePending);
+    result = commit(mutatedArchivePending, { STEADYSPEC_INTERNAL_TRANSACTION_FAULT: "archive-before-source-retire" });
+    assert(result.status === 4 && fs.existsSync(path.join(repo, ...mutatedArchive.sourceRoot.split("/"))) && fs.existsSync(path.join(repo, ...mutatedArchive.targetRoot.split("/"))), "archive mutation fixture did not stop with both sides available");
+    write(`${mutatedArchive.targetRoot}/archive.md`, Buffer.from("# mutated archive\n", "utf8"));
+    result = commit(mutatedArchivePending);
+    assert(result.status === 4 && result.json.status === "recovery-required" && fs.existsSync(path.join(repo, ...mutatedArchive.sourceRoot.split("/"))) && fs.existsSync(path.join(repo, ...mutatedArchive.targetRoot.split("/"))), "final archive byte mutation was not detected before source retirement");
+
+    const hardArchive = archiveFixture("archive-hard-crash");
+    const hardArchivePending = pendingFor(prepareArchive(hardArchive));
+    decisionFor(hardArchivePending);
+    result = commit(hardArchivePending, { STEADYSPEC_INTERNAL_TRANSACTION_CRASH: "archive-before-source-retire" });
+    assert(result.status === 86 && fs.existsSync(path.join(repo, ...hardArchive.sourceRoot.split("/"))) && fs.existsSync(path.join(repo, ...hardArchive.targetRoot.split("/"))), "archive hard crash did not preserve both sides");
+    result = commit(hardArchivePending);
+    assert(result.status === 0 && result.json.status === "committed" && !fs.existsSync(path.join(repo, ...hardArchive.sourceRoot.split("/"))), "archive exact retry did not reclaim a dead owner lock");
+
+    write("random/foo/proposal.md", Buffer.from("# arbitrary archive\n", "utf8"));
+    writePackedSmokeJson(path.join(repo, ".steadyspec", "requests", "custom-archive.json"), {
+      schemaVersion: 1,
+      sourceRoot: "random/foo",
+      targetRoot: "random/archive/foo",
+      archiveBase64: Buffer.from("# archive\n").toString("base64"),
+      substrate: "custom",
+      docsCheckRequired: false,
+    });
+    result = run(["prepare", "--kind", "archive-finalize", "--change", "random/foo", "--request", ".steadyspec/requests/custom-archive.json", "--json"]);
+    const customPending = pendingFor(result);
+    decisionFor(customPending);
+    result = commit(customPending);
+    assert(result.status === 0 && result.json.status === "committed" && result.json.changeRoot === "random/foo" && !fs.existsSync(path.join(repo, "random", "foo")) && fs.existsSync(path.join(repo, "random", "archive", "foo")), "bounded custom archive did not preserve the code-derived target contract");
+
+    if (process.platform === "win32") {
+      const caseId = "CaseAlias";
+      const caseProposal = Buffer.from("# Proposal\n\n## Boundary\n\n### In Scope\n- original\n\n### Out of Scope\n- excluded\n", "utf8");
+      write(`.meta/changes/${caseId}/proposal.md`, caseProposal);
+      const caseStart = caseProposal.indexOf(Buffer.from("### In Scope"));
+      const caseEnd = caseProposal.indexOf(Buffer.from("### Out of Scope"));
+      const caseRequest = ".steadyspec/requests/case-alias.json";
+      writePackedSmokeJson(path.join(repo, ...caseRequest.split("/")), { schemaVersion: 1, proposalPath: ".meta/changes/casealias/proposal.md", fieldId: "boundary.inScope", fieldSectionStartByte: caseStart, fieldSectionEndByte: caseEnd, insertionOffsetByte: caseEnd, additionBase64: Buffer.from("- alias\n").toString("base64") });
+      result = run(["prepare", "--kind", "intent-expansion", "--change", "casealias", "--request", caseRequest, "--json"]);
+      assert(result.status === 2 && result.json.status === "invalid" && read(`.meta/changes/${caseId}/proposal.md`).equals(caseProposal), "Windows case-only filesystem alias was accepted");
+    }
+
+    const docsFailure = archiveFixture("docs-fail", "docs");
+    const docsPending = pendingFor(prepareArchive(docsFailure));
+    decisionFor(docsPending);
+    result = commit(docsPending);
+    assert(result.status === 2 && result.json.status === "docs-check-failed" && fs.existsSync(path.join(repo, ...docsFailure.sourceRoot.split("/"))) && !fs.existsSync(path.join(repo, ...docsFailure.targetRoot.split("/"))), "failed docs check changed the archive domain");
+
+    const forgedDocs = archiveFixture("docs-forged-staging", "docs");
+    const forgedDocsPending = pendingFor(prepareArchive(forgedDocs));
+    decisionFor(forgedDocsPending);
+    result = commit(forgedDocsPending, { STEADYSPEC_INTERNAL_TRANSACTION_FAULT: "archive-validated" });
+    assert(result.status === 4, "forged docs fixture did not stop after archive journal creation");
+    const forgedDocsJournalPath = `.steadyspec/human-transactions/${forgedDocsPending.decisionId}/commit.json`;
+    const forgedDocsJournal = JSON.parse(read(forgedDocsJournalPath).toString("utf8"));
+    const forgedStaging = path.join(repo, ...forgedDocsJournal.workPaths.staging.split("/"));
+    fs.mkdirSync(forgedStaging, { recursive: true });
+    fs.copyFileSync(path.join(repo, ...forgedDocs.sourceRoot.split("/"), "proposal.md"), path.join(forgedStaging, "proposal.md"));
+    fs.writeFileSync(path.join(forgedStaging, "archive.md"), forgedDocs.archive);
+    forgedDocsJournal.phase = "staging-built";
+    forgedDocsJournal.status = "in-progress";
+    forgedDocsJournal.docsCheck = { required: true, passed: true, policyIdentity: forgedDocsPending.binding.operation.docsCheckPolicyIdentity, errors: [] };
+    forgedDocsJournal.history.push({ phase: "staging-built", at: "2026-07-18T00:00:01.000Z" });
+    forgedDocsJournal.commitHash = recordHash(forgedDocsJournal, "commitHash");
+    writePackedSmokeJson(path.join(repo, ...forgedDocsJournalPath.split("/")), forgedDocsJournal);
+    result = commit(forgedDocsPending);
+    assert(result.status === 2 && result.json.status === "docs-check-failed" && fs.existsSync(path.join(repo, ...forgedDocs.sourceRoot.split("/"))) && !fs.existsSync(path.join(repo, ...forgedDocs.targetRoot.split("/"))) && !fs.existsSync(forgedStaging), "forged staging docs result bypassed the fresh helper check");
+
+    result = spawnSync(process.execPath, [router, "internal", "human-transaction", "status", "--decision-id", "bad", "--json"], { cwd: repo, encoding: "utf8", timeout: 30000, windowsHide: true });
+    assert(result.status === 2 && JSON.parse(result.stdout).status === "invalid", "hidden init route did not preserve helper exit/JSON");
+    const help = spawnSync(process.execPath, [router, "--help"], { cwd: repo, encoding: "utf8", timeout: 30000, windowsHide: true });
+    assert(!/human-transaction|\binternal\b/.test(help.stdout || ""), "public help exposed the hidden transaction route");
+  } catch (error) {
+    fs.rmSync(repo, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    fail(`human-decision transaction fixtures: ${error.message}`);
+  }
+  fs.rmSync(repo, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+}
+
+function checkV06PackedInstall(root, pkg) {
+  if (process.platform !== "win32") {
+    warn("v0.6 fresh packed-install smoke skipped outside the supported Windows single-user boundary");
+    return;
+  }
+
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "steadyspec-v06-packed-install-"));
+  let failure = null;
+  let summary = null;
+  try {
+    const packDir = path.join(temp, "pack");
+    const installDir = path.join(temp, "clean-project");
+    fs.mkdirSync(packDir, { recursive: true });
+    fs.mkdirSync(installDir, { recursive: true });
+    const npmCli = locateNpmCliForPackedSmoke();
+
+    const packResult = packedSmokeProcess(process.execPath, [npmCli, "pack", root, "--json", "--pack-destination", packDir], packDir, 120000);
+    if (packResult.status !== 0) throw packedSmokeFailure("npm pack", packResult);
+    const packRows = parsePackedSmokeJson("npm pack", packResult);
+    if (!Array.isArray(packRows) || packRows.length !== 1) throw new Error("npm pack must describe exactly one tarball");
+    const packed = packRows[0];
+    const tarball = path.join(packDir, packed.filename || "");
+    if (!packed.filename || !fs.existsSync(tarball)) throw new Error("npm pack did not create its reported tarball");
+    if (packed.version !== pkg.version || packed.name !== pkg.name) throw new Error("npm pack name/version differs from package.json");
+    const tarballSha256 = `sha256:${crypto.createHash("sha256").update(fs.readFileSync(tarball)).digest("hex")}`;
+    const packedFiles = new Set((packed.files || []).map((row) => String(row.path || "").replace(/\\/g, "/")));
+    const requiredPackedFiles = [
+      "package.json",
+      "bin/init.js",
+      "bin/human-decision-transaction.js",
+      "bin/closure.js",
+      "bin/closure-fixtures.js",
+      "bin/validate.js",
+      "schemas/closure-state-v1.schema.json",
+      "schemas/acceptance-profile-v1.schema.json",
+      "schemas/closure-config-v1.schema.json",
+      "en/runtime/closure-env.js",
+      "en/runtime/process-cleanup.js",
+      "en/flows/steadyspec-verify-flow/SKILL.md",
+      "en/flows/steadyspec-archive-flow/SKILL.md",
+      "en/runtime/codex/agents/steadyspec-verify-flow.yaml",
+      "en/runtime/codex/agents/steadyspec-archive-flow.yaml",
+      "README.md",
+      "QUICKSTART.md",
+      "ARTIFACT_CONTRACT.md",
+      "zh/README.md",
+      "zh/QUICKSTART.md",
+    ];
+    for (const relative of requiredPackedFiles) if (!packedFiles.has(relative)) throw new Error(`packed tarball missing ${relative}`);
+    const forbiddenPrefixes = [".git/", ".meta/", ".steadyspec/", ".codex/", ".claude/", "node_modules/"];
+    const leaked = [...packedFiles].filter((relative) => forbiddenPrefixes.some((prefix) => relative === prefix.slice(0, -1) || relative.startsWith(prefix)));
+    if (leaked.length) throw new Error(`packed tarball leaked workspace paths: ${leaked.join(", ")}`);
+
+    writePackedSmokeJson(path.join(installDir, "package.json"), { name: "steadyspec-v06-packed-smoke", version: "1.0.0", private: true });
+    const installResult = packedSmokeProcess(process.execPath, [npmCli, "install", "--ignore-scripts", "--no-audit", "--no-fund", "--offline", tarball], installDir, 120000);
+    if (installResult.status !== 0) throw packedSmokeFailure("fresh npm install", installResult);
+    const installedRoot = path.join(installDir, "node_modules", "steadyspec");
+    const installedPackage = readJson(path.join(installedRoot, "package.json"));
+    if (installedPackage.version !== pkg.version) throw new Error(`installed package version ${installedPackage.version} differs from ${pkg.version}`);
+    for (const relative of requiredPackedFiles) if (!fs.existsSync(path.join(installedRoot, relative))) throw new Error(`installed package missing ${relative}`);
+
+    const shim = path.join(installDir, "node_modules", ".bin", "steadyspec.cmd");
+    if (!fs.existsSync(shim)) throw new Error("fresh install did not create node_modules/.bin/steadyspec.cmd");
+    const help = runInstalledShim(shim, ["closure", "--help"], installDir);
+    if (help.status !== 0) throw packedSmokeFailure("installed closure --help", help);
+    for (const anchor of ["--evaluator-start", "--import-evaluator", "--decide <resume|approve|reject|reopen|abandon>"]) {
+      if (!(help.stdout || "").includes(anchor)) throw new Error(`installed closure --help missing ${anchor}`);
+    }
+
+    const init = runInstalledShim(shim, ["init", "--runtime", "codex", "--substrate", "docs", "--closure", "manual", "--force"], installDir, 60000);
+    if (init.status !== 0) throw packedSmokeFailure("installed init", init);
+    const generatedConfigPath = path.join(installDir, ".steadyspec", "closure.json");
+    const generatedConfig = readJson(generatedConfigPath);
+    if (generatedConfig.mode !== "manual" || Object.keys(generatedConfig.proofPolicies || {}).length !== 0 || !/not human acceptance/i.test(generatedConfig.boundary || "")) {
+      throw new Error("installed init did not preserve the manual, empty-policy, human-authority template boundary");
+    }
+    for (const relative of [
+      ".codex/skills/steadyspec-verify-flow/SKILL.md",
+      ".codex/skills/steadyspec-verify-flow/agents/openai.yaml",
+      ".codex/skills/steadyspec-archive-flow/SKILL.md",
+      ".codex/skills/steadyspec-archive-flow/agents/openai.yaml",
+    ]) if (!fs.existsSync(path.join(installDir, relative))) throw new Error(`installed init output missing ${relative}`);
+
+    const { recordHash: installedRecordHash } = require(path.join(installedRoot, "bin", "human-decision-transaction.js"));
+    const installedDecision = (pending, decision) => {
+      const record = {
+        schemaVersion: 1, contractVersion: 1, recordType: "human-decision",
+        decisionId: pending.decisionId, kind: pending.kind, pendingHash: pending.pendingHash,
+        bindingHash: pending.bindingHash, decision, reason: "packed installed exact transaction",
+        confirmedBy: "packed-fixture-human", confirmedAt: "2026-07-18T00:00:00.000Z",
+        confirmationRef: "packed-install-smoke", decisionHash: "",
+      };
+      record.decisionHash = installedRecordHash(record, "decisionHash");
+      writePackedSmokeJson(path.join(installDir, ...pending.expectedDecisionPath.split("/")), record);
+    };
+    const installedPrepare = (kind, id, requestRelative) => {
+      const preparedResult = runInstalledShim(shim, ["internal", "human-transaction", "prepare", "--kind", kind, "--change", id, "--request", requestRelative, "--json"], installDir);
+      const json = parsePackedSmokeJson(`installed ${kind} prepare`, preparedResult);
+      if (preparedResult.status !== 2 || json.status !== "needs-user" || json.domainMutation !== "none") throw new Error(`installed ${kind} prepare did not stop without domain mutation`);
+      return readJson(path.join(installDir, ...json.pendingPath.split("/")));
+    };
+    const installedFinish = (action, pending) => runInstalledShim(shim, ["internal", "human-transaction", action, "--decision-id", pending.decisionId, "--decision-record", pending.expectedDecisionPath, "--json"], installDir);
+    const installedIntentFixture = (id, addition) => {
+      const proposalRelative = `.meta/changes/${id}/proposal.md`;
+      const proposal = Buffer.from("# Proposal\n\n## Boundary\n\n### In Scope\n- original\n\n### Out of Scope\n- excluded\n", "utf8");
+      const proposalFile = path.join(installDir, ...proposalRelative.split("/"));
+      fs.mkdirSync(path.dirname(proposalFile), { recursive: true });
+      fs.writeFileSync(proposalFile, proposal);
+      const start = proposal.indexOf(Buffer.from("### In Scope"));
+      const end = proposal.indexOf(Buffer.from("### Out of Scope"));
+      const requestRelative = `.steadyspec/packed-requests/${id}.json`;
+      writePackedSmokeJson(path.join(installDir, ...requestRelative.split("/")), { schemaVersion: 1, proposalPath: proposalRelative, fieldId: "boundary.inScope", fieldSectionStartByte: start, fieldSectionEndByte: end, insertionOffsetByte: end, additionBase64: Buffer.from(addition).toString("base64") });
+      return { id, requestRelative, proposalFile, expected: Buffer.concat([proposal.subarray(0, end), Buffer.from(addition), proposal.subarray(end)]) };
+    };
+    let txFixture = installedIntentFixture("packed-intent-commit", "- installed commit\n");
+    let txPending = installedPrepare("intent-expansion", txFixture.id, txFixture.requestRelative);
+    installedDecision(txPending, "approve-exact-transaction");
+    let txResult = installedFinish("commit", txPending);
+    if (txResult.status !== 0 || parsePackedSmokeJson("installed intent commit", txResult).action !== "proposal-readback-passed-write-drift-evidence" || !fs.readFileSync(txFixture.proposalFile).equals(txFixture.expected)) throw packedSmokeFailure("installed intent commit", txResult);
+    txFixture = installedIntentFixture("packed-intent-cancel", "- installed cancel\n");
+    txPending = installedPrepare("intent-expansion", txFixture.id, txFixture.requestRelative);
+    installedDecision(txPending, "cancel");
+    txResult = installedFinish("cancel", txPending);
+    if (txResult.status !== 0 || parsePackedSmokeJson("installed intent cancel", txResult).status !== "cancelled") throw packedSmokeFailure("installed intent cancel", txResult);
+
+    const installedArchiveFixture = (id) => {
+      const sourceRoot = `.meta/changes/${id}`;
+      const source = path.join(installDir, ...sourceRoot.split("/"));
+      fs.mkdirSync(source, { recursive: true });
+      fs.writeFileSync(path.join(source, "proposal.md"), "# packed archive\n", "utf8");
+      const requestRelative = `.steadyspec/packed-requests/${id}-archive.json`;
+      writePackedSmokeJson(path.join(installDir, ...requestRelative.split("/")), { schemaVersion: 1, sourceRoot, targetRoot: `.meta/changes/archive/${id}`, archiveBase64: Buffer.from(`# archive ${id}\n`).toString("base64"), substrate: "meta", docsCheckRequired: false });
+      return { id, sourceRoot, targetRoot: `.meta/changes/archive/${id}`, requestRelative };
+    };
+    let archiveTx = installedArchiveFixture("packed-archive-commit");
+    txPending = installedPrepare("archive-finalize", archiveTx.id, archiveTx.requestRelative);
+    installedDecision(txPending, "approve-exact-transaction");
+    txResult = installedFinish("commit", txPending);
+    if (txResult.status !== 0 || parsePackedSmokeJson("installed archive commit", txResult).action !== "archived" || fs.existsSync(path.join(installDir, ...archiveTx.sourceRoot.split("/"))) || !fs.existsSync(path.join(installDir, ...archiveTx.targetRoot.split("/")))) throw packedSmokeFailure("installed archive commit", txResult);
+    archiveTx = installedArchiveFixture("packed-archive-cancel");
+    txPending = installedPrepare("archive-finalize", archiveTx.id, archiveTx.requestRelative);
+    installedDecision(txPending, "cancel");
+    txResult = installedFinish("cancel", txPending);
+    if (txResult.status !== 0 || parsePackedSmokeJson("installed archive cancel", txResult).status !== "cancelled" || !fs.existsSync(path.join(installDir, ...archiveTx.sourceRoot.split("/")))) throw packedSmokeFailure("installed archive cancel", txResult);
+
+    const changeRelative = "docs/changes/001-packed-smoke";
+    const changeDir = path.join(installDir, ...changeRelative.split("/"));
+    fs.mkdirSync(changeDir, { recursive: true });
+    fs.writeFileSync(path.join(changeDir, "proposal.md"), "schemaVersion: 1\n\n# Packed smoke intent\n\nExercise the installed v0.6 closure boundary.\n", "utf8");
+    const missingProfile = runInstalledShim(shim, ["closure", "--change", changeRelative, "--validate-config", "--json"], installDir);
+    if (missingProfile.status !== 2) throw new Error(`installed missing-profile error must exit 2, observed ${missingProfile.status}`);
+    const missingProfileJson = parsePackedSmokeJson("installed missing-profile error", missingProfile);
+    if (missingProfileJson.status !== "invalid" || !(missingProfileJson.errors || []).some((value) => /acceptance profile missing|proofPolicies/.test(value))) {
+      throw new Error("installed missing-profile error JSON lost its actionable contract");
+    }
+
+    const policyId = "installed-pass";
+    writePackedSmokeJson(generatedConfigPath, {
+      schemaVersion: 1,
+      mode: "manual",
+      acceptanceProfile: "acceptance-profile.json",
+      limits: { maxCycles: 2, wallClockMs: 600000, maxAutoFiles: 1, recurrenceLimit: 1, noProgressCycles: 1 },
+      proofPolicies: {
+        [policyId]: {
+          executable: "node",
+          args: ["-e", "process.exit(0)"],
+          cwd: ".",
+          timeoutMs: 10000,
+          maxOutputBytes: 100000,
+          envKeys: [],
+          idempotent: true,
+          dependsOn: [],
+          outputs: [],
+          mutableStateSurfaces: [],
+          expectedExitCodes: [0],
+          evidenceContract: {
+            kind: "exit-code-only",
+            claim: "The installed package can execute one operator-configured direct proof.",
+            coverageLimit: "One no-side-effect Node exit on this fresh Windows project only."
+          }
+        }
+      },
+      generatedTemplate: false,
+      reviewRequired: false,
+      boundary: "Fresh Windows packed-install smoke; machine output is not human acceptance or release authority."
+    });
+    const dimensionIds = ["requirement-completeness", "logic-correctness", "edge-cases", "code-quality", "test-coverage", "actual-runtime-result"];
+    writePackedSmokeJson(path.join(changeDir, "acceptance-profile.json"), {
+      schemaVersion: 1,
+      id: "packed-install-smoke",
+      candidatePaths: [`${changeRelative}/proposal.md`],
+      dimensions: dimensionIds.map((id) => ({
+        id,
+        required: true,
+        proofPolicyIds: [policyId],
+        requiredSourceClasses: ["runtime-observation"],
+        coverageLimit: "Installed CLI lifecycle smoke only; no reviewer quality or semantic acceptance claim."
+      }))
+    });
+
+    const validConfig = runInstalledShim(shim, ["closure", "--change", changeRelative, "--validate-config", "--json"], installDir);
+    if (validConfig.status !== 0 || parsePackedSmokeJson("installed validate-config", validConfig).status !== "valid") throw packedSmokeFailure("installed validate-config", validConfig);
+    const prepared = runInstalledShim(shim, ["closure", "--change", changeRelative, "--prepare", "--json"], installDir);
+    if (prepared.status !== 0) throw packedSmokeFailure("installed prepare", prepared);
+    const preparedJson = parsePackedSmokeJson("installed prepare", prepared);
+    if (preparedJson.state !== "critic-required" || !/^sha256:[a-f0-9]{64}$/.test(preparedJson.candidateFingerprint || "")) throw new Error("installed prepare did not create a fingerprint-bound critic-required state");
+    const initialStatus = runInstalledShim(shim, ["closure", "--change", changeRelative, "--status", "--json"], installDir);
+    if (initialStatus.status !== 0 || parsePackedSmokeJson("installed initial status", initialStatus).state !== "critic-required") throw packedSmokeFailure("installed initial status", initialStatus);
+
+    const criticDir = path.join(changeDir, "cross-agent", "critic-no-findings");
+    fs.mkdirSync(criticDir, { recursive: true });
+    const criticRaw = path.join(criticDir, "raw.md");
+    fs.writeFileSync(criticRaw, "# Packed-install Critic\n\n| Finding ID | Severity | Claim / Risk | Evidence | Breaking Scenario | Alternative | Recommended Action |\n|---|---|---|---|---|---|---|\n\n- No findings: confirmed\n", "utf8");
+    writePackedSmokeJson(path.join(criticDir, "run.json"), {
+      schemaVersion: 1,
+      reviewer: "packed-install-smoke",
+      mode: "review",
+      reviewerStatus: "success",
+      outputFormat: "findings_table",
+      candidateFingerprint: preparedJson.candidateFingerprint,
+      transport: "deterministic-installed-smoke",
+      paths: { raw: criticRaw }
+    });
+    const criticImported = runInstalledShim(shim, ["closure", "--change", changeRelative, "--import-critic", path.relative(installDir, criticDir), "--json"], installDir);
+    if (criticImported.status !== 0 || parsePackedSmokeJson("installed Critic import", criticImported).state !== "proofs-required") throw packedSmokeFailure("installed Critic import", criticImported);
+    const proofs = runInstalledShim(shim, ["closure", "--change", changeRelative, "--run-proofs", "--json"], installDir, 60000);
+    if (proofs.status !== 0) throw packedSmokeFailure("installed proof", proofs);
+    const proofsJson = parsePackedSmokeJson("installed proof", proofs);
+    if (proofsJson.state !== "evaluator-required" || !/^sha256:[a-f0-9]{64}$/.test(proofsJson.evidenceBundleFingerprint || "")) throw new Error("installed proof did not create an evidence-bound evaluator-required state");
+
+    const expectedRunDir = `${changeRelative}/cross-agent/expected-evaluator`;
+    const startRecordPath = path.join(installDir, ".steadyspec", "packed-evaluator-start.json");
+    const startRecord = {
+      schemaVersion: 1,
+      candidateFingerprint: proofsJson.candidateFingerprint,
+      evidenceBundleFingerprint: proofsJson.evidenceBundleFingerprint,
+      invocationId: "packed-install-evaluator-1",
+      reviewer: "packed-install-smoke",
+      transport: "deterministic-installed-smoke",
+      expectedRunDir
+    };
+    writePackedSmokeJson(startRecordPath, startRecord);
+    const started = runInstalledShim(shim, ["closure", "--change", changeRelative, "--evaluator-start", path.relative(installDir, startRecordPath), "--json"], installDir);
+    if (started.status !== 0) throw packedSmokeFailure("installed evaluator-start", started);
+    const startedJson = parsePackedSmokeJson("installed evaluator-start", started);
+    if (startedJson.state !== "evaluator-running" || startedJson.invocationId !== startRecord.invocationId || startedJson.expectedRunDir !== expectedRunDir) throw new Error("installed evaluator-start did not persist the exact invocation identity");
+    const invocation = readJson(path.join(changeDir, "closure", "cycles", "001", "evaluator-invocation.json"));
+    for (const [key, value] of Object.entries(startRecord)) if (invocation[key] !== value) throw new Error(`installed evaluator invocation changed ${key}`);
+
+    const duplicate = runInstalledShim(shim, ["closure", "--change", changeRelative, "--evaluator-start", path.relative(installDir, startRecordPath), "--json"], installDir);
+    if (duplicate.status !== 2 || !(parsePackedSmokeJson("installed duplicate evaluator-start", duplicate).errors || []).some((value) => /requires evaluator-required/.test(value))) {
+      throw new Error("installed duplicate evaluator-start did not fail closed with exit 2");
+    }
+    const mismatchedDir = path.join(changeDir, "cross-agent", "mismatched-evaluator");
+    fs.mkdirSync(mismatchedDir, { recursive: true });
+    writePackedSmokeJson(path.join(mismatchedDir, "run.json"), {});
+    const mismatched = runInstalledShim(shim, ["closure", "--change", changeRelative, "--import-evaluator", path.relative(installDir, mismatchedDir), "--json"], installDir);
+    if (mismatched.status !== 2 || !(parsePackedSmokeJson("installed mismatched evaluator import", mismatched).errors || []).some((value) => /does not match the recorded invocation/.test(value))) {
+      throw new Error("installed mismatched evaluator import did not fail closed with exit 2");
+    }
+    const finalStatus = runInstalledShim(shim, ["closure", "--change", changeRelative, "--status", "--json"], installDir);
+    const finalStatusJson = parsePackedSmokeJson("installed final status", finalStatus);
+    if (finalStatus.status !== 0 || finalStatusJson.state !== "evaluator-running") throw new Error("failed duplicate/mismatched calls changed the installed evaluator-running state");
+
+    summary = {
+      package: `${packed.name}@${packed.version}`,
+      tarballSha256,
+      packedEntryCount: packed.entryCount,
+      installedShim: "node_modules/.bin/steadyspec.cmd",
+      installedLifecycle: ["help", "init", "intent-prepare-commit-cancel", "archive-prepare-commit-cancel", "invalid-config", "valid-config", "prepare", "status", "critic-import", "proof", "evaluator-start"],
+      failClosed: ["duplicate-evaluator-start", "mismatched-evaluator-import"],
+      terminalState: finalStatusJson.state,
+      boundary: "one fresh Windows project; not registry publication, reviewer quality, process-death, POSIX/team, semantic correctness, or human acceptance"
+    };
+  } catch (error) {
+    failure = error;
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
+  if (failure) fail(`v0.6 fresh packed-install smoke: ${failure.message}`);
+  console.log(`[v0.6 packed-install smoke] ${JSON.stringify(summary)}`);
+}
+
+async function main() {
   const root = path.resolve(process.argv[2] || path.join(__dirname, ".."));
   const manifestPath = path.join(root, "manifest.json");
   const packagePath = path.join(root, "package.json");
@@ -2549,12 +4341,24 @@ function main() {
   checkV03ResponsibilityModel(root, manifest);
   checkActiveVerbSurface(root);
   checkDocsSubstrateContract(root);
-  checkV05ReleaseSurface(root, manifest, pkg);
+  checkReleaseSurface(root, manifest, pkg);
+  checkActiveV06Identity(root, pkg);
+  checkEvidenceContinuityWorkflows(root);
+  checkCrossReviewWorkflowPreflight(root);
   checkV05CrossReview(root);
   checkCrossReviewContracts(root);
+  checkV06ClosureContracts(root);
+  await checkHumanTransactionWorkflowIntegration(root);
+  checkHumanDecisionTransactions(root);
+  checkV06PackedInstall(root, pkg);
 
-  warn("Cross-review JSON contracts are valid with fixture coverage only; real reviewer invocation and POSIX behavior are not validated by npm run validate.");
-  console.log("Package is structurally valid (cross-review coverage: fixture-contracts only; no real reviewer or POSIX validation).");
+  if (process.platform === "win32") {
+    warn("Cross-review and closure JSON contracts, one-machine Windows process/preservation-rename/transport interruption observations, and a fresh packed-install smoke are covered; final archive-publication contention, real reviewer quality, arbitrary side-effect isolation, final-candidate trust, POSIX, and team behavior remain outside npm run validate.");
+    console.log("Package is structurally valid (cross-review + closure fixtures + bounded Windows real interruption + fresh packed-install smoke; no human acceptance or release-authority claim).");
+  } else {
+    warn("Cross-review and closure JSON contracts plus portable synthetic fixtures are covered; Windows real interruption smoke was skipped, so no Windows/POSIX process or rename readiness, human acceptance, or release authority is inferred.");
+    console.log("Package is structurally valid for portable structural contracts (Windows real interruption skipped; no human acceptance or release-authority claim).");
+  }
 }
 
-main();
+main().catch((error) => fail(`validation exception: ${error && error.stack ? error.stack : error}`));

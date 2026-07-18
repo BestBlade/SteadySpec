@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.0 (Windows single-user)
+
+v0.6 adds an optional attention-preserving closure support engine under the
+existing `verify` verb. SteadySpec still exposes exactly five governed verbs.
+The engine coordinates a fingerprint-bound fresh Critic -> bounded Builder ->
+configured proof -> fresh Evaluator cycle while preserving human ownership of
+scope, acceptance, merge, archive, and release decisions.
+
+- **NEW: bounded closure state machine.** `steadyspec closure` persists candidate, finding, Builder, proof, Evaluator, decision, recovery, and terminal lineage with explicit ready, stale, needs-user, environment-blocked, and non-convergent states.
+- **NEW: identity-bound role and evidence contracts.** Critic findings bind exact candidate bytes; Builder work binds declared paths, authority IDs, proof policies, and a completion token; Evaluator verdicts bind both candidate and evidence-bundle fingerprints.
+- **NEW: bounded auto mode.** Operator configuration may auto-route only declared low-risk repair slices. Scope expansion, requirement reduction, public or high-risk semantics, proof-strategy change, missing evidence, recurrence, exhausted limits, and residual human decisions stop for review.
+- **NEW: interruption and recovery contracts.** Atomic same-directory state publication, previous-state inspection, explicit incomplete-repair handling, approve/reject/reopen decisions, and reason-bound recover/reset/abandon operations preserve raw evidence and fail closed.
+- **CHANGED: verify and archive integration.** Closure is an optional support engine beneath `verify`, not a sixth verb. Non-ready closure states block archive recommendation; `candidate-ready` continues to the ordinary human trust checkpoint.
+- **COMPATIBILITY: v0.5 cross-review retained.** The existing packet, reviewer, moderation, advice, and gate lane remains available and covered by its fixture contract.
+- **AUTHORITY LIMIT: machine readiness is not acceptance.** `candidate-ready` means bounded readiness for the recorded candidate, evidence, context, and unknowns. It is not truth, general correctness, human acceptance, merge authority, or release authority.
+- **SUPPORT LIMIT: Windows single-user only.** v0.6 does not claim a Builder OS sandbox, general side-effect or proof isolation, POSIX readiness, team coordination, or knowledge of unprovided reality.
+- **EVIDENCE LIMIT: packed-install proof remains a release gate.** Source-tree validation and dogfood evidence do not replace a fresh `npm pack` installation smoke; that proof must pass before the final release claim.
+
 ## 0.5.0 (Windows single-user)
 
 v0.5 ships the cross-agent lane for one operator on Windows. Codex and
