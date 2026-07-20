@@ -1,6 +1,13 @@
 # SteadySpec 范围和边界
 
-SteadySpec 是 [METHOD.md](METHOD.md) 中描述的反漂移方法的一个参考技能包。它提供五个对外动词（`explore` / `propose` / `apply` / `verify` / `archive`），每个都是一个小闭环，在内部编排了反漂移机制和责任路由。为了可靠地兑现这件事，v0.6 明确了具体的边界。安装前请读。
+SteadySpec 是 [METHOD.md](METHOD.md) 中描述的反漂移方法的一个参考技能包。它提供五个对外动词（`explore` / `propose` / `apply` / `verify` / `archive`），每个都是一个小闭环，在内部编排了反漂移机制和责任路由。为了可靠地兑现这件事，源码分发的 v0.6.1 明确了具体边界。安装前请读。
+
+## v0.6.1 分发边界
+
+v0.6.1 只通过官方 Git 仓库分发，`package.json` 会阻止误发布到 npm。
+用户从可信 tag 或 commit 构建本地 tarball 后安装。本地 validator 和 CI
+只是有边界的证据，不代表 registry 发布、第三方采用、语义真理或人的
+发布授权。
 
 ## v0.6 closure 产品边界
 
@@ -70,7 +77,11 @@ SteadySpec v0.6 是为**每次变更一名作者**设计的。技能里提到的
 - **它不会给规格书做版本管理。** 那是介质（OpenSpec、纯文档、issue tracker）的事。SteadySpec 在介质外面加了一层漂移防御。
 - **它不替代测试。** 测试是可观测检查的一种。SteadySpec 问的是"东西做对了没有"，测试验的是"做出来的东西管不管用"。
 - **它不强制被使用。** 你可以装了 SteadySpec 但一次动词都不调。包不会吭声。
-- **它不提供 `init` 和 docs 模式 `check` 以外的生命周期 CLI 自动化。** 没有 `update`、`uninstall` 或 `status`。`steadyspec check` 是 docs 模式 artifact 结构的确定性辅助校验器；它不是第六个治理动词，也不证明语义正确。升级靠文件操作和重新 init。要从项目里卸掉，看 [QUICKSTART.md](QUICKSTART.md) 里的手动清理清单。没有卸载命令的原因：一个会在用户文件上动刀的按项目卸载命令，alpha 阶段不担这个数据丢失的风险。
+- **辅助命令有界，不是新的方法论动词。** 除了 `init` 和 docs 模式
+  `check`，CLI 还有 `cross-review`、`closure` 和 `hooks`。没有顶层
+  `update`、项目级 `uninstall` 或通用 `status`。升级时固定并验证新的
+  源码版本，再预演 `init --force`；卸载按 [QUICKSTART.md](QUICKSTART.md)
+  的精确路径清理清单执行。
 - **issue-tracker 介质仍是实验性。** v0.4 增加了原生 docs 模式结构；GitHub issues / Jira / Linear 可以作为外部记录使用，但 SteadySpec 还不拥有它们的结构和生命周期。
 - **Tier 2 优化目标是移动靶。** 方法依赖 Agent 遵循 MUST 前缀指令和基于技能描述的选择。模型行为随版本变化；没有任何 API 合约能保证今天遵循 MUST 前缀的模型在下次更新后仍然遵守。Tier 2 标注描述的是 SteadySpec 发布时测试过的模型，不是永久的保证。
 - **不保证多步骤动词流中原语技能选择的正确性。** v0.3 增加了更明确的 flow contract，但原语选择仍依赖 Agent 可靠性。如果你在 `propose-flow` / `apply-flow` / `verify-flow` / `archive-flow` 中观察到加载了错误的原语，请视为路由失败并报告。

@@ -2,17 +2,48 @@
 
 SteadySpec is a reference skill pack of the anti-drift method. Five outward verbs, each a small closed-loop with anti-drift gates and responsibility routing. Read [SCOPE.md](SCOPE.md) before adopting.
 
-## Install
+## Source-only install
 
-```bash
-npm install -g steadyspec
+SteadySpec v0.6.1 is **not published to the npm registry**. Do not run a
+registry install or `npx steadyspec`; an unqualified registry package is not a
+supported distribution of this project. Install only from the official source
+repository, pinned to a trusted tag or commit.
+
+PowerShell example:
+
+```powershell
+git clone https://github.com/BestBlade/SteadySpec.git
+Set-Location SteadySpec
+git checkout <trusted-tag-or-commit>
+git remote get-url origin
+git rev-parse HEAD
+
+node --version  # must be 18 or newer
+npm run validate
+npm pack
+npm install --global .\steadyspec-0.6.1.tgz
+steadyspec --help
 ```
 
-Then in your project directory:
+Then enter the target project and preview the exact installation before writing:
 
-```bash
-steadyspec init
+```powershell
+Set-Location D:\path\to\project
+steadyspec init --runtime codex --substrate docs --dry-run
+steadyspec init --runtime codex --substrate docs
 ```
+
+Use `--runtime claude` or `--substrate openspec` when those are the intended
+runtime/substrate. Do not add `--force` until the dry run has shown which
+existing SteadySpec-owned files would be replaced.
+
+### Agent-assisted installation contract
+
+Ask the agent to use the same commands above. It must report the Git remote,
+exact commit SHA, validation result, tarball name, and `steadyspec --help`
+result. It must stop for user confirmation if the target already contains
+SteadySpec files, runtime/substrate selection is ambiguous, or `--force` would
+be required. Agent-assisted installation is not a second opaque installer.
 
 Auto-detects `.claude/` or `.codex/` in your project. Pass `--runtime claude` or `--runtime codex` to override. If both `openspec/` and `docs/changes/` exist, init prompts which substrate is canonical (`--substrate openspec` or `--substrate docs` to bypass the prompt). For docs-mode projects, `init` also installs a structural contract and templates under `.steadyspec/substrates/docs/`.
 
@@ -204,7 +235,6 @@ before running `--include-diff`.
 To save those defaults during install:
 
 ```bash
-# DRAFT: do not script this as stable API until the v0.5 tag lands.
 steadyspec init --cross-review manual --cross-review-reviewer claude --cross-review-pass-env ANTHROPIC_AUTH_TOKEN,ANTHROPIC_BASE_URL
 ```
 
@@ -262,7 +292,6 @@ For a hook- or flow-friendly recommendation without starting a reviewer, opt in
 to advisory mode and ask for advice:
 
 ```bash
-# DRAFT: do not script this as stable API until the v0.5 tag lands.
 steadyspec init --cross-review advisory --cross-review-reviewer claude --cross-review-pass-env ANTHROPIC_AUTH_TOKEN,ANTHROPIC_BASE_URL --cross-review-min-signals 1
 steadyspec cross-review --change <change-id-or-path> --advice --json
 steadyspec cross-review --change <change-id-or-path> --advice --verbose --json
@@ -306,7 +335,6 @@ changes, inspect the histogram, then set `minSignals` above routine low-risk
 signal counts before enabling `gated`:
 
 ```bash
-# DRAFT: do not script this as stable API until the v0.5 tag lands.
 steadyspec cross-review --calibrate-dir docs/changes --mode review --include-diff --verbose --json
 ```
 
@@ -323,7 +351,6 @@ this blind spot is visible instead of being read as zero path risk.
 For automated flow blocking, opt in to the gated profile:
 
 ```bash
-# DRAFT: do not script this as stable API until the v0.5 tag lands.
 steadyspec init --cross-review gated --cross-review-reviewer claude --cross-review-pass-env ANTHROPIC_AUTH_TOKEN,ANTHROPIC_BASE_URL --cross-review-min-signals 2
 steadyspec cross-review --change <change-id-or-path> --mode review --include-diff --gate --json
 steadyspec cross-review --change <change-id-or-path> --mode review --include-diff --run-if-needed --json
@@ -368,7 +395,6 @@ from `status: template` to `status: complete`, with one decision row per finding
 To verify that the latest real run is usable:
 
 ```bash
-# DRAFT: do not script this as stable API until the v0.5 tag lands.
 steadyspec cross-review --change <change-id-or-path> --mode review --include-diff --check-latest --json
 ```
 
@@ -450,23 +476,30 @@ After `init`, `.claude/workflows/` contains deterministic execution scripts (`st
 
 SteadySpec does not provide a project-level uninstall command — it would risk deleting your work. Removal is two layers:
 
-**Global package** (one command):
+**Locally installed global package** (one command; this does not contact the
+registry):
 
-```bash
+```powershell
 npm uninstall -g steadyspec
 ```
 
 **Per-project residue** (manual cleanup, in each project where you ran `steadyspec init`):
 
-```bash
-# From the project root, remove SteadySpec's own files only
-rm -rf .claude/skills/steadyspec-*
-rm -rf .claude/commands/steadyspec
-rm -rf .claude/workflows/steadyspec-*
-rm -rf .codex/skills/steadyspec-*
-rm -rf .steadyspec
-# Then open CLAUDE.md and/or AGENTS.md and delete the block between
-# <!-- steadyspec --> and <!-- /steadyspec --> if present.
+```powershell
+# From the verified target project root, inspect exact targets before removal.
+Get-ChildItem -LiteralPath .claude\skills -Filter 'steadyspec-*' -ErrorAction SilentlyContinue
+Get-ChildItem -LiteralPath .claude\workflows -Filter 'steadyspec-*' -ErrorAction SilentlyContinue
+Get-ChildItem -LiteralPath .codex\skills -Filter 'steadyspec-*' -ErrorAction SilentlyContinue
+Get-Item -LiteralPath .claude\commands\steadyspec -ErrorAction SilentlyContinue
+Get-Item -LiteralPath .steadyspec -ErrorAction SilentlyContinue
+
+# Remove only the exact SteadySpec-owned paths you inspected.
+Remove-Item -LiteralPath .claude\commands\steadyspec -Recurse -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath .steadyspec -Recurse -ErrorAction SilentlyContinue
+
+# Remove each listed steadyspec-* skill/workflow directory by its exact
+# -LiteralPath. Then open CLAUDE.md and/or AGENTS.md and delete only the block
+# between <!-- steadyspec --> and <!-- /steadyspec --> if present.
 ```
 
 **Do NOT delete** your own work: `openspec/` (if you use OpenSpec), `docs/changes/<NNN>-*` directories with your change records, your project's existing `CLAUDE.md` content outside the SteadySpec block.

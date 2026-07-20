@@ -134,12 +134,37 @@ function parseArgs(argv) {
 function repoRoot(input) {
   const requested = path.resolve(input);
   const result = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: requested, encoding: "utf8", timeout: 30000 });
-  return result.status === 0 && result.stdout.trim() ? path.resolve(result.stdout.trim()) : requested;
+  const observed = result.status === 0 && result.stdout.trim() ? path.resolve(result.stdout.trim()) : requested;
+  return realpathWithMissingTail(observed);
+}
+
+function realpathWithMissingTail(value) {
+  let cursor = path.resolve(value);
+  const tail = [];
+  while (!fs.existsSync(cursor)) {
+    const parent = path.dirname(cursor);
+    if (parent === cursor) throw new Error(`no existing ancestor for ${value}`);
+    tail.unshift(path.basename(cursor));
+    cursor = parent;
+  }
+  const real = fs.realpathSync.native ? fs.realpathSync.native(cursor) : fs.realpathSync(cursor);
+  return path.resolve(real, ...tail);
+}
+
+function containedPathIdentity(parent, child) {
+  try {
+    const realParent = realpathWithMissingTail(parent);
+    const realChild = realpathWithMissingTail(child);
+    const relative = path.relative(realParent, realChild);
+    const inside = relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+    return { inside, relative: inside ? relative.replace(/\\/g, "/") : "", realParent, realChild };
+  } catch (error) {
+    return { inside: false, relative: "", realParent: "", realChild: "", error: error.message };
+  }
 }
 
 function pathInsideOrSame(parent, child) {
-  const relative = path.relative(path.resolve(parent), path.resolve(child));
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  return containedPathIdentity(parent, child).inside;
 }
 
 function resolveChange(repo, input) {
@@ -190,6 +215,11 @@ function hashFile(file) {
   return hashBuffer(fs.readFileSync(file));
 }
 
+function hashPortableTextFile(file) {
+  const text = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n");
+  return hashBuffer(Buffer.from(text, "utf8"));
+}
+
 function diagnosticHash(value) {
   return hashValue({ present: value !== undefined, value: value === undefined ? null : value });
 }
@@ -228,7 +258,9 @@ function policyDependsOn(policies, dependent, dependency, seen = new Set()) {
 }
 
 function repoRelative(repo, file) {
-  return path.relative(repo, file).replace(/\\/g, "/");
+  const identity = containedPathIdentity(repo, file);
+  if (!identity.inside) throw new Error(`path escapes repository identity: ${file}${identity.error ? ` (${identity.error})` : ""}`);
+  return identity.relative;
 }
 
 function normalizeRel(value) {
@@ -300,18 +332,18 @@ function schemaPaths(packageRoot) {
 function validateSchemaPackage(packageRoot) {
   const errors = [];
   for (const [name, file] of Object.entries(schemaPaths(packageRoot))) {
-    if (!fs.existsSync(file)) { errors.push(`${name} schema missing: ${file}; reinstall SteadySpec v0.6`); continue; }
+    if (!fs.existsSync(file)) { errors.push(`${name} schema missing: ${file}; reinstall SteadySpec v0.6.1 from source`); continue; }
     try {
-      const observedDigest = hashFile(file);
+      const observedDigest = hashPortableTextFile(file);
       if (observedDigest !== SCHEMA_SHA256[name]) {
-        errors.push(`${name} schema package-integrity mismatch: expected ${SCHEMA_SHA256[name]}, observed ${observedDigest}; reinstall SteadySpec v0.6`);
+        errors.push(`${name} schema package-integrity mismatch: expected ${SCHEMA_SHA256[name]}, observed ${observedDigest}; reinstall SteadySpec v0.6.1 from source`);
         continue;
       }
       const schema = readJson(file);
       if (schema.$schema !== "https://json-schema.org/draft/2020-12/schema") errors.push(`${name} schema has unexpected draft identifier`);
       if (schema.type !== "object") errors.push(`${name} schema root must be object`);
     } catch (error) {
-      errors.push(`${name} schema unreadable: ${error.message}; reinstall SteadySpec v0.6`);
+      errors.push(`${name} schema unreadable: ${error.message}; reinstall SteadySpec v0.6.1 from source`);
     }
   }
   return errors;
@@ -2533,6 +2565,8 @@ module.exports = {
   policyDependsOn,
   proofOrder,
   parseCriticFindings,
+  pathInsideOrSame,
+  repoRelative,
   structuredFieldDiff,
   validateConfigProfile,
   validateEvaluation,

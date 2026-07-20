@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.6.1 (source-only reliability correction)
+
+v0.6.1 repairs the third-party source distribution and validation boundary of
+v0.6 without adding methodology features or publishing to the npm registry.
+
+- **DISTRIBUTION: official Git source only.** `package.json` is private. Users
+  pin a trusted tag/commit, run the observable validation suites, build a local
+  tarball, and install that tarball. Registry and `npx` installation are not
+  supported.
+- **FIXED: Windows line-ending portability.** Repository text is fixed to LF;
+  schema package-integrity checks normalize CRLF transport while still
+  rejecting content mutations. Shared workflow-helper comparisons likewise
+  ignore CRLF/LF transport spelling but reject other content changes, including
+  when a clean `core.autocrlf=true` v0.6.0 worktree is upgraded in place.
+- **FIXED: cross-review path aliases.** The filesystem-capable CLI resolves
+  real containment and emits repo-relative parent/run identities. Verify and
+  archive no longer depend solely on short-versus-long absolute spelling.
+- **NEW: observable validation suites.** Contract, cross-review, closure,
+  install, and portability suites report start, progress, pass/fail, and
+  duration while `npm run validate` remains the composite entry point.
+- **NEW: source CI and public release evidence.** Windows/Linux CI on Node
+  18/22/24 validates the source and local-install boundary, with separate fresh
+  clone and v0.6.0 worktree-upgrade jobs, without reviewer credentials or npm
+  publication. Sanitized evidence is kept under `release-evidence/`.
+- **BOUNDARY: no maturity overclaim.** CI and agent review remain bounded
+  evidence. They are not external adoption, semantic truth, human acceptance,
+  merge authority, or release authority.
+
 ## 0.6.0 (Windows single-user)
 
 v0.6 adds an optional attention-preserving closure support engine under the

@@ -210,10 +210,11 @@ function canonicalizeCrossReviewHostRoot(value, explicitPlatform) {
     return { ok: false, raw: typeof value === "string" ? value : "", canonical: "", platform, reason: "host-root-invalid-text" }
   }
   if (platform === "win32") {
-    if (!/^[A-Za-z]:\\/.test(value) || value.includes("/")) return { ok: false, raw: value, canonical: "", platform, reason: "host-root-not-windows-native-absolute" }
-    const parts = value.slice(3).split("\\").filter(Boolean)
+    const normalized = value.replace(/\//g, "\\")
+    if (!/^[A-Za-z]:\\/.test(normalized)) return { ok: false, raw: value, canonical: "", platform, reason: "host-root-not-windows-native-absolute" }
+    const parts = normalized.slice(3).split("\\").filter(Boolean)
     if (parts.some((part) => !crossReviewWindowsSegmentSafe(part))) return { ok: false, raw: value, canonical: "", platform, reason: "host-root-windows-segment-invalid" }
-    const canonical = value.length > 3 ? value.replace(/\\+$/, "") : value
+    const canonical = normalized.length > 3 ? `${normalized.slice(0, 3)}${normalized.slice(3).replace(/\\+/g, "\\").replace(/\\+$/, "")}` : normalized
     return { ok: true, raw: value, canonical, platform, reason: "windows-native-absolute" }
   }
   if (platform === "posix") {
@@ -259,15 +260,18 @@ function crossReviewRunJsonIdentity(value, expectedOutputParent = "", explicitPl
   const absolute = canonicalizeCrossReviewHostRoot(value, explicitPlatform)
   if (!absolute.ok) return { ok: false, raw: typeof value === "string" ? value : "", reason: absolute.reason }
   const separator = absolute.platform === "win32" ? "\\" : "/"
-  const segments = value.split(separator).filter(Boolean)
-  if (segments[segments.length - 1] !== "run.json") return { ok: false, raw: value, reason: "run-json-exact-basename-required" }
+  if (value.endsWith("/") || value.endsWith("\\")) return { ok: false, raw: value, reason: "run-json-trailing-separator-forbidden" }
+  const candidate = absolute.canonical
+  const key = (item) => absolute.platform === "win32" ? String(item).toLowerCase() : String(item)
+  const segments = candidate.split(separator).filter(Boolean)
+  if (key(segments[segments.length - 1]) !== key("run.json")) return { ok: false, raw: value, reason: "run-json-exact-basename-required" }
   if (expectedOutputParent) {
     const expected = canonicalizeCrossReviewHostRoot(expectedOutputParent, absolute.platform === "win32" ? "win32" : "linux")
-    if (!expected.ok || expected.canonical !== expectedOutputParent) return { ok: false, raw: value, reason: "run-json-expected-output-parent-invalid" }
-    const prefix = `${expectedOutputParent}${expectedOutputParent.endsWith(separator) ? "" : separator}`
-    if (!value.startsWith(prefix)) return { ok: false, raw: value, reason: "run-json-outside-declared-output-parent" }
-    const tail = value.slice(prefix.length).split(separator)
-    if (tail.length !== 2 || !tail[0] || tail[1] !== "run.json") return { ok: false, raw: value, reason: "run-json-not-direct-run-child" }
+    if (!expected.ok) return { ok: false, raw: value, reason: "run-json-expected-output-parent-invalid" }
+    const prefix = `${expected.canonical}${expected.canonical.endsWith(separator) ? "" : separator}`
+    if (!key(candidate).startsWith(key(prefix))) return { ok: false, raw: value, reason: "run-json-outside-declared-output-parent" }
+    const tail = candidate.slice(prefix.length).split(separator)
+    if (tail.length !== 2 || !tail[0] || key(tail[1]) !== key("run.json")) return { ok: false, raw: value, reason: "run-json-not-direct-run-child" }
   }
   return { ok: true, raw: value, platform: absolute.platform, reason: `${absolute.platform}-native-absolute` }
 }
@@ -305,7 +309,7 @@ function buildCrossReviewCommandPlan(changeRef, rawState, projectRoot) {
     warnings.push("unbound-existing-cross-review-artifacts")
   }
 
-  const base = ["steadyspec", "cross-review", "--change", changePath.canonical]
+  const base = ["steadyspec", "cross-review", "--repo", projectRoot, "--change", changePath.canonical]
   if (claimRequired) {
     const outputDirPath = canonicalizeCrossReviewDeclaredPath(claimScope.outputDir, "repo-output")
     const outputParent = outputDirPath.ok ? crossReviewExpectedOutputParent(projectRoot, outputDirPath.canonical) : { ok: false, absolute: "", platform: "unknown" }
@@ -336,8 +340,8 @@ function buildCrossReviewCommandPlan(changeRef, rawState, projectRoot) {
       claimScope.packetOnly ? "--packet-only" : "--no-packet-only",
       "--output-dir", outputDirPath.canonical,
     ]
-    plan.commands.push({ kind: "check-latest", expectedConfigMode: null, expectedOutputParent: outputParent.absolute, hostPlatform: outputParent.platform, argv: [...scoped, "--check-latest", "--json"] })
-    plan.commands.push({ kind: configMode === "gated" ? "gate" : "advice", expectedConfigMode: configMode, expectedOutputParent: outputParent.absolute, hostPlatform: outputParent.platform, argv: [...scoped, configMode === "gated" ? "--gate" : "--advice", "--json"] })
+    plan.commands.push({ kind: "check-latest", expectedConfigMode: null, expectedOutputParent: outputParent.absolute, expectedOutputDir: outputDirPath.canonical, hostPlatform: outputParent.platform, argv: [...scoped, "--check-latest", "--json"] })
+    plan.commands.push({ kind: configMode === "gated" ? "gate" : "advice", expectedConfigMode: configMode, expectedOutputParent: outputParent.absolute, expectedOutputDir: outputDirPath.canonical, hostPlatform: outputParent.platform, argv: [...scoped, configMode === "gated" ? "--gate" : "--advice", "--json"] })
   } else {
     const policyArgv = [...base, "--mode", "review", "--include-diff"]
     plan.commands.push({ kind: configMode === "gated" ? "gate" : "advice", expectedConfigMode: configMode, expectedOutputParent: "", hostPlatform: crossReviewHostPlatform(), argv: [...policyArgv, configMode === "gated" ? "--gate" : "--advice", "--json"] })
@@ -361,6 +365,9 @@ function parseCrossReviewExecution(expectedCommand, execution) {
     latestExitCode: null,
     runJson: "",
     parentDir: "",
+    parentDirRelative: "",
+    runJsonRelative: "",
+    pathIdentityValid: null,
     moderationPath: "",
     warnings: [],
     errors: [],
@@ -400,18 +407,45 @@ function parseCrossReviewExecution(expectedCommand, execution) {
       if (latestObject && Object.prototype.hasOwnProperty.call(latestObject, "runJson")) errors.push("check-latest-nested-run-json-forbidden")
       trace.runJson = String(json.runJson || "")
       trace.parentDir = String(json.parentDir || "")
+      trace.parentDirRelative = String(json.parentDirRelative || "")
+      trace.runJsonRelative = String(json.runJsonRelative || "")
+      trace.pathIdentityValid = Object.prototype.hasOwnProperty.call(json, "pathIdentityValid") ? json.pathIdentityValid === true : null
       trace.moderationPath = String(json.moderationPath || "")
     } else if (expectedCommand && expectedCommand.kind === "gate") {
       if (Object.prototype.hasOwnProperty.call(json, "runJson")) errors.push("gate-top-level-run-json-forbidden")
       trace.runJson = String(latestObject && latestObject.runJson || "")
       trace.parentDir = String(latestObject && latestObject.parentDir || "")
+      trace.parentDirRelative = String(latestObject && latestObject.parentDirRelative || "")
+      trace.runJsonRelative = String(latestObject && latestObject.runJsonRelative || "")
+      trace.pathIdentityValid = latestObject && Object.prototype.hasOwnProperty.call(latestObject, "pathIdentityValid") ? latestObject.pathIdentityValid === true : null
       trace.moderationPath = String(latestObject && latestObject.moderationPath || "")
     }
     trace.warnings = Array.isArray(json.warnings) ? json.warnings.map(String) : []
     trace.errors = Array.isArray(json.errors) ? json.errors.map(String) : []
   }
-  if (expectedCommand && expectedCommand.expectedOutputParent && (trace.runJson || trace.parentDir) && trace.parentDir !== expectedCommand.expectedOutputParent) errors.push("cross-review-output-parent-drift")
-  if (trace.runJson && !crossReviewRunJsonIdentity(trace.runJson, expectedCommand && expectedCommand.expectedOutputParent || "", expectedCommand && expectedCommand.hostPlatform || "").ok) errors.push("cross-review-run-json-identity-invalid")
+  if (expectedCommand && expectedCommand.expectedOutputDir) {
+    const platformKey = (value) => expectedCommand.hostPlatform === "win32" ? String(value).toLowerCase() : String(value)
+    if (!trace.parentDirRelative || trace.pathIdentityValid === null) {
+      errors.push("cross-review-path-identity-missing")
+    } else {
+      const relativeParent = canonicalizeCrossReviewDeclaredPath(trace.parentDirRelative, "observed-output-parent")
+      if (!relativeParent.ok || platformKey(relativeParent.canonical) !== platformKey(expectedCommand.expectedOutputDir)) errors.push("cross-review-output-parent-drift")
+      if (trace.pathIdentityValid !== true) errors.push("cross-review-path-identity-invalid")
+    }
+    if (trace.runJson && !trace.runJsonRelative) {
+      errors.push("cross-review-run-json-relative-identity-missing")
+    } else if (trace.runJson) {
+      const relativeRun = canonicalizeCrossReviewDeclaredPath(trace.runJsonRelative, "observed-run-json")
+      const expectedParts = expectedCommand.expectedOutputDir.split("/")
+      const observedParts = relativeRun.ok ? relativeRun.canonical.split("/") : []
+      const parentMatches = expectedParts.every((part, index) => platformKey(part) === platformKey(observedParts[index]))
+      const tail = parentMatches ? observedParts.slice(expectedParts.length) : []
+      if (!relativeRun.ok || tail.length !== 2 || !tail[0] || platformKey(tail[1]) !== platformKey("run.json")) errors.push("cross-review-run-json-relative-identity-invalid")
+    }
+  } else if (expectedCommand && expectedCommand.expectedOutputParent && (trace.runJson || trace.parentDir) && trace.parentDir !== expectedCommand.expectedOutputParent) {
+    errors.push("cross-review-output-parent-drift")
+  }
+  if (trace.runJson && !crossReviewRunJsonIdentity(trace.runJson, trace.parentDir || expectedCommand && expectedCommand.expectedOutputParent || "", expectedCommand && expectedCommand.hostPlatform || "").ok) errors.push("cross-review-run-json-identity-invalid")
   trace.errors.push(...errors)
   return { valid: errors.length === 0, kind: expectedCommand && expectedCommand.kind || "", exitCode: execution && execution.exitCode, json, trace, errors }
 }

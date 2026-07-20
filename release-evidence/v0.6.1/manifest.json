@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "version": "0.6.1",
+  "captureState": "pre-release-candidate",
+  "capture": {
+    "observedAt": "2026-07-20",
+    "sourceIdentity": "uncommitted-working-tree",
+    "remoteResultsIncluded": false
+  },
+  "distribution": {
+    "kind": "official-git-source-plus-local-tarball",
+    "npmRegistryPublished": false,
+    "npmPublicationBlocked": true,
+    "intendedTag": "v0.6.1",
+    "remoteReleaseState": "external-to-capture"
+  },
+  "evidence": {
+    "contract": "pass",
+    "crossReview": "pass",
+    "portability": "pass",
+    "closure": "pass-local",
+    "install": "pass-local",
+    "composite": "pass-local",
+    "freshAutocrlfClone": "pass-local",
+    "v060AutocrlfUpgrade": "pass-local-uncommitted-overlay",
+    "windowsCiAtCapture": "not-observed",
+    "linuxCiAtCapture": "not-observed"
+  },
+  "authorityAtCapture": {
+    "humanAccepted": false,
+    "tagAuthorized": false,
+    "githubReleaseAuthorized": false,
+    "npmPublishAuthorized": false
+  }
+}

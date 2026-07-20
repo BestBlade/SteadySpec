@@ -18,9 +18,10 @@ const ALLOWED_ROOT_FILES = new Set([
   "manifest.json",
   "package.json",
   ".gitignore",
+  ".gitattributes",
   "LICENSE",
 ]);
-const ALLOWED_ROOT_DIRS = new Set(["bin", "design", "docs", "en", "scripts", "zh", "recipes", "schemas"]);
+const ALLOWED_ROOT_DIRS = new Set([".github", "bin", "design", "docs", "en", "release-evidence", "scripts", "tests", "zh", "recipes", "schemas"]);
 const IGNORED_DEV_DIRS = new Set([".git", ".meta", "node_modules"]);
 const IGNORED_ROOT_DEV_DIRS = new Set([".git", ".meta", "node_modules", ".agents", ".codex", ".claude", ".steadyspec"]);
 const FORBIDDEN_NAMES = new Set([
@@ -46,18 +47,80 @@ const REQUIRED_ROOT_FILES = [
   "manifest.json",
   "package.json",
   ".gitignore",
+  ".gitattributes",
   "LICENSE",
 ];
 
 const CJK_REGEX = /[一-鿿　-〿＀-￯]/;
 
+let activeSuite = null;
+let activeSuiteStartedAt = 0;
+
+function githubAnnotationData(value) {
+  return String(value)
+    .replace(/%/g, "%25")
+    .replace(/\r/g, "%0D")
+    .replace(/\n/g, "%0A");
+}
+
 function fail(message) {
+  const detail = String(message);
+  if (activeSuite) {
+    console.error(`[validate] FAIL suite=${activeSuite} duration_ms=${Date.now() - activeSuiteStartedAt} error=${detail.replace(/\s+/g, " ").trim()}`);
+  }
+  if (process.env.GITHUB_ACTIONS === "true") {
+    const title = activeSuite ? `SteadySpec ${activeSuite} validation` : "SteadySpec validation";
+    console.error(`::error title=${title}::${githubAnnotationData(detail.slice(0, 8000))}`);
+  }
   console.error(`ERROR: ${message}`);
   process.exit(1);
 }
 
 function warn(message) {
   console.warn(`WARN: ${message}`);
+}
+
+function validationProgress(detail) {
+  console.log(`[validate] PROGRESS suite=${activeSuite || "startup"} detail=${detail}`);
+}
+
+async function runValidationSuite(name, action) {
+  activeSuite = name;
+  activeSuiteStartedAt = Date.now();
+  console.log(`[validate] START suite=${name}`);
+  try {
+    await action();
+  } catch (error) {
+    fail(error && error.stack ? error.stack : error);
+  }
+  console.log(`[validate] PASS suite=${name} duration_ms=${Date.now() - activeSuiteStartedAt}`);
+  activeSuite = null;
+  activeSuiteStartedAt = 0;
+}
+
+function parseValidationArgs(argv) {
+  const result = { root: path.join(__dirname, ".."), suite: "all" };
+  let rootSeen = false;
+  for (let index = 2; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--suite") {
+      const value = argv[index + 1];
+      if (!value) fail("--suite requires all, contract, cross-review, closure, install, or portability");
+      result.suite = value;
+      index += 1;
+    } else if (arg.startsWith("--")) {
+      fail(`unknown validation option: ${arg}`);
+    } else if (!rootSeen) {
+      result.root = arg;
+      rootSeen = true;
+    } else {
+      fail(`unexpected validation argument: ${arg}`);
+    }
+  }
+  const allowed = new Set(["all", "contract", "cross-review", "closure", "install", "portability"]);
+  if (!allowed.has(result.suite)) fail(`unknown validation suite: ${result.suite}`);
+  result.root = path.resolve(result.root);
+  return result;
 }
 
 function walk(dir, out = [], root = dir) {
@@ -81,6 +144,24 @@ function readJson(file) {
 
 function readText(file) {
   return fs.readFileSync(file, "utf8").replace(/^﻿/, "");
+}
+
+function normalizeTransportEol(text) {
+  return String(text).replace(/\r\n?/g, "\n");
+}
+
+function requirePureBlockEquivalent(left, right, label) {
+  if (normalizeTransportEol(left) !== normalizeTransportEol(right)) {
+    fail(`${label} must be content-equivalent after transport EOL normalization`);
+  }
+}
+
+function checkTransportEolEquivalenceContract() {
+  const lf = "alpha\nbeta\ngamma";
+  requirePureBlockEquivalent(lf, lf.replace(/\n/g, "\r\n"), "transport EOL fixture");
+  if (normalizeTransportEol(lf) === normalizeTransportEol("alpha\nbeta\ndelta")) {
+    fail("transport EOL normalization masked a non-EOL content mutation");
+  }
 }
 
 function frontmatter(file) {
@@ -333,10 +414,11 @@ function requirePattern(root, file, pattern, label) {
 }
 
 function checkReleaseSurface(root, manifest, pkg) {
-  if (pkg.version !== "0.6.0" || manifest.version !== "0.6.0") {
-    fail("v0.6 release surface requires package.json and manifest.json version 0.6.0");
+  if (pkg.version !== "0.6.1" || manifest.version !== "0.6.1") {
+    fail("v0.6.1 release surface requires package.json and manifest.json version 0.6.1");
   }
 
+  requireText(root, "CHANGELOG.md", "## 0.6.1 (source-only reliability correction)");
   requireText(root, "CHANGELOG.md", "## 0.4.0 (alpha)");
 
   requireText(root, "ARTIFACT_CONTRACT.md", "## Native Docs Substrate Contract");
@@ -366,6 +448,98 @@ function checkReleaseSurface(root, manifest, pkg) {
     requirePattern(root, file, /capability[- ]lane/i, "capability lane wording");
     for (const anchor of anchors) {
       requireText(root, file, anchor);
+    }
+  }
+}
+
+function checkSourceDistributionDocs(root, pkg) {
+  if (pkg.private !== true) fail("source-only distribution must prevent npm publication with private=true");
+  const docs = ["README.md", "QUICKSTART.md", "en/README.md", "zh/README.md", "zh/QUICKSTART.md"];
+  for (const relative of docs) {
+    const text = readText(path.join(root, relative));
+    if (/^\s*npm\s+(?:install|i)\s+(?:--global|-g)\s+steadyspec\s*$/im.test(text)) fail(`${relative} still exposes an unsupported npm-registry install command`);
+    if (/^\s*npx\s+steadyspec\b/im.test(text)) fail(`${relative} still exposes unsupported npx installation`);
+    if (/DRAFT:\s*do not script this as stable API/i.test(text)) fail(`${relative} still contains a stale pre-v0.5 DRAFT marker`);
+  }
+  for (const [relative, anchors] of Object.entries({
+    "README.md": ["published to the npm registry", "npm pack", "trusted-tag-or-commit", "git remote get-url origin", "git rev-parse HEAD", "cross-review-hook.js"],
+    "QUICKSTART.md": ["## Source-only install", "Agent-assisted installation contract", "npm pack", "git remote get-url origin", "git rev-parse HEAD", ".claude\\workflows"],
+    "en/README.md": ["source-distributed", "published to the npm registry"],
+    "zh/README.md": ["没有发布到 npm registry", "npm pack", "git remote get-url origin", "git rev-parse HEAD", "cross-review-hook.js"],
+    "zh/QUICKSTART.md": ["没有发布到 npm registry", "commit SHA", "npm pack", "git remote get-url origin", "git rev-parse HEAD", "## Cross-agent 审查通道（v0.5）", ".claude\\workflows"],
+  })) {
+    const text = readText(path.join(root, relative));
+    for (const anchor of anchors) if (!text.includes(anchor)) fail(`${relative} missing source-distribution anchor: ${anchor}`);
+  }
+  const evidenceManifest = readJson(path.join(root, "release-evidence", "v0.6.1", "manifest.json"));
+  if (evidenceManifest.version !== pkg.version || evidenceManifest.distribution && evidenceManifest.distribution.npmRegistryPublished !== false) {
+    fail("v0.6.1 release evidence must match the package version and preserve the no-registry boundary");
+  }
+  if (evidenceManifest.captureState !== "pre-release-candidate" || evidenceManifest.distribution && evidenceManifest.distribution.remoteReleaseState !== "external-to-capture") {
+    fail("v0.6.1 release evidence must be a timeless pre-release capture whose remote release state stays external");
+  }
+  if (!evidenceManifest.capture || evidenceManifest.capture.sourceIdentity !== "uncommitted-working-tree" || evidenceManifest.capture.remoteResultsIncluded !== false) {
+    fail("v0.6.1 pre-release evidence must disclose its uncommitted local identity and exclude unobserved remote results");
+  }
+  requireText(root, "release-evidence/v0.6.1/README.md", "Evidence capture: **pre-release candidate**.");
+  requireText(root, "SCOPE.md", "## v0.6 closure product boundary");
+  const ci = readText(path.join(root, ".github", "workflows", "ci.yml"));
+  for (const anchor of ["windows-latest", "ubuntu-latest", "node: [18, 22, 24]", "windows-autocrlf-v060-upgrade", "fetch-depth: 0", "25cc20eb3f8a77d6972ce04b949533c1925a81d6", "validate:portability", "validate:install", "core.autocrlf=true", "permissions:", "contents: read"]) {
+    if (!ci.includes(anchor)) fail(`source CI missing required boundary: ${anchor}`);
+  }
+  const upgradeJobMatch = ci.match(/(?:^|\n)  windows-autocrlf-v060-upgrade:\r?\n([\s\S]*?)(?=\n  [A-Za-z0-9_-]+:\r?\n|$)/);
+  if (!upgradeJobMatch) fail("source CI missing the v0.6.0 worktree-upgrade job block");
+  for (const anchor of [
+    "fetch-depth: 0",
+    "git config core.autocrlf true",
+    "git checkout --detach 25cc20eb3f8a77d6972ce04b949533c1925a81d6",
+    "npm run validate:contract",
+    "npm run validate:cross-review",
+    "npm run validate:closure",
+    "git status --porcelain",
+  ]) {
+    if (!upgradeJobMatch[1].includes(anchor)) fail(`v0.6.0 worktree-upgrade CI job missing required step: ${anchor}`);
+  }
+  if (/npm\s+publish/i.test(ci) || /ANTHROPIC|OPENAI_API_KEY/.test(ci)) fail("source CI must not publish npm or load reviewer credentials");
+
+  checkLocalMarkdownLinks(root, [
+    "README.md",
+    "QUICKSTART.md",
+    "SCOPE.md",
+    "EVIDENCE.md",
+    "en/README.md",
+    "zh/README.md",
+    "zh/QUICKSTART.md",
+    "zh/SCOPE.md",
+    "zh/EVIDENCE.md",
+    "release-evidence/v0.6.1/README.md",
+  ]);
+}
+
+function checkLocalMarkdownLinks(root, relatives) {
+  for (const relative of relatives) {
+    const source = path.join(root, relative);
+    const text = readText(source);
+    const pattern = /!?\[[^\]]*\]\(([^)]+)\)/g;
+    let match;
+    while ((match = pattern.exec(text))) {
+      let target = match[1].trim();
+      if (/^(?:https?:|mailto:|tel:|data:|#)/i.test(target)) continue;
+      if (target.startsWith("<") && target.endsWith(">")) target = target.slice(1, -1);
+      target = target.split("#", 1)[0].split("?", 1)[0];
+      if (!target) continue;
+      let decoded;
+      try {
+        decoded = decodeURIComponent(target);
+      } catch (error) {
+        fail(`${relative} contains an invalid encoded local link: ${target}`);
+      }
+      const resolved = path.resolve(path.dirname(source), decoded);
+      const repositoryRelative = path.relative(root, resolved);
+      if (repositoryRelative.startsWith("..") || path.isAbsolute(repositoryRelative)) {
+        fail(`${relative} local link escapes the repository: ${target}`);
+      }
+      if (!fs.existsSync(resolved)) fail(`${relative} contains a broken local link: ${target}`);
     }
   }
 }
@@ -749,12 +923,36 @@ function checkWarningMapCoverage(runnerText) {
 }
 
 function runCrossReview(root, repo, args, options = {}) {
-  return spawnSync(process.execPath, [path.join(root, "bin", "cross-review.js"), "--repo", repo, ...args], {
+  const portableArgs = process.platform !== "win32"
+    && (args.includes("--run") || args.includes("--run-if-needed"))
+    && !args.includes("--experimental-posix")
+    ? [...args, "--experimental-posix"]
+    : args;
+  const env = { ...process.env, ...(options.env || {}) };
+  if (process.platform !== "win32" && options.env && options.env.Path && !Object.prototype.hasOwnProperty.call(options.env, "PATH")) {
+    env.PATH = options.env.Path;
+  }
+  return spawnSync(process.execPath, [path.join(root, "bin", "cross-review.js"), "--repo", repo, ...portableArgs], {
     cwd: root,
     encoding: "utf8",
-    env: { ...process.env, ...(options.env || {}) },
+    env,
     timeout: 30000,
   });
+}
+
+function writeFixtureReviewerShim(dir, scriptName, windowsExtension = "cmd") {
+  fs.writeFileSync(path.join(dir, `claude.${windowsExtension}`), [
+    "@echo off",
+    `node "%~dp0${scriptName}" %*`,
+    "",
+  ].join("\r\n"), "utf8");
+  const posixShim = path.join(dir, "claude");
+  fs.writeFileSync(posixShim, [
+    "#!/bin/sh",
+    `exec node "$(dirname "$0")/${scriptName}" "$@"`,
+    "",
+  ].join("\n"), "utf8");
+  fs.chmodSync(posixShim, 0o755);
 }
 
 function parseJsonOutput(result, label) {
@@ -817,12 +1015,26 @@ function checkCrossReviewContracts(root) {
     "console.log('| F1 | P3 | Forced fixture finding | Fixture evidence. | Fixture scenario. | Fixture alternative. | Fixture action. |');",
     "",
   ].join("\n"), "utf8");
-  fs.writeFileSync(path.join(fakeBin, "claude.cmd"), [
-    "@echo off",
-    "node \"%~dp0fake-claude.js\" %*",
-    "",
-  ].join("\r\n"), "utf8");
+  writeFixtureReviewerShim(fakeBin, "fake-claude.js");
   const fakeReviewerEnv = { Path: `${fakeBin}${path.delimiter}${process.env.Path || process.env.PATH || ""}` };
+  if (process.platform !== "win32") {
+    const missingPosixOptIn = spawnSync(process.execPath, [
+      path.join(root, "bin", "cross-review.js"),
+      "--repo", tmp,
+      "--change", "001-contract",
+      "--reviewer", "claude",
+      "--mode", "design",
+      "--run",
+    ], {
+      cwd: root,
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH || process.env.Path || ""}` },
+      timeout: 30000,
+    });
+    if (missingPosixOptIn.status === 0 || !missingPosixOptIn.stderr.includes("pass --experimental-posix")) {
+      fail("cross-review POSIX reviewer execution must fail closed without explicit --experimental-posix opt-in");
+    }
+  }
   let result;
   let json;
 
@@ -839,11 +1051,7 @@ function checkCrossReviewContracts(root) {
     "setTimeout(() => {}, 5000);",
     "",
   ].join("\n"), "utf8");
-  fs.writeFileSync(path.join(timeoutBin, "claude.cmd"), [
-    "@echo off",
-    "node \"%~dp0fake-claude-timeout.js\" %*",
-    "",
-  ].join("\r\n"), "utf8");
+  writeFixtureReviewerShim(timeoutBin, "fake-claude-timeout.js");
   const timeoutReviewerEnv = { Path: `${timeoutBin}${path.delimiter}${process.env.Path || process.env.PATH || ""}` };
   const timeoutWithOutputDir = path.join(changeDir, "timeout-with-output-tests");
   result = runCrossReview(root, tmp, ["--change", "001-contract", "--reviewer", "claude", "--mode", "design", "--run", "--timeout-ms", "100", "--output-dir", timeoutWithOutputDir], { env: timeoutReviewerEnv });
@@ -883,11 +1091,7 @@ function checkCrossReviewContracts(root) {
     "console.log('x'.repeat(2000));",
     "",
   ].join("\n"), "utf8");
-  fs.writeFileSync(path.join(outputLimitBin, "claude.bat"), [
-    "@echo off",
-    "node \"%~dp0fake-claude-large-output.js\" %*",
-    "",
-  ].join("\r\n"), "utf8");
+  writeFixtureReviewerShim(outputLimitBin, "fake-claude-large-output.js", "bat");
   const outputLimitEnv = { Path: `${outputLimitBin}${path.delimiter}${process.env.Path || process.env.PATH || ""}` };
   const outputLimitDir = path.join(changeDir, "output-limit-tests");
   result = runCrossReview(root, tmp, ["--change", "001-contract", "--reviewer", "claude", "--mode", "design", "--run", "--max-output-bytes", "500", "--output-dir", outputLimitDir], { env: outputLimitEnv });
@@ -918,11 +1122,7 @@ function checkCrossReviewContracts(root) {
     "console.log('🙂'.repeat(200));",
     "",
   ].join("\n"), "utf8");
-  fs.writeFileSync(path.join(utf8LimitBin, "claude.cmd"), [
-    "@echo off",
-    "node \"%~dp0fake-claude-utf8-output.js\" %*",
-    "",
-  ].join("\r\n"), "utf8");
+  writeFixtureReviewerShim(utf8LimitBin, "fake-claude-utf8-output.js");
   const utf8LimitEnv = { Path: `${utf8LimitBin}${path.delimiter}${process.env.Path || process.env.PATH || ""}` };
   const utf8LimitDir = path.join(changeDir, "utf8-limit-tests");
   result = runCrossReview(root, tmp, ["--change", "001-contract", "--reviewer", "claude", "--mode", "design", "--run", "--max-output-bytes", "420", "--output-dir", utf8LimitDir], { env: utf8LimitEnv });
@@ -945,11 +1145,7 @@ function checkCrossReviewContracts(root) {
     "console.log('| Alpha | High | Fixture format mismatch. |');",
     "",
   ].join("\n"), "utf8");
-  fs.writeFileSync(path.join(unstructuredBin, "claude.cmd"), [
-    "@echo off",
-    "node \"%~dp0fake-claude-unstructured.js\" %*",
-    "",
-  ].join("\r\n"), "utf8");
+  writeFixtureReviewerShim(unstructuredBin, "fake-claude-unstructured.js");
   const unstructuredEnv = { Path: `${unstructuredBin}${path.delimiter}${process.env.Path || process.env.PATH || ""}` };
   const unstructuredDir = path.join(changeDir, "unstructured-tests");
   result = runCrossReview(root, tmp, ["--change", "001-contract", "--reviewer", "claude", "--mode", "design", "--run", "--output-dir", unstructuredDir], { env: unstructuredEnv });
@@ -1457,11 +1653,7 @@ function checkCrossReviewContracts(root) {
     "console.log('| F1 | P3 | Old version fixture | Fixture evidence. | Fixture scenario. | Fixture alternative. | Fixture action. |');",
     "",
   ].join("\n"), "utf8");
-  fs.writeFileSync(path.join(oldClaudeBin, "claude.cmd"), [
-    "@echo off",
-    "node \"%~dp0fake-claude.js\" %*",
-    "",
-  ].join("\r\n"), "utf8");
+  writeFixtureReviewerShim(oldClaudeBin, "fake-claude.js");
   const oldClaudeEnv = { Path: `${oldClaudeBin}${path.delimiter}${process.env.Path || process.env.PATH || ""}` };
   const oldClaudeOutputDir = path.join(changeDir, "old-claude-tests");
   result = runCrossReview(root, tmp, ["--change", "001-contract", "--reviewer", "claude", "--mode", "design", "--packet-only", "--run", "--output-dir", oldClaudeOutputDir], { env: oldClaudeEnv });
@@ -2567,10 +2759,12 @@ function checkV06ClosureContracts(root) {
   for (const expected of ["evaluate", "evaluator_json", "candidateFingerprint", "evidenceBundleFingerprint", "targetBaselineFingerprint", "--target-baseline-fingerprint", "parseEvaluatorOutput", "buildScrubbedEnv"]) {
     if (!runnerText.includes(expected)) fail(`bin/cross-review.js missing v0.6 evaluate surface: ${expected}`);
   }
+  validationProgress("closure-synthetic-fixtures");
   const result = spawnSync(process.execPath, [path.join(root, "bin/closure-fixtures.js")], { cwd: root, encoding: "utf8", timeout: 120000, windowsHide: true });
   if (result.status !== 0) fail(`v0.6 closure fixtures failed: ${(result.stderr || result.stdout || "unknown failure").trim()}`);
   if (!/synthetic full-cycle fixture/i.test(result.stdout || "")) fail("v0.6 closure fixture coverage boundary output changed");
   if (process.platform === "win32") {
+    validationProgress("closure-windows-real-interruption-smoke");
     const real = spawnSync(process.execPath, [path.join(root, "bin/closure-fixtures.js"), "--windows-real-smoke", "--json"], { cwd: root, encoding: "utf8", timeout: 120000, windowsHide: true });
     if (real.status !== 0) fail(`v0.6 Windows real interruption smoke failed: ${(real.stderr || real.stdout || "unknown failure").trim()}`);
     let observation;
@@ -2640,32 +2834,32 @@ function checkV06ClosureContracts(root) {
 }
 
 function checkActiveV06Identity(root, pkg) {
-  if (pkg.version !== "0.6.0") fail("active v0.6 identity check requires package version 0.6.0");
+  if (pkg.version !== "0.6.1") fail("active product identity check requires package version 0.6.1");
   const contracts = {
     "README.md": {
-      current: "v0.6 remains pre-1.0.",
+      current: "v0.6.1 remains pre-1.0.",
       stale: ["v0.4-alpha is alpha."],
       historical: "## v0.4 Docs Contract And Capability Lane",
     },
     "SCOPE.md": {
-      current: "the v0.6 release defines specific boundaries",
+      current: "the source-only v0.6.1 release defines specific boundaries",
       stale: ["the v0.4-alpha release defines", "Primary optimization target for v0.4-alpha", "SteadySpec v0.4-alpha is designed", "SteadySpec v0.4-alpha is not the right fit"],
       historical: "## v0.4 capability lane boundary",
     },
     "zh/README.md": {
-      current: "v0.6 仍处于 1.0 之前。",
+      current: "v0.6.1 仍处于 1.0 之前。",
       stale: ["v0.4-alpha 是 alpha。"],
       historical: "## v0.4 文档合同与能力通道",
     },
     "zh/SCOPE.md": {
-      current: "v0.6 明确了具体的边界",
+      current: "源码分发的 v0.6.1 明确了具体边界",
       stale: ["v0.4-alpha 明确了具体的边界", "v0.4-alpha 主要优化目标", "SteadySpec v0.4-alpha 是为", "SteadySpec v0.4-alpha 就不是正确选择"],
       historical: "## v0.4 能力通道边界",
     },
   };
   for (const [relative, contract] of Object.entries(contracts)) {
     const text = readText(path.join(root, relative));
-    if (!text.includes(contract.current)) fail(`${relative} must identify the active product boundary with its exact v0.6 anchor`);
+    if (!text.includes(contract.current)) fail(`${relative} must identify the active product boundary with its exact v0.6.1 anchor`);
     for (const stale of contract.stale) if (text.includes(stale)) fail(`${relative} still contains stale active identity: ${stale}`);
     if (!text.includes(contract.historical)) fail(`${relative} must preserve its legitimate v0.4 historical capability anchor`);
   }
@@ -2701,7 +2895,7 @@ function checkCrossReviewWorkflowPreflight(root) {
   };
   const verifyBlock = extract(verifyText, "steadyspec-verify.js");
   const archiveBlock = extract(archiveText, "steadyspec-archive.js");
-  if (verifyBlock !== archiveBlock) fail("verify and archive cross-review preflight pure helper blocks must be byte-equivalent");
+  requirePureBlockEquivalent(verifyBlock, archiveBlock, "verify and archive cross-review preflight pure helper blocks");
   const archiveRenderBegin = "// BEGIN ARCHIVE RENDER PURE";
   const archiveRenderEnd = "// END ARCHIVE RENDER PURE";
   const archiveRenderStart = archiveText.indexOf(archiveRenderBegin);
@@ -2814,7 +3008,8 @@ function checkCrossReviewWorkflowPreflight(root) {
     claimScope: { ...claimedState.claimScope, outputDir: "changes/fixture/./cross-agent" },
   }, hostRepoRoot);
   if (canonicalClaimPlan.precondition
-    || canonicalClaimPlan.commands[0].argv[3] !== "changes/fixture"
+    || canonicalClaimPlan.commands[0].argv[canonicalClaimPlan.commands[0].argv.indexOf("--change") + 1] !== "changes/fixture"
+    || canonicalClaimPlan.commands[0].argv[canonicalClaimPlan.commands[0].argv.indexOf("--repo") + 1] !== hostRepoRoot
     || !canonicalClaimPlan.commands[0].argv.includes("changes/fixture/cross-agent")
     || canonicalClaimPlan.claimSources[0] !== "evidence.md") {
     fail("declared cross-review paths must use bounded relative lexical canonicalization");
@@ -2842,7 +3037,25 @@ function checkCrossReviewWorkflowPreflight(root) {
     reviewerLaunched: false,
     moderationWritten: false,
   });
-  const parseOne = (command, json, exitCode) => api.parseCrossReviewExecution(command, executionFor(command, json, exitCode));
+  const claimIdentityJson = (command, json) => {
+    if (!command || !command.expectedOutputDir || !json || typeof json !== "object") return json;
+    const decorate = (carrier) => {
+      if (!carrier || typeof carrier !== "object") return carrier;
+      const runJson = String(carrier.runJson || "");
+      const runParts = runJson.split(/[\\/]/).filter(Boolean);
+      const runName = runParts.length >= 2 ? runParts[runParts.length - 2] : "";
+      return {
+        ...carrier,
+        pathIdentityValid: true,
+        parentDirRelative: command.expectedOutputDir,
+        runJsonRelative: runName ? `${command.expectedOutputDir}/${runName}/run.json` : "",
+      };
+    };
+    if (command.kind === "check-latest") return decorate(json);
+    if (command.kind === "gate" && json.latest && typeof json.latest === "object") return { ...json, latest: decorate(json.latest) };
+    return json;
+  };
+  const parseOne = (command, json, exitCode) => api.parseCrossReviewExecution(command, executionFor(command, claimIdentityJson(command, json), exitCode));
   const advicePlan = api.buildCrossReviewCommandPlan("changes/fixture", baseState, hostRepoRoot);
   const adviceCommand = advicePlan.commands[0];
   const adviceJson = { schemaVersion: 1, status: "recommended", recommended: true, configMode: "advisory", suggestedCommand: "steadyspec cross-review --run" };
@@ -2861,9 +3074,50 @@ function checkCrossReviewWorkflowPreflight(root) {
   const checkCommand = claimPlan.commands[0];
   const gateCommand = claimPlan.commands[1];
   const claimOutputParent = checkCommand.expectedOutputParent;
+  const claimOutputDir = checkCommand.expectedOutputDir;
   const hostSeparator = process.platform === "win32" ? "\\" : "/";
   const runA = `${claimOutputParent}${hostSeparator}run-a${hostSeparator}run.json`;
   const runB = `${claimOutputParent}${hostSeparator}run-b${hostSeparator}run.json`;
+  const relativeIdentity = (runName = "") => ({
+    pathIdentityValid: true,
+    parentDirRelative: claimOutputDir,
+    runJsonRelative: runName ? `${claimOutputDir}/${runName}/run.json` : "",
+  });
+  const legacyClaimObservation = api.parseCrossReviewExecution(checkCommand, executionFor(checkCommand, {
+    schemaVersion: 1,
+    status: "pass",
+    exitCode: 0,
+    parentDir: claimOutputParent,
+    runJson: runA,
+    warnings: [],
+    errors: [],
+  }, 0));
+  const falseClaimIdentity = api.parseCrossReviewExecution(checkCommand, executionFor(checkCommand, {
+    schemaVersion: 1,
+    status: "pass",
+    exitCode: 0,
+    parentDir: claimOutputParent,
+    runJson: runA,
+    ...relativeIdentity("run-a"),
+    pathIdentityValid: false,
+    warnings: [],
+    errors: [],
+  }, 0));
+  const missingRunRelativeIdentity = api.parseCrossReviewExecution(checkCommand, executionFor(checkCommand, {
+    schemaVersion: 1,
+    status: "pass",
+    exitCode: 0,
+    parentDir: claimOutputParent,
+    runJson: runA,
+    ...relativeIdentity(),
+    warnings: [],
+    errors: [],
+  }, 0));
+  if (legacyClaimObservation.valid || !legacyClaimObservation.errors.includes("cross-review-path-identity-missing")
+    || falseClaimIdentity.valid || !falseClaimIdentity.errors.includes("cross-review-path-identity-invalid")
+    || missingRunRelativeIdentity.valid || !missingRunRelativeIdentity.errors.includes("cross-review-run-json-relative-identity-missing")) {
+    fail("explicit claim observations must fail closed when v0.6.1 path identity is missing, false, or incomplete");
+  }
   const checkCases = [
     [{ schemaVersion: 1, status: "no-run", exitCode: 2, parentDir: claimOutputParent, warnings: [], errors: ["missing"] }, 2, "claim-blocked"],
     [{ schemaVersion: 1, status: "failed", exitCode: 3, parentDir: claimOutputParent, warnings: [], errors: ["latest raw reviewer output is unstructured"] }, 3, "claim-blocked"],
@@ -2880,13 +3134,58 @@ function checkCrossReviewWorkflowPreflight(root) {
     [{ schemaVersion: 1, status: "satisfied-with-warning", exitCode: 0, configMode: "gated", warnings: ["bounded"], errors: [], latest: { status: "pass-with-warning", exitCode: 1, parentDir: claimOutputParent, runJson: runA } }, 0, "ready-with-warning"],
     [{ schemaVersion: 1, status: "blocked", action: "moderation-required", exitCode: 5, configMode: "gated", warnings: [], errors: [], latest: { status: "failed", exitCode: 4, parentDir: claimOutputParent, runJson: runA } }, 5, "moderation-required"],
     [{ schemaVersion: 1, status: "needs-user", action: "user-confirmation-required", exitCode: 5, configMode: "gated", warnings: [], errors: [], latest: { status: "pass-with-warning", exitCode: 1, parentDir: claimOutputParent, runJson: runA } }, 5, "needs-user"],
-    [{ schemaVersion: 1, status: "not-required", exitCode: 0, configMode: "gated", warnings: [], errors: [] }, 0, "not-required"],
+    [{ schemaVersion: 1, status: "not-required", exitCode: 0, configMode: "gated", warnings: [], errors: [] }, 0, "invalid"],
   ];
   for (const [json, exitCode, readiness] of gateCases) {
     if (api.mapCrossReviewObservation(parseOne(gateCommand, json, exitCode)).readiness !== readiness) {
       fail(`cross-review gate mapping changed for ${json.status}/${exitCode}`);
     }
   }
+  const aliasOutputParent = process.platform === "win32" ? "C:\\REPO~1\\docs\\changes\\fixture\\cross-agent" : "/repo-alias/docs/changes/fixture/cross-agent";
+  const aliasRun = `${aliasOutputParent}${hostSeparator}run-a${hostSeparator}run.json`;
+  const aliasObservation = api.parseCrossReviewExecution(checkCommand, executionFor(checkCommand, {
+    schemaVersion: 1,
+    status: "pass",
+    exitCode: 0,
+    parentDir: aliasOutputParent,
+    runJson: aliasRun,
+    ...relativeIdentity("run-a"),
+    warnings: [],
+    errors: [],
+  }, 0));
+  if (!aliasObservation.valid) fail(`repo-relative identity must tolerate an equivalent absolute-path alias: ${aliasObservation.errors.join(", ")}`);
+  if (process.platform === "win32") {
+    const slashRoot = hostRepoRoot.replace(/\\/g, "/");
+    const slashRootPlan = api.buildCrossReviewCommandPlan("changes/fixture", { ...claimedState, configMode: "gated" }, slashRoot);
+    if (slashRootPlan.commands.length !== 2 || slashRootPlan.commands.some((command) => command.expectedOutputParent.includes("/"))) {
+      fail("Windows claim preflight must accept a forward-slash absolute project root and canonicalize the expected output parent");
+    }
+    const caseObservation = api.parseCrossReviewExecution(checkCommand, executionFor(checkCommand, {
+      schemaVersion: 1,
+      status: "pass",
+      exitCode: 0,
+      parentDir: claimOutputParent.toUpperCase(),
+      runJson: runA.toUpperCase(),
+      pathIdentityValid: true,
+      parentDirRelative: claimOutputDir.toUpperCase(),
+      runJsonRelative: `${claimOutputDir.toUpperCase()}/RUN-A/RUN.JSON`,
+      warnings: [],
+      errors: [],
+    }, 0));
+    if (!caseObservation.valid) fail(`Windows path identity must be case-insensitive after producer realpath: ${caseObservation.errors.join(", ")}`);
+  }
+  const escapedIdentity = api.parseCrossReviewExecution(checkCommand, executionFor(checkCommand, {
+    schemaVersion: 1,
+    status: "pass",
+    exitCode: 0,
+    parentDir: aliasOutputParent,
+    runJson: aliasRun,
+    ...relativeIdentity("run-a"),
+    parentDirRelative: "docs/changes/fixture/outside",
+    warnings: [],
+    errors: [],
+  }, 0));
+  if (escapedIdentity.valid) fail("repo-relative output identity drift must fail closed");
   if (api.parseCrossReviewExecution(gateCommand, executionFor(gateCommand, {
     schemaVersion: 1,
     status: "not-enforced",
@@ -2921,8 +3220,8 @@ function checkCrossReviewWorkflowPreflight(root) {
   const noRun = parseOne(checkCommand, { schemaVersion: 1, status: "no-run", exitCode: 2, parentDir: claimOutputParent, warnings: [], errors: ["missing"] }, 2);
   const notRequired = parseOne(gateCommand, { schemaVersion: 1, status: "not-required", exitCode: 0, configMode: "gated", warnings: [], errors: [] }, 0);
   const noUpgrade = api.combineCrossReviewObservations(claimPlan, [noRun, notRequired]);
-  if (noUpgrade.readiness !== "claim-blocked" || noUpgrade.claimAllowed || !noUpgrade.mustStopArchive) {
-    fail("gate not-required must not upgrade a failed explicit claim check");
+  if (noUpgrade.readiness !== "invalid" || noUpgrade.claimAllowed || !noUpgrade.mustStopArchive) {
+    fail("an identity-less gate observation must invalidate, never upgrade, a failed explicit claim check");
   }
   const warningCheck = parseOne(checkCommand, { schemaVersion: 1, status: "pass-with-warning", exitCode: 1, parentDir: claimOutputParent, warnings: ["bounded"], errors: [], runJson: runA }, 1);
   const warningGate = parseOne(gateCommand, { schemaVersion: 1, status: "satisfied-with-warning", exitCode: 0, configMode: "gated", warnings: ["bounded"], errors: [], latest: { status: "pass-with-warning", exitCode: 1, parentDir: claimOutputParent, runJson: runA } }, 0);
@@ -2986,8 +3285,11 @@ function checkCrossReviewWorkflowPreflight(root) {
     fail("run.json identity must be same-host native and a direct child run under the declared output parent");
   }
   const alienHostRun = process.platform === "win32" ? "/tmp/run.json" : "C:\\repo\\run.json";
-  for (const badRun of ["run.json", "C:/repo/run.json", "c:\\repo\\RUN.JSON", "\\\\server\\share\\run.json", "\\\\?\\C:\\repo\\run.json", "C:\\repo\\run.json\n## Cross-Review Claim", "/tmp/RUN.JSON", "//server/share/run.json", "C:\\CON\\run.json", "C:\\repo:stream\\run.json", "C:\\repo\\AUX.txt\\run.json", "C:\\repo\\bad?name\\run.json", alienHostRun]) {
+  for (const badRun of ["run.json", "\\\\server\\share\\run.json", "\\\\?\\C:\\repo\\run.json", "C:\\repo\\run.json\\", "C:\\repo\\run.json\n## Cross-Review Claim", "/tmp/RUN.JSON", "/tmp/run.json/", "//server/share/run.json", "C:\\CON\\run.json", "C:\\repo:stream\\run.json", "C:\\repo\\AUX.txt\\run.json", "C:\\repo\\bad?name\\run.json", alienHostRun]) {
     if (api.crossReviewRunJsonIdentity(badRun).ok) fail(`unsafe run.json identity was accepted: ${JSON.stringify(badRun)}`);
+  }
+  if (process.platform === "win32" && !api.crossReviewRunJsonIdentity("C:/repo/run-a/RUN.JSON", "C:\\repo", "win32").ok) {
+    fail("Windows run.json identity must accept forward slashes and filesystem-equivalent path case");
   }
   const passCheck = parseOne(checkCommand, { schemaVersion: 1, status: "pass", exitCode: 0, parentDir: claimOutputParent, warnings: [], errors: [], runJson: runA }, 0);
   const missingGate = api.combineCrossReviewObservations(claimPlan, [passCheck]);
@@ -2995,8 +3297,8 @@ function checkCrossReviewWorkflowPreflight(root) {
     fail("a gated explicit claim must not survive a missing gate observation");
   }
   const verifyOverride = api.crossReviewVerifyDecision(noUpgrade, "archive");
-  if (verifyOverride.recommendedNext === "archive" || verifyOverride.evidenceCredibility !== "gap") {
-    fail("verify code override must prevent archive on a blocked explicit cross-review claim");
+  if (verifyOverride.recommendedNext === "archive" || verifyOverride.evidenceCredibility !== "blocked") {
+    fail("verify code override must stop archive on an invalid explicit cross-review observation");
   }
   const blockedArchiveClaim = api.buildCrossReviewArchiveClaimBlock(noUpgrade, true);
   const canonicalArchiveClaim = api.buildCrossReviewArchiveClaimBlock(warningUpgrade, true);
@@ -3165,7 +3467,7 @@ function checkEvidenceContinuityWorkflows(root) {
   };
   const applyBlock = extract("en/runtime/claude/workflows/steadyspec-apply.js");
   const verifyBlock = extract("en/runtime/claude/workflows/steadyspec-verify.js");
-  if (applyBlock !== verifyBlock) fail("apply and verify evidence continuity pure helper blocks must be byte-equivalent");
+  requirePureBlockEquivalent(applyBlock, verifyBlock, "apply and verify evidence continuity pure helper blocks");
   for (const anchor of ["evidenceSource: EVIDENCE_SOURCE_SCHEMA", "evidenceSourcePathPolicy(context.evidenceSource, context.evidencePath, context.proposalPath)", "error: 'evidence-source-identity-mismatch'", "normalizeEvidenceDocument(context.evidenceSource)", "EVIDENCE_RESULT_VALUES.includes(s.proofResult)", "mergeEvidenceDocument(", "const mergedEvidencePolicy = evidenceVerificationPolicy(evidenceMerge.view)", "evidenceOverallStatusForSlices(evidenceMerge.view.slices)", "mergedEvidencePolicy,", "evidenceReadbackMatches(evidenceMd.evidenceMd, diskEvidence?.evidenceMd)", "error: 'evidence-merge-conflict'"]) {
     if (!applyText.includes(anchor)) fail(`apply evidence continuity integration missing: ${anchor}`);
   }
@@ -3428,10 +3730,13 @@ function locateNpmCliForPackedSmoke() {
   const candidates = [];
   if (process.env.npm_execpath) candidates.push(process.env.npm_execpath);
   candidates.push(path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"));
-  const where = packedSmokeProcess("where.exe", ["npm.cmd"], process.cwd(), 10000);
-  if (where.status === 0) {
-    for (const line of (where.stdout || "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean)) {
-      candidates.push(path.join(path.dirname(line), "node_modules", "npm", "bin", "npm-cli.js"));
+  candidates.push(path.resolve(path.dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"));
+  if (process.platform === "win32") {
+    const where = packedSmokeProcess("where.exe", ["npm.cmd"], process.cwd(), 10000);
+    if (where.status === 0) {
+      for (const line of (where.stdout || "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean)) {
+        candidates.push(path.join(path.dirname(line), "node_modules", "npm", "bin", "npm-cli.js"));
+      }
     }
   }
   const npmCli = candidates.find((candidate) => candidate && fs.existsSync(candidate));
@@ -3440,6 +3745,7 @@ function locateNpmCliForPackedSmoke() {
 }
 
 function runInstalledShim(shim, args, cwd, timeout = 30000) {
+  if (process.platform !== "win32") return packedSmokeProcess(shim, args, cwd, timeout);
   const commandProcessor = process.env.ComSpec || process.env.COMSPEC;
   if (!commandProcessor || !fs.existsSync(commandProcessor)) throw new Error("Windows command processor is unavailable for installed .cmd shim smoke");
   return packedSmokeProcess(commandProcessor, ["/d", "/s", "/c", "call", shim, ...args], cwd, timeout);
@@ -3468,7 +3774,7 @@ async function checkHumanTransactionWorkflowIntegration(root) {
   };
   const applyBlock = extract(applyText, "apply workflow");
   const archiveBlock = extract(archiveText, "archive workflow");
-  if (applyBlock !== archiveBlock) fail("apply/archive human transaction observation pure blocks must be byte-equivalent");
+  requirePureBlockEquivalent(applyBlock, archiveBlock, "apply/archive human transaction observation pure blocks");
   const sandbox = {};
   vm.runInNewContext(`${applyBlock}\nthis.txApi={humanTransactionArgv,validateHumanTransactionObservation};`, sandbox, { timeout: 1000 });
   const id = "a".repeat(32);
@@ -3985,21 +4291,19 @@ function checkHumanDecisionTransactions(root) {
 }
 
 function checkV06PackedInstall(root, pkg) {
-  if (process.platform !== "win32") {
-    warn("v0.6 fresh packed-install smoke skipped outside the supported Windows single-user boundary");
-    return;
-  }
-
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "steadyspec-v06-packed-install-"));
   let failure = null;
   let summary = null;
   try {
     const packDir = path.join(temp, "pack");
     const installDir = path.join(temp, "clean-project");
+    const globalPrefix = path.join(temp, "global-prefix");
     fs.mkdirSync(packDir, { recursive: true });
     fs.mkdirSync(installDir, { recursive: true });
+    fs.mkdirSync(globalPrefix, { recursive: true });
     const npmCli = locateNpmCliForPackedSmoke();
 
+    validationProgress("install-pack-local-source");
     const packResult = packedSmokeProcess(process.execPath, [npmCli, "pack", root, "--json", "--pack-destination", packDir], packDir, 120000);
     if (packResult.status !== 0) throw packedSmokeFailure("npm pack", packResult);
     const packRows = parsePackedSmokeJson("npm pack", packResult);
@@ -4017,6 +4321,9 @@ function checkV06PackedInstall(root, pkg) {
       "bin/closure.js",
       "bin/closure-fixtures.js",
       "bin/validate.js",
+      "tests/portability-fixtures.js",
+      "release-evidence/v0.6.1/README.md",
+      "release-evidence/v0.6.1/manifest.json",
       "schemas/closure-state-v1.schema.json",
       "schemas/acceptance-profile-v1.schema.json",
       "schemas/closure-config-v1.schema.json",
@@ -4038,15 +4345,20 @@ function checkV06PackedInstall(root, pkg) {
     if (leaked.length) throw new Error(`packed tarball leaked workspace paths: ${leaked.join(", ")}`);
 
     writePackedSmokeJson(path.join(installDir, "package.json"), { name: "steadyspec-v06-packed-smoke", version: "1.0.0", private: true });
-    const installResult = packedSmokeProcess(process.execPath, [npmCli, "install", "--ignore-scripts", "--no-audit", "--no-fund", "--offline", tarball], installDir, 120000);
-    if (installResult.status !== 0) throw packedSmokeFailure("fresh npm install", installResult);
-    const installedRoot = path.join(installDir, "node_modules", "steadyspec");
+    validationProgress("install-isolated-global-prefix");
+    const installResult = packedSmokeProcess(process.execPath, [npmCli, "install", "--global", "--prefix", globalPrefix, "--ignore-scripts", "--no-audit", "--no-fund", "--offline", tarball], installDir, 120000);
+    if (installResult.status !== 0) throw packedSmokeFailure("isolated global npm install", installResult);
+    const installedRoot = process.platform === "win32"
+      ? path.join(globalPrefix, "node_modules", "steadyspec")
+      : path.join(globalPrefix, "lib", "node_modules", "steadyspec");
     const installedPackage = readJson(path.join(installedRoot, "package.json"));
     if (installedPackage.version !== pkg.version) throw new Error(`installed package version ${installedPackage.version} differs from ${pkg.version}`);
     for (const relative of requiredPackedFiles) if (!fs.existsSync(path.join(installedRoot, relative))) throw new Error(`installed package missing ${relative}`);
 
-    const shim = path.join(installDir, "node_modules", ".bin", "steadyspec.cmd");
-    if (!fs.existsSync(shim)) throw new Error("fresh install did not create node_modules/.bin/steadyspec.cmd");
+    const shimName = process.platform === "win32" ? "steadyspec.cmd" : "steadyspec";
+    const shim = process.platform === "win32" ? path.join(globalPrefix, shimName) : path.join(globalPrefix, "bin", shimName);
+    if (!fs.existsSync(shim)) throw new Error(`isolated global install did not create ${path.relative(temp, shim).replace(/\\/g, "/")}`);
+    validationProgress("install-cli-help-and-init");
     const help = runInstalledShim(shim, ["closure", "--help"], installDir);
     if (help.status !== 0) throw packedSmokeFailure("installed closure --help", help);
     for (const anchor of ["--evaluator-start", "--import-evaluator", "--decide <resume|approve|reject|reopen|abandon>"]) {
@@ -4067,6 +4379,7 @@ function checkV06PackedInstall(root, pkg) {
       ".codex/skills/steadyspec-archive-flow/agents/openai.yaml",
     ]) if (!fs.existsSync(path.join(installDir, relative))) throw new Error(`installed init output missing ${relative}`);
 
+    validationProgress("install-human-transaction-lifecycle");
     const { recordHash: installedRecordHash } = require(path.join(installedRoot, "bin", "human-decision-transaction.js"));
     const installedDecision = (pending, decision) => {
       const record = {
@@ -4129,6 +4442,7 @@ function checkV06PackedInstall(root, pkg) {
     txResult = installedFinish("cancel", txPending);
     if (txResult.status !== 0 || parsePackedSmokeJson("installed archive cancel", txResult).status !== "cancelled" || !fs.existsSync(path.join(installDir, ...archiveTx.sourceRoot.split("/")))) throw packedSmokeFailure("installed archive cancel", txResult);
 
+    validationProgress("install-closure-lifecycle");
     const changeRelative = "docs/changes/001-packed-smoke";
     const changeDir = path.join(installDir, ...changeRelative.split("/"));
     fs.mkdirSync(changeDir, { recursive: true });
@@ -4162,13 +4476,13 @@ function checkV06PackedInstall(root, pkg) {
           evidenceContract: {
             kind: "exit-code-only",
             claim: "The installed package can execute one operator-configured direct proof.",
-            coverageLimit: "One no-side-effect Node exit on this fresh Windows project only."
+            coverageLimit: `One no-side-effect Node exit on this fresh ${process.platform} project only.`
           }
         }
       },
       generatedTemplate: false,
       reviewRequired: false,
-      boundary: "Fresh Windows packed-install smoke; machine output is not human acceptance or release authority."
+      boundary: `Fresh ${process.platform} packed-install smoke; machine output is not human acceptance or release authority.`
     });
     const dimensionIds = ["requirement-completeness", "logic-correctness", "edge-cases", "code-quality", "test-coverage", "actual-runtime-result"];
     writePackedSmokeJson(path.join(changeDir, "acceptance-profile.json"), {
@@ -4252,11 +4566,11 @@ function checkV06PackedInstall(root, pkg) {
       package: `${packed.name}@${packed.version}`,
       tarballSha256,
       packedEntryCount: packed.entryCount,
-      installedShim: "node_modules/.bin/steadyspec.cmd",
+      installedShim: path.relative(temp, shim).replace(/\\/g, "/"),
       installedLifecycle: ["help", "init", "intent-prepare-commit-cancel", "archive-prepare-commit-cancel", "invalid-config", "valid-config", "prepare", "status", "critic-import", "proof", "evaluator-start"],
       failClosed: ["duplicate-evaluator-start", "mismatched-evaluator-import"],
       terminalState: finalStatusJson.state,
-      boundary: "one fresh Windows project; not registry publication, reviewer quality, process-death, POSIX/team, semantic correctness, or human acceptance"
+      boundary: `one fresh ${process.platform} project; not registry publication, reviewer quality, process-death, team behavior, semantic correctness, or human acceptance`
     };
   } catch (error) {
     failure = error;
@@ -4264,11 +4578,12 @@ function checkV06PackedInstall(root, pkg) {
     fs.rmSync(temp, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   }
   if (failure) fail(`v0.6 fresh packed-install smoke: ${failure.message}`);
-  console.log(`[v0.6 packed-install smoke] ${JSON.stringify(summary)}`);
+  console.log(`[v0.6.1 source-install smoke] ${JSON.stringify(summary)}`);
 }
 
 async function main() {
-  const root = path.resolve(process.argv[2] || path.join(__dirname, ".."));
+  const args = parseValidationArgs(process.argv);
+  const root = args.root;
   const manifestPath = path.join(root, "manifest.json");
   const packagePath = path.join(root, "package.json");
   if (!fs.existsSync(manifestPath)) fail("manifest.json is missing");
@@ -4286,27 +4601,9 @@ async function main() {
     fail("scripts/ must not be published; use bin/validate.js");
   }
   if (pkg.name !== "steadyspec") fail("package name must be steadyspec");
+  if (pkg.private !== true) fail("source-only distribution requires package.json private=true to prevent accidental npm publication");
   if (!pkg.bin || pkg.bin.steadyspec !== "bin/init.js") {
     fail("package bin must expose steadyspec -> bin/init.js");
-  }
-
-  // Existing root layout checks
-  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    if (IGNORED_ROOT_DEV_DIRS.has(entry.name)) continue;
-    if (entry.isDirectory() && !ALLOWED_ROOT_DIRS.has(entry.name)) {
-      fail(`unexpected package root directory: ${entry.name}`);
-    }
-    if (entry.isFile() && !ALLOWED_ROOT_FILES.has(entry.name)) {
-      fail(`unexpected package root file: ${entry.name}`);
-    }
-  }
-
-  // Existing forbidden-name walk
-  for (const file of walk(root)) {
-    const parts = rel(root, file).split("/");
-    if (parts.some((part) => FORBIDDEN_NAMES.has(part))) {
-      fail(`forbidden dev/runtime artifact: ${rel(root, file)}`);
-    }
   }
 
   const languages = manifest.languages || [];
@@ -4317,48 +4614,76 @@ async function main() {
     fail("manifest.skills must be a non-empty array");
   }
 
-  // Existing per-skill checks (frontmatter name matches dir basename)
-  for (const lang of languages) {
-    for (const sourceDir of skillMappings) {
-      const runtimeName = path.basename(sourceDir);
-      const skillPath = path.join(root, lang, sourceDir, "SKILL.md");
-      if (!fs.existsSync(skillPath)) fail(`missing skill: ${lang}/${sourceDir}/SKILL.md`);
-      validateSkillFrontmatter(skillPath, root);
-      if (frontmatterName(skillPath) !== runtimeName) {
-        fail(`${lang}/${sourceDir}/SKILL.md name must be ${runtimeName}`);
+  const selected = (name) => args.suite === "all" || args.suite === name;
+
+  if (selected("contract")) await runValidationSuite("contract", async () => {
+    checkTransportEolEquivalenceContract();
+    for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+      if (IGNORED_ROOT_DEV_DIRS.has(entry.name)) continue;
+      if (entry.isDirectory() && !ALLOWED_ROOT_DIRS.has(entry.name)) fail(`unexpected package root directory: ${entry.name}`);
+      if (entry.isFile() && !ALLOWED_ROOT_FILES.has(entry.name)) fail(`unexpected package root file: ${entry.name}`);
+    }
+    for (const file of walk(root)) {
+      const parts = rel(root, file).split("/");
+      if (parts.some((part) => FORBIDDEN_NAMES.has(part))) fail(`forbidden dev/runtime artifact: ${rel(root, file)}`);
+    }
+    for (const lang of languages) {
+      for (const sourceDir of skillMappings) {
+        const runtimeName = path.basename(sourceDir);
+        const skillPath = path.join(root, lang, sourceDir, "SKILL.md");
+        if (!fs.existsSync(skillPath)) fail(`missing skill: ${lang}/${sourceDir}/SKILL.md`);
+        validateSkillFrontmatter(skillPath, root);
+        if (frontmatterName(skillPath) !== runtimeName) fail(`${lang}/${sourceDir}/SKILL.md name must be ${runtimeName}`);
       }
+      for (const file of walk(path.join(root, lang)).filter((item) => path.basename(item) === "SKILL.md")) validateSkillFrontmatter(file, root);
     }
-    for (const file of walk(path.join(root, lang)).filter((item) => path.basename(item) === "SKILL.md")) {
-      validateSkillFrontmatter(file, root);
-    }
-  }
+    checkCjkBan(root);
+    checkRequiredRootFiles(root);
+    checkFlowsReferencePrimitives(root, manifest);
+    checkPrimitiveByteEquivalence(root);
+    checkV03ResponsibilityModel(root, manifest);
+    checkActiveVerbSurface(root);
+    checkDocsSubstrateContract(root);
+    checkReleaseSurface(root, manifest, pkg);
+    checkSourceDistributionDocs(root, pkg);
+    checkActiveV06Identity(root, pkg);
+    checkEvidenceContinuityWorkflows(root);
+  });
 
-  // Package integrity rules
-  checkCjkBan(root);
-  checkRequiredRootFiles(root);
-  checkFlowsReferencePrimitives(root, manifest);
-  checkPrimitiveByteEquivalence(root);
-  checkV03ResponsibilityModel(root, manifest);
-  checkActiveVerbSurface(root);
-  checkDocsSubstrateContract(root);
-  checkReleaseSurface(root, manifest, pkg);
-  checkActiveV06Identity(root, pkg);
-  checkEvidenceContinuityWorkflows(root);
-  checkCrossReviewWorkflowPreflight(root);
-  checkV05CrossReview(root);
-  checkCrossReviewContracts(root);
-  checkV06ClosureContracts(root);
-  await checkHumanTransactionWorkflowIntegration(root);
-  checkHumanDecisionTransactions(root);
-  checkV06PackedInstall(root, pkg);
+  if (selected("cross-review")) await runValidationSuite("cross-review", async () => {
+    validationProgress("cross-review-workflow-preflight");
+    checkCrossReviewWorkflowPreflight(root);
+    validationProgress("cross-review-v0.5-surface-and-hooks");
+    checkV05CrossReview(root);
+    validationProgress("cross-review-runner-contract-fixtures");
+    checkCrossReviewContracts(root);
+  });
 
-  if (process.platform === "win32") {
-    warn("Cross-review and closure JSON contracts, one-machine Windows process/preservation-rename/transport interruption observations, and a fresh packed-install smoke are covered; final archive-publication contention, real reviewer quality, arbitrary side-effect isolation, final-candidate trust, POSIX, and team behavior remain outside npm run validate.");
-    console.log("Package is structurally valid (cross-review + closure fixtures + bounded Windows real interruption + fresh packed-install smoke; no human acceptance or release-authority claim).");
+  if (selected("closure")) await runValidationSuite("closure", async () => {
+    checkV06ClosureContracts(root);
+    await checkHumanTransactionWorkflowIntegration(root);
+    checkHumanDecisionTransactions(root);
+  });
+
+  if (selected("install")) await runValidationSuite("install", async () => {
+    checkV06PackedInstall(root, pkg);
+  });
+
+  if (selected("portability")) await runValidationSuite("portability", async () => {
+    const result = spawnSync(process.execPath, [path.join(root, "tests", "portability-fixtures.js")], { cwd: root, encoding: "utf8", timeout: 30000, windowsHide: true });
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+    if (result.status !== 0) fail(`portability fixtures failed with exit ${result.status}`);
+  });
+
+  if (args.suite !== "all") {
+    warn(`Only suite=${args.suite} was selected; no coverage outside that suite is inferred.`);
+  } else if (process.platform === "win32") {
+    warn("Composite source contracts plus bounded Windows observations passed; final archive-publication contention, real reviewer quality, arbitrary side-effect isolation, final-candidate trust, POSIX, and team behavior remain outside validation.");
   } else {
-    warn("Cross-review and closure JSON contracts plus portable synthetic fixtures are covered; Windows real interruption smoke was skipped, so no Windows/POSIX process or rename readiness, human acceptance, or release authority is inferred.");
-    console.log("Package is structurally valid for portable structural contracts (Windows real interruption skipped; no human acceptance or release-authority claim).");
+    warn("Composite portable source contracts passed; Windows real interruption coverage was unavailable, so no Windows process/rename readiness, human acceptance, or release authority is inferred.");
   }
+  console.log(`Validation completed for suite=${args.suite}; no human acceptance or release-authority claim.`);
 }
 
 main().catch((error) => fail(`validation exception: ${error && error.stack ? error.stack : error}`));

@@ -1,0 +1,92 @@
+name: source-validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-contracts:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        node: [18, 22, 24]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Contract suite
+        run: npm run validate:contract
+      - name: Cross-review suite
+        run: npm run validate:cross-review
+      - name: Closure and transaction suite
+        run: npm run validate:closure
+      - name: Source portability suite
+        run: npm run validate:portability
+      - name: Local tarball install suite
+        run: npm run validate:install
+      - name: Tests do not modify tracked files
+        run: git diff --exit-code
+
+  windows-autocrlf-fresh-clone:
+    name: Windows fresh clone / core.autocrlf=true
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 18
+      - name: Create a real fresh clone with autocrlf enabled
+        shell: pwsh
+        run: |
+          $fresh = Join-Path $env:RUNNER_TEMP 'steadyspec-fresh-autocrlf'
+          git -c core.autocrlf=true clone --no-local $env:GITHUB_WORKSPACE $fresh
+          Set-Location $fresh
+          $schemaFiles = @(
+            'schemas/closure-state-v1.schema.json',
+            'schemas/acceptance-profile-v1.schema.json',
+            'schemas/closure-config-v1.schema.json'
+          )
+          foreach ($schema in $schemaFiles) {
+            $attr = git check-attr eol -- $schema
+            if ($attr -notmatch ': eol: lf$') { throw "$schema is not governed as LF: $attr" }
+            $bytes = [System.IO.File]::ReadAllBytes((Join-Path $fresh $schema))
+            for ($i = 0; $i -lt $bytes.Length - 1; $i++) {
+              if ($bytes[$i] -eq 13 -and $bytes[$i + 1] -eq 10) { throw "$schema contains CRLF after fresh checkout" }
+            }
+          }
+          npm run validate:portability
+          npm run validate:install
+          git diff --exit-code
+
+  windows-autocrlf-v060-upgrade:
+    name: Windows v0.6.0 worktree upgrade / core.autocrlf=true
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 18
+      - name: Replay an existing v0.6.0 worktree upgraded to this commit
+        shell: pwsh
+        run: |
+          $upgrade = Join-Path $env:RUNNER_TEMP 'steadyspec-v060-upgrade-autocrlf'
+          $target = git -C $env:GITHUB_WORKSPACE rev-parse HEAD
+          git clone --no-local --no-checkout $env:GITHUB_WORKSPACE $upgrade
+          Set-Location $upgrade
+          git config core.autocrlf true
+          git checkout --detach 25cc20eb3f8a77d6972ce04b949533c1925a81d6
+          git checkout --detach $target
+          npm run validate:contract
+          npm run validate:cross-review
+          npm run validate:closure
+          if (git status --porcelain) { throw 'upgrade replay changed tracked files' }

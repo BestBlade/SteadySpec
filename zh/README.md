@@ -16,7 +16,7 @@ Evaluator 传输必须先登记、后启动：在 `evaluator-required` 状态写
 
 `auto` 模式只能路由已声明、低风险且机械边界明确的修复。范围扩大、需求缩减、proof 策略变化、公共或高风险语义、环境失败、无法收敛、证据缺口和残余未知仍要交给人。`candidate-ready` 只表示当前候选、证据包、已声明上下文和未知项在这个边界内就绪；它不是人的接受、合并或发布授权，也不证明未观测现实中的正确性。
 
-当前支持边界是 Windows 单用户。没有 Builder 操作系统沙箱、通用副作用或 proof 隔离、POSIX 就绪、团队工作流，也没有“多 Agent 共识即真理”的承诺。源代码树验证和本仓库 dogfood 已经存在，但在最终发布声明前，仍必须通过一次全新的 `npm pack` 安装 smoke。
+当前支持边界是 Windows 单用户。没有 Builder 操作系统沙箱、通用副作用或 proof 隔离、POSIX 就绪、团队工作流，也没有“多 Agent 共识即真理”的承诺。当前候选已通过本地全新 `npm pack`、隔离 global-prefix 安装和 CLI lifecycle smoke；这仍只是一个 Windows 主机上的候选证据，不代替精确发布 SHA 的远端 CI、tag、GitHub Release 或人的发布决定。
 
 ## v0.3 注意力与责任模型
 
@@ -32,10 +32,23 @@ v0.4 增加了两条有边界的能力。第一，docs 模式现在有 SteadySpe
 
 看 [QUICKSTART.md](QUICKSTART.md) 了解安装、五个动词和手动卸载清单。下面是方向性介绍。
 
-```bash
-npm install -g steadyspec
-cd my-project
-steadyspec init
+v0.6.1 **没有发布到 npm registry**。不要运行 registry 安装，也不要使用
+`npx steadyspec`；同名 registry 包不属于本项目支持的分发面。只从官方
+GitHub 仓库取得源码，并固定到可信 tag 或 commit。
+
+```powershell
+git clone https://github.com/BestBlade/SteadySpec.git
+Set-Location SteadySpec
+git checkout <trusted-tag-or-commit>
+git remote get-url origin
+git rev-parse HEAD
+npm run validate
+npm pack
+npm install --global .\steadyspec-0.6.1.tgz
+
+Set-Location D:\path\to\my-project
+steadyspec init --runtime codex --substrate docs --dry-run
+steadyspec init --runtime codex --substrate docs
 ```
 
 然后在你的 Agent（Claude Code 或 Codex）中：
@@ -57,7 +70,9 @@ steadyspec init
 - **Agent 能力：** 针对 **Tier 2** Agent 优化（DeepSeek-V4-Pro、Claude Sonnet 4.5+、GPT-4o 级别）。Tier 3 **不作承诺。**
 - **单开发者：** 每个变更只有一名作者。"人"指的是**未来的你或接手者。**
 - **你调用它：** SteadySpec 不会自动检测漂移。你怀疑有漂移的时候调它。
-- **小型 CLI：** `init` 安装 SteadySpec；`check` 校验 docs 模式的 artifact 结构。没有 `update`、`uninstall` 或 `status`。卸载靠手动 + `npm uninstall -g`。
+- **有边界的辅助 CLI：** `init`、docs `check`、`cross-review`、`closure`
+  和 `hooks` 为五个治理动词提供支持，但不是新的方法论动词。没有顶层
+  `update`、项目级 `uninstall` 或通用 `status`。
 - **issue-tracker 介质仍是实验性：** v0.4 增加了 docs 模式结构合同；GitHub issues / Jira / Linear 仍是外部记录。
 
 ## 目录结构
@@ -70,6 +85,7 @@ steadyspec/
   QUICKSTART.md         # 五个动词 + 安装 + 手动卸载
   README.md             # 本文件
   CHANGELOG.md
+  .github/workflows/ci.yml  # Windows/Linux 源码验证
   zh/                   # 中文翻译
   recipes/
     software-sdd.md     # 方法 → 软件 SDD 的映射
@@ -85,9 +101,18 @@ steadyspec/
         workflows/             # 5 个确定性执行脚本
       codex/agents/            # Codex yaml 接口描述
   bin/
-    init.js             # CLI 入口：init + docs 模式 check
+    init.js             # 有边界的 CLI 入口和辅助命令分发
+    cross-review.js     # v0.5 cross-agent 审查运行器
+    closure.js          # v0.6 收口状态机与证据绑定
+    human-decision-transaction.js  # fail-closed 人类决策写入
+    cross-review-hook.js  # 可选 cross-review hook 集成
     docs-check.js       # 确定性 docs substrate checker
     validate.js         # 内部包校验器
+  tests/
+    portability-fixtures.js  # CRLF、realpath、别名和逃逸回归
+  release-evidence/
+    v0.6.1/             # 公开候选证据与机器可读状态
+  schemas/              # closure/config/acceptance JSON schema
   manifest.json
   package.json
 ```
@@ -116,11 +141,14 @@ SteadySpec 跟通用技能包（TDD、诊断、审查、效率工具）不冲突
 
 ## 升级与卸载
 
-SteadySpec 提供 `init` 和 docs 模式结构化 `check`。没有 `update` 或 `uninstall` 命令。升级或卸载看 [QUICKSTART.md](QUICKSTART.md)。全局包卸载：`npm uninstall -g steadyspec`。
+SteadySpec 采用源码分发。升级时切换到新的可信 tag/commit，重新验证并
+构建本地 tarball，再先运行 `init --force --dry-run` 检查覆盖范围。没有
+顶层 `update` 或项目级 `uninstall`；卸载看 [QUICKSTART.md](QUICKSTART.md)。
+本地安装的全局包仍可用 `npm uninstall -g steadyspec` 删除。
 
 ## 稳定性
 
-v0.6 仍处于 1.0 之前。1.0 之前仍可能有破坏性变更，但 SteadySpec 打算保持以下表面稳定，除非 [CHANGELOG.md](CHANGELOG.md) 明确说打破：
+v0.6.1 仍处于 1.0 之前。1.0 之前仍可能有破坏性变更，但 SteadySpec 打算保持以下表面稳定，除非 [CHANGELOG.md](../CHANGELOG.md) 明确说打破：
 
 - 对外动词名：`/steadyspec:explore`、`/steadyspec:propose`、`/steadyspec:apply`、`/steadyspec:verify`、`/steadyspec:archive`。
 - 动词流 SKILL 名：`steadyspec-<verb>-flow`。
@@ -131,7 +159,7 @@ v0.6 仍处于 1.0 之前。1.0 之前仍可能有破坏性变更，但 SteadySp
 
 ## 方法优先
 
-读 [METHOD.md](METHOD.md) 了解领域无关的反漂移机制。读 [recipes/software-sdd.md](recipes/software-sdd.md) 看方法怎么映射成软件 SDD 动词和原语。读 [recipes/research-paper.md](recipes/research-paper.md) 看一个紧凑的非软件迁移示例。
+读 [METHOD.md](METHOD.md) 了解领域无关的反漂移机制。读 [recipes/software-sdd.md](../recipes/software-sdd.md) 看方法怎么映射成软件 SDD 动词和原语。读 [recipes/research-paper.md](../recipes/research-paper.md) 看一个紧凑的非软件迁移示例。
 
 ## 给人看的阅读路径
 

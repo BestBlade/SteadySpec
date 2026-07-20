@@ -1,6 +1,36 @@
 # SteadySpec Scope and Boundaries
 
-SteadySpec is a reference skill pack of the anti-drift method described in [METHOD.md](METHOD.md). It provides five outward verbs (`explore` / `propose` / `apply` / `verify` / `archive`), each a small closed-loop that orchestrates anti-drift mechanisms with explicit responsibility routing. To deliver on that promise reliably, the v0.6 release defines specific boundaries. Read this before adopting.
+SteadySpec is a reference skill pack of the anti-drift method described in [METHOD.md](METHOD.md). It provides five outward verbs (`explore` / `propose` / `apply` / `verify` / `archive`), each a small closed-loop that orchestrates anti-drift mechanisms with explicit responsibility routing. To deliver on that promise reliably, the source-only v0.6.1 release defines specific boundaries. Read this before adopting.
+
+## v0.6.1 distribution boundary
+
+v0.6.1 is distributed only through the official Git repository and is blocked
+from npm publication by `package.json`. Users install a locally built tarball
+from a trusted tag or commit. Local validation and CI are bounded evidence, not
+registry publication, third-party adoption, semantic truth, or human release
+authority.
+
+## v0.6 closure product boundary
+
+The v0.6 closure lane is an optional product/runtime extension beneath
+`verify`; it does not rewrite the portable method in [METHOD.md](METHOD.md) and
+it is not a sixth governed verb. Within the Windows single-user boundary, it
+binds a fresh Critic, bounded Builder, operator-configured proof, and fresh
+Evaluator to candidate and evidence fingerprints so repeated low-risk repair
+and re-check turns can be digested without silently changing the target.
+
+The automated lane cannot own or change scope, narrow requirements, redefine a
+public surface, security/permission or data/migration semantics, select proof
+policy, dispose of debt, accept risk, merge, archive, or publish. Such changes,
+environment blocks, insufficient evidence, non-convergence, and residual
+unknowns must surface to the human unchanged. `candidate-ready` means bounded
+machine readiness for the observed candidate and evidence bundle; it is not
+human acceptance or multi-agent truth.
+
+Closure does not promise a Builder OS sandbox, general side-effect isolation,
+complete proof-process isolation, correctness about unprovided reality, POSIX
+reviewer execution, multi-author coordination, or release authority. v0.6.1
+adds source portability and CI contracts without expanding those authorities.
 
 ## Agent capability tiers
 
@@ -62,7 +92,13 @@ To save users from misaligned expectations:
 - **It does not version your specs.** The substrate (OpenSpec, plain docs, issue tracker) is responsible for that. SteadySpec adds drift defense around the substrate. Docs mode has a SteadySpec structural checker; OpenSpec still owns its own schema and lifecycle.
 - **It does not replace tests.** Tests are one form of observable check. SteadySpec asks whether the right thing was built; tests verify whether the built thing works.
 - **It does not enforce its own use.** You can install SteadySpec and never invoke a single verb. The package will not complain.
-- **It does not provide lifecycle CLI automation beyond `init` and docs-mode `check`.** There is no `update`, no `uninstall`, and no `status`. `steadyspec check` is a deterministic support validator for docs-mode artifact structure; it is not a governed verb and does not prove semantic correctness. Use file operations and re-init to upgrade. To remove SteadySpec from a project, see the manual cleanup checklist in [QUICKSTART.md](QUICKSTART.md). Reason for no uninstall command: a per-project removal command that touches user files is a data-loss risk we won't take in alpha.
+- **Its support commands are bounded, not new methodology verbs.** In addition
+  to `init` and docs-mode `check`, the CLI exposes `cross-review`, `closure`,
+  and `hooks`. There is no top-level `update`, project-level `uninstall`, or
+  general `status`. `check` proves declared docs structure, not semantics;
+  cross-review and closure retain their separate evidence limits. Upgrade by
+  pinning and validating a new source revision, then previewing `init --force`.
+  Use the manual cleanup checklist in [QUICKSTART.md](QUICKSTART.md).
 - **Issue-tracker substrates remain experimental.** v0.4 adds native docs-mode structure; GitHub issues / Jira / Linear can be used as external records, but SteadySpec does not yet own their schema or lifecycle.
 - **Tier 2 optimization is a moving target.** The method relies on agents following MUST-prefixed instructions and skill-description-based selection. Model behavior changes across versions; no API contract guarantees that a model which follows MUST-prefix today will do so after the next update. The Tier 2 designation describes the models SteadySpec was tested against at release time, not a permanent guarantee.
 - **It does not guarantee correct primitive skill selection during multi-step verb-flow orchestration.** v0.3 adds more explicit flow contracts, but primitive selection still depends on agent reliability. If you observe wrong primitives being loaded during `propose-flow` / `apply-flow` / `verify-flow` / `archive-flow`, treat it as a routing failure and report.

@@ -4,9 +4,13 @@
 
 Substrate-agnostic SDD methodology built around drift defense. This package is standalone: humans read it to understand the method; agents configure and install it for a target runtime.
 
-SteadySpec v1 is a reference implementation of a general anti-drift method in the software spec-driven-development setting. The npm package is the fastest way to feel the method in a real code project; it is not the boundary of the method.
+SteadySpec v0.6.1 is a source-distributed reference implementation of a general
+anti-drift method in the software spec-driven-development setting. It is not
+published to the npm registry. Use only the official Git repository pinned to a
+trusted tag or commit; do not use a registry install or `npx steadyspec`.
 
-v0.1 ships in English. Chinese localization will be reintroduced through a generator path; do not hand-translate.
+The root README is the current English product overview. The `zh/` directory
+contains the maintained Chinese overview and operating guide.
 
 ## Purpose
 
@@ -41,13 +45,18 @@ See [phases.md](phases.md). Keep this list single-source; do not duplicate the p
 
 When a user asks an agent to use this package in a project, the agent should:
 
-1. Run `npx steadyspec init`.
+1. Clone the official repository, pin a trusted tag or commit, run
+   `npm run validate`, build with `npm pack`, and install that local tarball.
 2. Start from `steadyspec-adopt`.
 3. Choose a governance level from [adoption-guide.md](adoption/steadyspec-adopt/references/adoption-guide.md).
 4. Choose a substrate from [substrates.md](adoption/steadyspec-adopt/references/substrates.md): plain docs, OpenSpec, or existing issues/docs.
 5. Use `steadyspec-workflow` when unsure which phase should run next.
 
-The init command auto-detects `.claude/` or `.codex/`; pass `--runtime claude` or `--runtime codex` to override. V1 supports `init` only. `check`, `upgrade`, and `uninstall` are not implemented; use normal file operations for those until the CLI grows those commands.
+The init command auto-detects `.claude/` or `.codex/`; pass `--runtime claude`
+or `--runtime codex` to override. The bounded support CLI also provides docs
+`check`, `cross-review`, `closure`, and `hooks`; these are support commands, not
+new governed verbs. There is no top-level `update`, project-level `uninstall`,
+or general `status` command.
 
 ## Human Reading Path
 

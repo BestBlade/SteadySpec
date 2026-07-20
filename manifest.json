@@ -1,7 +1,7 @@
 {
   "name": "steadyspec",
-  "version": "0.6.0",
-  "description": "Anti-drift methodology packaged as a software SDD reference implementation.",
+  "version": "0.6.1",
+  "description": "Source-distributed anti-drift methodology for software SDD and agent closure.",
   "languages": ["en"],
   "install": {
     "defaultLayout": "flat-runtime-skills",

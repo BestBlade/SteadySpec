@@ -51,13 +51,39 @@ v0.4 补上了用户在 plain docs 项目里指出的介质缺口：没有 OpenS
 
 这不证明语义正确、不提供独立验证，也不声称 docs 模式等价 OpenSpec。它给 docs 模式项目一个结构校验器，并给高不确定工作一条有边界的方式，避免过早选择低上限主线，同时不把高风险决定交给 agent。
 
-## v0.6（进行中的自狗粮验证）
+## v0.5（Windows 单用户边界内交付）
 
-v0.6 正在用自己的闭环处理自己的发布候选。当前本地证据已经跑过多轮真实的 Critic -> Builder -> proof -> Evaluator：每轮候选和证据分别计算指纹；Builder 必须先声明路径、授权 finding、proof policy 和 completion token；proof 只能运行操作员配置的直接 executable/argv；新鲜 Evaluator 同时绑定候选与证据，并保留原始 verdict、未知项、未观测现实和独立性限制。
+v0.5 增加了 packet 绑定的 cross-agent 传输、raw/moderation 分离、scope
+freshness、advisory/gated policy 和显式 reviewer 环境。多轮外部审查确实
+抓到了环境继承、超时、scope 完整性和上下文边界缺陷，并在 v0.5 源码
+快照前修复。证据仍然只是单操作员 Windows dogfood，不是团队/POSIX 或
+reviewer 判断质量证明。
+
+## v0.6（已交付源码快照）
+
+v0.6 用自己的闭环处理了自己的发布候选。本地证据跑过多轮 Critic ->
+Builder -> proof -> Evaluator：每轮候选和证据分别计算指纹；Builder 先
+声明路径、授权 finding、proof policy 和 completion token；proof 只运行
+操作员配置的直接 executable/argv；新鲜 Evaluator 同时绑定候选与证据，
+并保留原始 verdict、未知项、未观测现实和独立性限制。
 
 dogfood 已经实际抓到并修复了四类状态机问题：历史 incomplete-repair 记录劫持后来状态、Critic 基线写入时机错误、旧状态缺少基线时伪造进度，以及 carried-forward finding 让 Builder 无法继续。它也保留了 `fix-required`、`blocked-by-environment` 和 `non-convergent` 的原始语义，没有为了收口把它们改写成 pass。当前 Claude 认证不可用，因此这部分只记录为环境限制；同家族 collaboration agent 的结果也只算结构化审查，不算独立真理。
 
-这仍不是 v0.6 完成声明。待补证据包括：全新的 `npm pack` 安装 smoke；Builder、proof、Evaluator、decision、reset 和 terminal 状态的中断/恢复 fixture；BOM、CRLF、纯空白和二进制候选的精确字节陈旧性 fixture；自动回合与人类上浮次数的注意力指标；最后一轮新鲜 Critic/proof/Evaluator；以及由人负责的信任检查点。机器的 `candidate-ready` 只能作为那次审计的输入。
+v0.6 最终补上了本地 packed-install、状态中断/恢复和新鲜
+Critic/Evaluator 证据，并由人授权收尾。但是随后一次干净环境的第三方
+审阅发现了另一层产品缺口：registry 安装并不存在，Windows CRLF 和 8.3
+路径别名可能让验证失败，公开文档已经漂移，也没有 CI 和可观察 suite。
+这些问题没有从 v0.6 历史里被擦掉，而是进入 v0.6.1。
+
+## v0.6.1（只通过源码分发的可靠性候选）
+
+v0.6.1 不增加方法论功能。它诚实化 Git 源码分发，阻止误发布 npm，修复
+CRLF/路径 portability，拆出可观察验证 suite，增加 Windows/Linux CI，
+并在 [`release-evidence/v0.6.1/`](../release-evidence/v0.6.1/README.md)
+公开脱敏且可复验的证据。
+
+这里记录的是发布前候选快照。当前 tag、GitHub Release 和远端 CI 状态属于
+外部证据，必须按精确远端 SHA 查询；这份历史快照本身不构成发布声明。
 
 ## 证明了什么（以及没证明什么）
 

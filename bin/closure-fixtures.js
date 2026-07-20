@@ -143,6 +143,11 @@ function assertSafeRealTempRoot(root) {
   return resolved;
 }
 
+function sameExistingPathIdentity(left, right) {
+  const real = (value) => (fs.realpathSync.native ? fs.realpathSync.native(value) : fs.realpathSync(value));
+  return path.relative(real(left), real(right)) === "";
+}
+
 function expect(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -158,6 +163,20 @@ async function realChildMain(args) {
     const runDir = path.resolve(target);
     fs.mkdirSync(runDir, { recursive: true });
     writeJson(path.join(runDir, "transport-started.json"), { pid: process.pid, nonce, startedAt: new Date().toISOString() });
+  } else if (kind === "directory-lock") {
+    const ready = process.env.STEADYSPEC_V06_LOCK_READY;
+    const release = process.env.STEADYSPEC_V06_LOCK_RELEASE;
+    const started = process.env.STEADYSPEC_V06_LOCK_STARTED;
+    if (!ready || !release || !started) throw new Error("directory-lock child requires ready, release, and started markers");
+    if (!sameExistingPathIdentity(target, process.cwd())) throw new Error("directory-lock child cwd does not match the requested staging directory");
+    fs.writeFileSync(started, "entered", "utf8");
+    fs.writeFileSync(ready, process.cwd(), "utf8");
+    const deadline = Date.now() + 60000;
+    while (!fs.existsSync(release)) {
+      if (Date.now() >= deadline) throw new Error("timed out waiting for the directory lock release marker");
+      await delay(10);
+    }
+    return;
   } else {
     throw new Error(`unknown real interruption child kind ${kind}`);
   }
@@ -603,7 +622,10 @@ function integrationContract(packageRoot) {
     const criticRun = { schemaVersion: 1, mode: "review", reviewer: "fixture", reviewerStatus: "success", outputFormat: "findings_table", candidateFingerprint: initialFingerprint, transport: "fixture-read-only", scopeFingerprint: `sha256:${"c".repeat(64)}`, paths: { raw: path.join(criticDir, "raw.md") } };
     writeJson(path.join(criticDir, "run.json"), { ...criticRun, mode: "evaluate" });
     let rejectedIdentity = runClosure(packageRoot, tmp, ["--import-critic", criticDir], 2);
-    assert(rejectedIdentity.errors.some((error) => error.includes("successful structured review mode")), "Critic import must reject the wrong requested role/mode");
+    assert(
+      rejectedIdentity.errors.some((error) => error.includes("successful structured review mode")),
+      `Critic import must reject the wrong requested role/mode; observed errors: ${JSON.stringify(rejectedIdentity.errors)}`,
+    );
     writeJson(path.join(criticDir, "run.json"), { ...criticRun, candidateFingerprint: `sha256:${"d".repeat(64)}` });
     rejectedIdentity = runClosure(packageRoot, tmp, ["--import-critic", criticDir], 2);
     assert(rejectedIdentity.errors.some((error) => error.includes("candidateFingerprint")), "Critic import must reject a run over another included candidate scope");
@@ -1624,51 +1646,6 @@ async function realProofProcessDeath(packageRoot, suiteRoot, trackedChildren, kn
   return { taskkillTreeSucceeded: true, uncertainMarkerPreserved: true, proofAttempts: attemptsAfter.length, automaticReplay: false };
 }
 
-function directoryLockerScript() {
-  return [
-    "$ErrorActionPreference = 'Stop'",
-    "$Archive = $env:STEADYSPEC_V06_LOCK_ARCHIVE",
-    "$Ready = $env:STEADYSPEC_V06_LOCK_READY",
-    "$Release = $env:STEADYSPEC_V06_LOCK_RELEASE",
-    "$Started = $env:STEADYSPEC_V06_LOCK_STARTED",
-    "[IO.File]::WriteAllText($Started, 'entered')",
-    "Add-Type @'",
-    "using System;",
-    "using System.Runtime.InteropServices;",
-    "using Microsoft.Win32.SafeHandles;",
-    "public static class SteadySpecDirectoryShareLock {",
-    "  [DllImport(\"kernel32.dll\", CharSet = CharSet.Unicode, SetLastError = true)]",
-    "  public static extern SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr security, uint creation, uint flags, IntPtr template);",
-    "}",
-    "'@",
-    "[IO.File]::WriteAllText($Started, 'compiled')",
-    "$deadline = [DateTime]::UtcNow.AddSeconds(30)",
-    "$handle = $null",
-    "$candidate = $null",
-    "while ([DateTime]::UtcNow -lt $deadline) {",
-    "  $candidate = Get-ChildItem -LiteralPath $Archive -Directory -Filter '.reset-*.tmp' -ErrorAction SilentlyContinue | Select-Object -First 1",
-    "  if ($null -ne $candidate) {",
-    "    $handle = [SteadySpecDirectoryShareLock]::CreateFileW($candidate.FullName, 1, 3, [IntPtr]::Zero, 3, 0x02000000, [IntPtr]::Zero)",
-    "    if (-not $handle.IsInvalid) { break }",
-    "    $handle.Dispose()",
-    "    $handle = $null",
-    "  }",
-    "  [Threading.Thread]::Sleep(5)",
-    "}",
-    "if ($null -eq $handle -or $handle.IsInvalid) { throw 'failed to acquire the reset staging directory without delete sharing' }",
-    "[IO.File]::WriteAllText($Ready, $candidate.FullName)",
-    "try {",
-    "  $releaseDeadline = [DateTime]::UtcNow.AddSeconds(60)",
-    "  while (-not (Test-Path -LiteralPath $Release)) {",
-    "    if ([DateTime]::UtcNow -ge $releaseDeadline) { throw 'timed out waiting for the directory lock release marker' }",
-    "    [Threading.Thread]::Sleep(10)",
-    "  }",
-    "} finally {",
-    "  $handle.Dispose()",
-    "}",
-  ].join("\n");
-}
-
 async function realResetRenameContention(packageRoot, suiteRoot, trackedChildren, releaseMarkers) {
   const repo = path.join(suiteRoot, "reset-rename-contention");
   const fixture = prepareNoFindingFixture(packageRoot, repo, "real-reset-rename-contention", {
@@ -1701,15 +1678,14 @@ async function realResetRenameContention(packageRoot, suiteRoot, trackedChildren
   const release = path.join(suiteRoot, "directory-lock-release.txt");
   const started = path.join(suiteRoot, "directory-lock-started.txt");
   releaseMarkers.add(release);
-  const encodedLocker = Buffer.from(directoryLockerScript(), "utf16le").toString("base64");
   const lockerEnv = buildScrubbedEnv().env;
-  const locker = spawn("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodedLocker], {
-    cwd: suiteRoot,
+  const lockerNonce = crypto.randomBytes(8).toString("hex");
+  const locker = spawn(process.execPath, [__filename, "--real-child", "directory-lock", staging, lockerNonce], {
+    cwd: staging,
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
     env: {
       ...lockerEnv,
-      STEADYSPEC_V06_LOCK_ARCHIVE: archiveDir,
       STEADYSPEC_V06_LOCK_READY: ready,
       STEADYSPEC_V06_LOCK_RELEASE: release,
       STEADYSPEC_V06_LOCK_STARTED: started,
@@ -1721,13 +1697,13 @@ async function realResetRenameContention(packageRoot, suiteRoot, trackedChildren
   locker.stderr.on("data", (chunk) => { lockerStderr += chunk.toString(); });
   trackedChildren.push({ child: locker, label: "Win32 reset directory locker" });
   try {
-    await waitFor(() => fs.existsSync(started) && fs.readFileSync(started, "utf8") === "compiled", "Win32 directory-lock watcher start", 10000);
+    await waitFor(() => fs.existsSync(started) && fs.readFileSync(started, "utf8") === "entered", "Win32 directory-lock watcher start", 10000);
   } catch (error) {
     const stage = fs.existsSync(started) ? fs.readFileSync(started, "utf8") : "missing";
     throw new Error(`${error.message}; stage=${stage}; locker exit=${locker.exitCode}; stdout=${lockerStdout.trim()}; stderr=${lockerStderr.trim()}`);
   }
   await waitFor(() => fs.existsSync(ready), "Win32 directory lock acquisition");
-  expect(path.resolve(fs.readFileSync(ready, "utf8")) === path.resolve(staging), "Win32 directory lock must bind the exact journaled staging path");
+  expect(sameExistingPathIdentity(fs.readFileSync(ready, "utf8"), staging), "Win32 directory lock must bind the exact journaled staging path");
   const failedReset = runClosureObserved(packageRoot, repo, ["--reset", "--reason", "real fixture starts reset under Win32 rename contention"], 2);
   expect(failedReset.status === "failed" && (failedReset.errors || []).some((error) => /EPERM|EBUSY|access denied|operation not permitted/i.test(error)), "held Win32 directory handle must cause a real reset rename failure");
   expect(fs.existsSync(journalFile), "rename contention must preserve the reset journal");

@@ -359,12 +359,23 @@ signal.
 
 ## Quick start
 
-See [QUICKSTART.md](QUICKSTART.md) for install + the five verbs + manual cleanup checklist. Below is just enough to orient.
+See [QUICKSTART.md](QUICKSTART.md) for the complete source-only installation,
+verification, agent handoff, and manual cleanup contract. v0.6.1 is not
+published to the npm registry; do not use a registry install or `npx`.
 
-```bash
-npm install -g steadyspec
-cd my-project
-steadyspec init
+```powershell
+git clone https://github.com/BestBlade/SteadySpec.git
+Set-Location SteadySpec
+git checkout <trusted-tag-or-commit>
+git remote get-url origin
+git rev-parse HEAD
+npm run validate
+npm pack
+npm install --global .\steadyspec-0.6.1.tgz
+
+Set-Location D:\path\to\my-project
+steadyspec init --runtime codex --substrate docs --dry-run
+steadyspec init --runtime codex --substrate docs
 ```
 
 Then in your agent (Claude Code or Codex):
@@ -386,7 +397,10 @@ The reference skill pack is alpha. Full matrix in [SCOPE.md](SCOPE.md).
 - **Agent capability:** optimized for **Tier 2** agents (DeepSeek-V4-Pro, Claude Sonnet 4.5+, GPT-4o-class). Tier 3 is **not promised.**
 - **Single developer:** designed for one author per change. "Human" means **future-you or a successor.**
 - **User-invoked:** SteadySpec does not auto-detect drift. It provides verbs you call.
-- **Small CLI:** `init` installs SteadySpec; `check` validates docs-mode artifact structure. There is no `update`, `uninstall`, or `status`. Removal is manual + `npm uninstall -g`.
+- **Bounded support CLI:** `init`, docs `check`, `cross-review`, `closure`, and
+  `hooks` support the five governed verbs. They are not additional methodology
+  verbs. There is no top-level `update`, project-level `uninstall`, or general
+  `status`; removal is manual plus `npm uninstall -g` for a local installation.
 - **Issue-tracker substrate remains experimental:** v0.4 adds docs-mode structure; GitHub issues / Jira / Linear are still external records.
 
 ## Layout
@@ -398,6 +412,7 @@ steadyspec/
   QUICKSTART.md         # 5 verbs + install + manual cleanup
   README.md             # this file
   CHANGELOG.md
+  .github/workflows/ci.yml  # Windows/Linux source validation
   recipes/
     software-sdd.md     # map the method to software SDD
     research-paper.md   # non-software transfer example
@@ -417,10 +432,18 @@ steadyspec/
         workflows/                   # 5 deterministic execution scripts
       codex/agents/                  # 5 yaml interface descriptors (Codex)
   bin/
-    init.js             # CLI entrypoint: init + docs-mode check + cross-review dispatch
+    init.js             # bounded CLI entrypoint and support-command dispatch
     cross-review.js     # v0.5 Level 1 cross-agent review runner
+    closure.js          # v0.6 closure state machine and evidence binding
+    human-decision-transaction.js  # fail-closed human decision writes
+    cross-review-hook.js  # optional cross-review hook integration
     docs-check.js       # deterministic docs substrate checker
     validate.js         # internal package validator
+  tests/
+    portability-fixtures.js  # CRLF, realpath, alias, and escape regressions
+  release-evidence/
+    v0.6.1/             # public candidate evidence and machine-readable state
+  schemas/              # closure/config/acceptance JSON schemas
   manifest.json         # install spec
   package.json
 ```
@@ -453,11 +476,16 @@ SteadySpec is compatible with general skill packs (TDD, diagnosis, review, produ
 
 ## Upgrade and removal
 
-SteadySpec ships `init` and a docs-mode structural `check`. There is no `update` or `uninstall` CLI command. To upgrade or remove SteadySpec, see [QUICKSTART.md](QUICKSTART.md). Global package removal is `npm uninstall -g steadyspec`.
+SteadySpec is source-distributed. To upgrade, check out a new trusted tag or
+commit, re-run validation, build a local tarball, and preview project changes
+with `init --force --dry-run` before confirming replacement. There is no
+top-level `update` or project-level `uninstall` command. See
+[QUICKSTART.md](QUICKSTART.md); local global-package removal remains
+`npm uninstall -g steadyspec`.
 
 ## Stability
 
-v0.6 remains pre-1.0. Before 1.0, breaking changes may still happen, but SteadySpec intends to keep these surfaces stable unless [CHANGELOG.md](CHANGELOG.md) says otherwise:
+v0.6.1 remains pre-1.0. Before 1.0, breaking changes may still happen, but SteadySpec intends to keep these surfaces stable unless [CHANGELOG.md](CHANGELOG.md) says otherwise:
 
 - Outward verb names: `/steadyspec:explore`, `/steadyspec:propose`, `/steadyspec:apply`, `/steadyspec:verify`, `/steadyspec:archive`.
 - Verb-flow SKILL names: `steadyspec-<verb>-flow`.

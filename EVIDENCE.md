@@ -51,11 +51,49 @@ v0.4 closes the docs-substrate gap the user found in plain docs projects: withou
 
 This does not prove semantic correctness, independent validation, or substrate parity with OpenSpec. It gives docs-mode projects a structural checker, and it gives high-uncertainty work a bounded way to avoid low-ceiling mainline choices without handing high-risk decisions to the agent.
 
+## v0.5.0 (shipped, Windows single-user boundary)
+
+v0.5 added packet-bound cross-agent transport, raw/moderation separation,
+scope freshness checks, advisory/gated policy, and explicit reviewer environment
+handling. Repeated external review found real defects in environment inheritance,
+timeout handling, scope completeness, and context boundaries; those defects were
+repaired before the v0.5 source snapshot. The remaining evidence was still
+single-operator Windows dogfood, not team/POSIX or reviewer-quality proof.
+
+## v0.6.0 (shipped source snapshot)
+
+v0.6 added the optional attention-preserving closure state machine beneath
+`verify`: fresh Critic, bounded Builder, operator-configured proof, and fresh
+Evaluator records are bound to candidate/evidence fingerprints. Interruption,
+recovery, decision, reset, and installed-package fixtures passed on the recorded
+Windows host. The machine verdict remained bounded readiness for human audit,
+not truth or release authority.
+
+The first clean third-party review after publication found a separate product
+gap: the registry install did not exist, Windows line endings and 8.3 path
+aliases could break validation, public docs had drifted, and validation lacked
+CI and observable suites. These findings are not erased from the v0.6 story;
+they are the input to v0.6.1.
+
+## v0.6.1 (source-only reliability candidate)
+
+v0.6.1 does not add methodology features. It makes Git source distribution
+honest, prevents accidental npm publication, repairs CRLF/path portability,
+splits validation into observable suites, adds Windows/Linux CI, and publishes
+sanitized reproducible evidence under
+[`release-evidence/v0.6.1/`](release-evidence/v0.6.1/README.md).
+
+This section records the pre-release candidate capture. Current tag, GitHub
+Release, and remote CI status are external evidence and must be checked against
+the exact remote SHA; this historical capture is not itself a release claim.
+
 ## What this proves (and doesn't)
 
 - The method produced a working orchestration layer from a standing start in a single-author setting
 - The method caught its own blind spots when an external reviewer was introduced
 - The docs-mode checker can reject missing structure and known archive truth hazards before a plain-docs change is treated as structurally ready
+- The v0.5/v0.6 runtimes have bounded local contract and installed-source evidence, with their platform and independence limits preserved
+- v0.6.1 source reliability results can be replayed from the public commands and manifest rather than relying only on the private `.meta` trail
 - The method has NOT been validated on multi-author teams, concurrent changes, or projects with issue-tracker substrates
 
 See [SCOPE.md](SCOPE.md) for what the reference skill pack does and does not promise.

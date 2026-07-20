@@ -484,6 +484,63 @@ function pathInsideOrSame(parent, child) {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
+function realpathWithMissingTail(value) {
+  let cursor = path.resolve(value);
+  const tail = [];
+  while (!fs.existsSync(cursor)) {
+    const parent = path.dirname(cursor);
+    if (parent === cursor) throw new Error(`no existing ancestor for ${value}`);
+    tail.unshift(path.basename(cursor));
+    cursor = parent;
+  }
+  const real = fs.realpathSync.native ? fs.realpathSync.native(cursor) : fs.realpathSync(cursor);
+  return path.resolve(real, ...tail);
+}
+
+function repoPathIdentity(repo, target) {
+  try {
+    const realRepo = realpathWithMissingTail(repo);
+    const realTarget = realpathWithMissingTail(target);
+    const relative = path.relative(realRepo, realTarget);
+    const insideRepo = relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+    return {
+      ok: insideRepo,
+      realRepo,
+      realTarget,
+      relative: insideRepo ? relative.replace(/\\/g, "/") || "." : "",
+      reason: insideRepo ? "realpath-contained" : "realpath-outside-repo",
+    };
+  } catch (error) {
+    return { ok: false, realRepo: "", realTarget: "", relative: "", reason: `realpath-unavailable: ${error.message}` };
+  }
+}
+
+function crossReviewOutputIdentity(repo, parentDir, runJson = "") {
+  const parent = repoPathIdentity(repo, parentDir);
+  const result = {
+    pathIdentityValid: parent.ok,
+    pathIdentityReason: parent.reason,
+    parentDirRelative: parent.relative,
+    runJsonRelative: "",
+  };
+  if (!runJson) return result;
+  const run = repoPathIdentity(repo, runJson);
+  const directTail = parent.ok && run.ok ? path.relative(parent.realTarget, run.realTarget) : "";
+  const parts = directTail.split(path.sep).filter(Boolean);
+  const resolvedRunParent = run.ok ? path.dirname(path.dirname(run.realTarget)) : "";
+  const sameResolvedParent = parent.ok && run.ok && path.relative(parent.realTarget, resolvedRunParent) === "";
+  const directRunChild = !path.isAbsolute(directTail)
+    && parts.length === 2
+    && parts[0] !== "."
+    && parts[0] !== ".."
+    && parts[1] === "run.json"
+    && sameResolvedParent;
+  result.pathIdentityValid = parent.ok && run.ok && directRunChild;
+  result.pathIdentityReason = !parent.ok ? parent.reason : !run.ok ? run.reason : directRunChild ? "realpath-contained-direct-run-child" : "run-json-not-direct-run-child";
+  result.runJsonRelative = run.ok ? run.relative : "";
+  return result;
+}
+
 function directoryLooksLikePublicDocs(dir) {
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return false;
   if (fs.existsSync(path.join(dir, "flows"))) return true;
@@ -888,8 +945,8 @@ function repoRoot(input) {
     cwd: requested,
     encoding: "utf8",
   });
-  if (result.status === 0 && result.stdout.trim()) return path.resolve(result.stdout.trim());
-  return requested;
+  const observed = result.status === 0 && result.stdout.trim() ? path.resolve(result.stdout.trim()) : requested;
+  return realpathWithMissingTail(observed);
 }
 
 function crossReviewConfigPath(repo) {
@@ -2766,15 +2823,17 @@ function rawStdoutText(run, runJsonFile) {
     : "";
 }
 
-function evaluateLatestRun(parentDir, expected = null) {
+function evaluateLatestRun(parentDir, expected = null, repo = "") {
   const orphanWarnings = [...orphanRunDirWarnings(parentDir), ...unreadableRunDirWarnings(parentDir)];
   const latest = latestRunJson(parentDir, expected);
+  const parentIdentity = repo ? crossReviewOutputIdentity(repo, parentDir) : {};
   if (!latest) {
     return {
       schemaVersion: 1,
       status: "no-run",
       exitCode: 2,
       parentDir,
+      ...parentIdentity,
       warnings: orphanWarnings,
       errors: [`no run.json found under ${parentDir}`],
     };
@@ -2785,6 +2844,7 @@ function evaluateLatestRun(parentDir, expected = null) {
       status: "failed",
       exitCode: 3,
       parentDir,
+      ...parentIdentity,
       latest: latest.name,
       runJson: latest.file,
       warnings: orphanWarnings,
@@ -2799,6 +2859,7 @@ function evaluateLatestRun(parentDir, expected = null) {
     status: "pass",
     exitCode: 0,
     parentDir,
+    ...(repo ? crossReviewOutputIdentity(repo, parentDir, latest.file) : {}),
     latest: latest.name,
     runJson: latest.file,
     reviewerStatus: run.reviewerStatus,
@@ -3008,7 +3069,7 @@ function checkLatestScopeWarnings(args) {
 }
 
 function checkLatestRun(parentDir, options = {}) {
-  const result = evaluateLatestRun(parentDir, options.expected || null);
+  const result = evaluateLatestRun(parentDir, options.expected || null, options.repo || "");
   if (options.scopeWarnings && options.scopeWarnings.length) {
     result.warnings.push(...options.scopeWarnings);
     if (result.status === "pass") {
@@ -3066,7 +3127,7 @@ function buildGate({ repo, changeDir, args, configSource, files, outputParentDir
     return result;
   }
 
-  const latest = evaluateLatestRun(outputParentDir, expectedScope);
+  const latest = evaluateLatestRun(outputParentDir, expectedScope, repo);
   result.latest = latest;
   if (latest.status === "pass") {
     result.status = "satisfied";
@@ -3454,7 +3515,7 @@ async function main() {
     return;
   }
   const changeDir = resolveChange(repo, args.change);
-  const outputParentDir = args.outputDir ? path.resolve(repo, args.outputDir) : path.join(changeDir, "cross-agent");
+  const outputParentDir = realpathWithMissingTail(args.outputDir ? path.resolve(repo, args.outputDir) : path.join(changeDir, "cross-agent"));
   const warnings = [];
   if (args.outputDir && !pathInsideOrSame(repo, outputParentDir)) warnings.push(EXTERNAL_OUTPUT_DIR_WARNING);
   if ((args.run || args.runIfNeeded) && process.platform !== "win32") warnings.push(posixSmokeWarning());
@@ -3486,7 +3547,7 @@ async function main() {
     warnings,
   }), expectedGitStatus);
   if (args.checkLatest) {
-    checkLatestRun(outputParentDir, { json: args.json, expected: expectedScope, scopeWarnings: checkLatestScopeWarnings(args) });
+    checkLatestRun(outputParentDir, { json: args.json, expected: expectedScope, scopeWarnings: checkLatestScopeWarnings(args), repo });
     return;
   }
   if (args.advice) {
@@ -3541,7 +3602,7 @@ async function main() {
       return;
     }
 
-    const latest = evaluateLatestRun(outputParentDir, expectedScope);
+    const latest = evaluateLatestRun(outputParentDir, expectedScope, repo);
     runIfNeededResult.latestBefore = latest;
     if (latest.status === "pass" && !args.force) {
       runIfNeededResult.status = "already-satisfied";
@@ -3699,6 +3760,7 @@ async function main() {
     repo,
     changeDir,
     outputParentDir,
+    outputParentRelative: repoPathIdentity(repo, outputParentDir).relative,
     config: configSource,
     primary: args.primary,
     reviewer: args.reviewer,
@@ -3890,7 +3952,10 @@ if (require.main === module) {
 
 module.exports = {
   buildReviewerEnv,
+  crossReviewOutputIdentity,
   parseEvaluatorOutput,
+  realpathWithMissingTail,
+  repoPathIdentity,
   renderPrompt,
   shouldRetryEvaluator,
 };

@@ -1,12 +1,20 @@
 {
   "name": "steadyspec",
-  "version": "0.6.0",
-  "description": "Anti-drift methodology packaged as a software SDD reference implementation.",
+  "version": "0.6.1",
+  "private": true,
+  "description": "Source-distributed anti-drift methodology for software SDD and agent closure.",
   "bin": {
     "steadyspec": "bin/init.js"
   },
   "scripts": {
-    "validate": "node bin/validate.js"
+    "test": "npm run validate",
+    "test:portability": "node tests/portability-fixtures.js",
+    "validate": "node bin/validate.js --suite all",
+    "validate:contract": "node bin/validate.js --suite contract",
+    "validate:cross-review": "node bin/validate.js --suite cross-review",
+    "validate:closure": "node bin/validate.js --suite closure",
+    "validate:install": "node bin/validate.js --suite install",
+    "validate:portability": "node bin/validate.js --suite portability"
   },
   "keywords": [
     "sdd",
@@ -29,6 +37,8 @@
   "homepage": "https://github.com/BestBlade/SteadySpec#readme",
   "files": [
     "bin/",
+    "tests/",
+    "release-evidence/",
     "schemas/",
     "en/",
     "zh/",
