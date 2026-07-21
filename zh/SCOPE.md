@@ -1,10 +1,24 @@
 # SteadySpec 范围和边界
 
-SteadySpec 是 [METHOD.md](METHOD.md) 中描述的反漂移方法的一个参考技能包。它提供五个对外动词（`explore` / `propose` / `apply` / `verify` / `archive`），每个都是一个小闭环，在内部编排了反漂移机制和责任路由。为了可靠地兑现这件事，源码分发的 v0.6.1 明确了具体边界。安装前请读。
+SteadySpec 包含 [METHOD.md](METHOD.md) 中的反漂移方法、实验性的 v0.7
+Assurance Protocol Candidate，以及 legacy 五动词软件技能包。这些表面的
+证据与采用边界不同。
 
-## v0.6.1 分发边界
+## v0.7 assurance protocol 边界
 
-v0.6.1 只通过官方 Git 仓库分发，`package.json` 会阻止误发布到 npm。
+协议提供领域中性的词汇和确定性 trace 行为，但没有证明它对所有领域都
+有效。它绑定精确 target、candidate、evidence、assessment、invalidation、
+invocation 与声明出来的 decision。最强状态只是 `ready-for-human`，不是
+接受或外部行动授权。
+
+v0.7 的证据覆盖参考进程、可替换实现的黑盒 conformance，以及故意写坏的
+always-ready 实现。它不覆盖真实漂移/人工负担/恢复成本的因果改善、外部
+采用、actor 身份认证、远程证明、旧快照回滚防护、团队协作或语义真理。
+现有 Codex/Claude workflow 与 v0.6 closure 也没有被宣称为薄适配器。
+
+## v0.7 源码分发边界
+
+v0.7.0 只通过官方 Git 仓库分发，`package.json` 会阻止误发布到 npm。
 用户从可信 tag 或 commit 构建本地 tarball 后安装。本地 validator 和 CI
 只是有边界的证据，不代表 registry 发布、第三方采用、语义真理或人的
 发布授权。
@@ -56,7 +70,8 @@ v0.4 增加了一个可选能力通道，用在过早收敛本身就是风险的
 
 ## 单开发者假设
 
-SteadySpec v0.6 是为**每次变更一名作者**设计的。技能里提到的"人"（`steadyspec-human-decision-record`、`steadyspec-strategy-rollup`、`verify-flow`、归档门）指的是**未来的你，或接手者**——一个需要在没有原始上下文的情况下重新评估决策的人。
+Legacy 软件技能包是为**每次变更一名作者**设计的。技能里提到的"人"
+指未来的你或接手者——一个需要在没有原始上下文时重新评估决策的人。
 
 实际意味着：
 
@@ -78,7 +93,7 @@ SteadySpec v0.6 是为**每次变更一名作者**设计的。技能里提到的
 - **它不替代测试。** 测试是可观测检查的一种。SteadySpec 问的是"东西做对了没有"，测试验的是"做出来的东西管不管用"。
 - **它不强制被使用。** 你可以装了 SteadySpec 但一次动词都不调。包不会吭声。
 - **辅助命令有界，不是新的方法论动词。** 除了 `init` 和 docs 模式
-  `check`，CLI 还有 `cross-review`、`closure` 和 `hooks`。没有顶层
+  `check`，CLI 还有 `assurance`、`cross-review`、`closure` 和 `hooks`。没有顶层
   `update`、项目级 `uninstall` 或通用 `status`。升级时固定并验证新的
   源码版本，再预演 `init --force`；卸载按 [QUICKSTART.md](QUICKSTART.md)
   的精确路径清理清单执行。
@@ -100,7 +115,13 @@ SteadySpec 把它的方法用在了自己身上。自我应用的记录存在源
 - 继承这个仓库的接手者可能看不到 `.meta/`。这是故意的。公开的 CHANGELOG.md 和 `git log` 是持久历史。
 - 把 `.meta/changes/` 当成 SteadySpec 的私有介质。**别把它当你的项目介质。** 用文档里推荐的介质。
 
-## SteadySpec 适不适合你
+## Assurance protocol 是否适合
+
+当精确快照要跨 Agent、上下文压缩、中断或数天流转，而过期/伪造 ready
+声明的代价较高时，可以 dogfood v0.7 protocol。短任务不要只为仪式感使用。
+在对照实验完成前，应同时测量收益与维护协议本身的负担。
+
+## Legacy 软件 recipe 是否适合
 
 SteadySpec 适合你，当**以下全部**成立：
 
@@ -110,4 +131,5 @@ SteadySpec 适合你，当**以下全部**成立：
 3. 你预计这份工作活得够久——久到未来的你（或接手者）会需要这些记录。
 4. 你愿意在合适的时候显式调用这五个动词。
 
-以上任何一条不成立，SteadySpec v0.6 就不是正确选择。用更轻或不同的工具。
+以上任何一条不成立，legacy 软件 recipe 就不是正确选择。用更轻或不同的
+工具；这不自动决定更小的 protocol 表面是否适用。

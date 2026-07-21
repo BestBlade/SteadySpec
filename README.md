@@ -1,16 +1,53 @@
 # SteadySpec
 
-### A method for working with agents - and keeping responsibility visible
+### An anti-drift method and an experimental agent assurance protocol
 
 [中文版本](zh/README.md) | [中文方法论文档](zh/METHOD.md)
 
-Long-running work with AI agents has a quiet failure mode: the agent slowly edits the intent, decisions lose their owner, validation is mistaken for truth, and the final record is cleaned up until it no longer describes what happened. SteadySpec is an anti-drift method that names eight mechanisms to prevent this. It was built by applying the method to itself.
+Long-running work with AI agents has a quiet failure mode: the agent slowly
+edits the intent, decisions lose their owner, validation is mistaken for truth,
+and the final record is cleaned up until it no longer describes what happened.
+SteadySpec now separates four things that earlier releases mixed together:
 
-> **Start here:** [METHOD.md](METHOD.md) — the portable thought (8 mechanisms, domain-neutral). Then [EVIDENCE.md](EVIDENCE.md) — the dogfood record (failure + success, compressed). If you want to try the method in a real project, this repo also ships a reference skill pack for software SDD: five verb-flows that orchestrate primitives with drift gates, responsibility routing, and trust checkpoints. See [SCOPE.md](SCOPE.md) for boundaries before installing.
+1. [METHOD.md](METHOD.md) explains why work drifts and who retains responsibility.
+2. [The v0.7 assurance protocol candidate](protocol/ASSURANCE_PROTOCOL.md)
+   constrains what a process may claim for one exact target, candidate,
+   evidence bundle, and assessment.
+3. Implementations/adapters connect that protocol to a runtime. v0.7 ships one
+   dependency-free reference process, not a completed adapter ecosystem.
+4. Recipes/profiles describe how work is done. The five-stage software SDD pack
+   and v0.6 Critic/Builder/Evaluator closure remain bundled legacy recipes.
+
+`ready-for-human` is the protocol's strongest claim. It means the exact supplied
+snapshot is suitable input to a human checkpoint within recorded coverage. It
+does not mean truth, human acceptance, reviewer independence, merge, archive,
+release, deployment, or risk authority.
+
+Try the core without installing skills or editing closure policy:
+
+```bash
+node bin/assurance.js reduce --trace protocol/examples/empty-trace.json --json
+node bin/assurance.js reduce --trace protocol/examples/minimal-ready-trace.json --json
+npm run validate:assurance
+```
+
+The first command returns `target-required`; the second returns
+`ready-for-human` for a complete synthetic trace; the suite then runs the reusable
+black-box conformance suite against the reference process and verifies that a
+deliberately bad always-ready implementation and an incomplete/forged-result
+implementation both fail mandatory cases. This proves
+declared protocol behavior only. It does not prove lower drift or lower review
+cost in real projects; that question is [pre-registered, not answered](protocol/EXPERIMENT.md).
+
+If you want the software workflow rather than the protocol, continue with the
+five-verb skill pack below. See [SCOPE.md](SCOPE.md) before adopting either
+surface and [EVIDENCE.md](EVIDENCE.md) for bounded dogfood evidence.
 
 The reference skill pack (`/steadyspec:explore` / `:propose` / `:apply` / `:verify` / `:archive`) wraps a spec workflow with closed-loop orchestration: explore routes attention to active risk, propose records a decision ledger and risk routing, apply executes slice-by-slice with proof-linked decisions and explicit re-slice events, verify runs a trust checkpoint before archive or handoff, and archive runs review + doc-sync + confirmed_by + durable truth gates before writing. It coexists with OpenSpec, plain docs, or issue trackers. The method is substrate-aware: OpenSpec owns its own schema, docs mode can use SteadySpec's native structural contract/checker, and issue trackers remain experimental.
 
 ## v0.6 Attention-Preserving Closure
+
+This is the legacy bundled software recipe, not the normative v0.7 protocol.
 
 v0.6 adds an optional closure support engine under `verify`; the outward product
 still has exactly five governed verbs. Closure coordinates a fingerprint-bound
@@ -360,7 +397,7 @@ signal.
 ## Quick start
 
 See [QUICKSTART.md](QUICKSTART.md) for the complete source-only installation,
-verification, agent handoff, and manual cleanup contract. v0.6.1 is not
+verification, agent handoff, and manual cleanup contract. v0.7.0 is not
 published to the npm registry; do not use a registry install or `npx`.
 
 ```powershell
@@ -371,7 +408,7 @@ git remote get-url origin
 git rev-parse HEAD
 npm run validate
 npm pack
-npm install --global .\steadyspec-0.6.1.tgz
+npm install --global .\steadyspec-0.7.0.tgz
 
 Set-Location D:\path\to\my-project
 steadyspec init --runtime codex --substrate docs --dry-run
@@ -397,10 +434,14 @@ The reference skill pack is alpha. Full matrix in [SCOPE.md](SCOPE.md).
 - **Agent capability:** optimized for **Tier 2** agents (DeepSeek-V4-Pro, Claude Sonnet 4.5+, GPT-4o-class). Tier 3 is **not promised.**
 - **Single developer:** designed for one author per change. "Human" means **future-you or a successor.**
 - **User-invoked:** SteadySpec does not auto-detect drift. It provides verbs you call.
-- **Bounded support CLI:** `init`, docs `check`, `cross-review`, `closure`, and
-  `hooks` support the five governed verbs. They are not additional methodology
-  verbs. There is no top-level `update`, project-level `uninstall`, or general
-  `status`; removal is manual plus `npm uninstall -g` for a local installation.
+- **Independent assurance process:** `assurance` implements the experimental
+  protocol candidate. It can be evaluated without installing or invoking the
+  five software verbs.
+- **Legacy recipe support CLI:** `init`, docs `check`, `cross-review`, `closure`,
+  and `hooks` support the five governed verbs. They are not additional
+  methodology verbs. There is no top-level `update`, project-level `uninstall`,
+  or general `status`; removal is manual plus `npm uninstall -g` for a local
+  installation.
 - **Issue-tracker substrate remains experimental:** v0.4 adds docs-mode structure; GitHub issues / Jira / Linear are still external records.
 
 ## Layout
@@ -412,6 +453,12 @@ steadyspec/
   QUICKSTART.md         # 5 verbs + install + manual cleanup
   README.md             # this file
   CHANGELOG.md
+  protocol/
+    ASSURANCE_PROTOCOL.md    # experimental normative candidate
+    EXPERIMENT.md            # preregistered value test, no result yet
+    schemas/                 # strict trace/result JSON schemas
+    conformance/             # static black-box cases
+    examples/                # empty and complete synthetic traces
   .github/workflows/ci.yml  # Windows/Linux source validation
   recipes/
     software-sdd.md     # map the method to software SDD
@@ -433,6 +480,7 @@ steadyspec/
       codex/agents/                  # 5 yaml interface descriptors (Codex)
   bin/
     init.js             # bounded CLI entrypoint and support-command dispatch
+    assurance.js        # v0.7 reference reducer/fingerprint/projection process
     cross-review.js     # v0.5 Level 1 cross-agent review runner
     closure.js          # v0.6 closure state machine and evidence binding
     human-decision-transaction.js  # fail-closed human decision writes
@@ -440,10 +488,12 @@ steadyspec/
     docs-check.js       # deterministic docs substrate checker
     validate.js         # internal package validator
   tests/
+    assurance-conformance.js  # reusable process-level conformance runner
     portability-fixtures.js  # CRLF, realpath, alias, and escape regressions
   release-evidence/
     v0.6.1/             # public candidate evidence and machine-readable state
-  schemas/              # closure/config/acceptance JSON schemas
+    v0.7.0/             # public protocol-candidate evidence and residual unknowns
+  schemas/              # legacy closure/config/acceptance JSON schemas
   manifest.json         # install spec
   package.json
 ```
@@ -485,7 +535,11 @@ top-level `update` or project-level `uninstall` command. See
 
 ## Stability
 
-v0.6.1 remains pre-1.0. Before 1.0, breaking changes may still happen, but SteadySpec intends to keep these surfaces stable unless [CHANGELOG.md](CHANGELOG.md) says otherwise:
+v0.7.0 remains pre-1.0. The assurance protocol, schemas, conformance catalog,
+and reference process are explicitly experimental. They may change
+incompatibly before 1.0; a semantic change must use a new `protocolVersion` and
+be recorded in [CHANGELOG.md](CHANGELOG.md). The following legacy software-recipe
+surfaces are intended to remain stable unless the changelog says otherwise:
 
 - Outward verb names: `/steadyspec:explore`, `/steadyspec:propose`, `/steadyspec:apply`, `/steadyspec:verify`, `/steadyspec:archive`.
 - Verb-flow SKILL names: `steadyspec-<verb>-flow`.
@@ -506,6 +560,14 @@ If you are evaluating the method:
 2. [EVIDENCE.md](EVIDENCE.md) — the dogfood record (what happened when the method was applied to itself)
 3. [SCOPE.md](SCOPE.md) — does the reference skill pack fit your project?
 4. [QUICKSTART.md](QUICKSTART.md) — what daily use looks like
+
+If you are evaluating the assurance protocol candidate:
+
+1. [protocol/ASSURANCE_PROTOCOL.md](protocol/ASSURANCE_PROTOCOL.md) — normative state, binding, transition, and process contract
+2. [protocol/schemas/](protocol/schemas/) — strict trace and result schemas
+3. [protocol/conformance/cases.jsonl](protocol/conformance/cases.jsonl) — static black-box cases
+4. [protocol/EXPERIMENT.md](protocol/EXPERIMENT.md) — preregistered value test; no result yet
+5. [release-evidence/v0.7.0/](release-evidence/v0.7.0/README.md) — reproducible candidate evidence and remaining limits
 
 If you are an agent inheriting a project with SteadySpec installed:
 

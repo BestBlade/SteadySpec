@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://steadyspec.dev/protocol/schemas/assurance-trace-v1.schema.json",
+  "title": "SteadySpec assurance trace v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "protocolVersion", "lineageId", "events"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "protocolVersion": { "const": "0.7" },
+    "lineageId": { "$ref": "#/$defs/id" },
+    "events": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/event" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" },
+    "trimmedString": { "type": "string", "minLength": 1, "pattern": "^\\S(?:[\\s\\S]*\\S)?$" },
+    "fingerprint": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "safeInteger": { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "locator", "contentDigest", "byteLength"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "locator": { "$ref": "#/$defs/trimmedString" },
+        "contentDigest": { "$ref": "#/$defs/fingerprint" },
+        "byteLength": { "$ref": "#/$defs/safeInteger", "minimum": 0 }
+      }
+    },
+    "requiredEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "allowedSourceClasses"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "allowedSourceClasses": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/trimmedString" } }
+      }
+    },
+    "criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "required", "requiredEvidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "required": { "type": "boolean" },
+        "requiredEvidence": { "type": "array", "items": { "$ref": "#/$defs/requiredEvidence" } }
+      },
+      "allOf": [
+        { "if": { "properties": { "required": { "const": true } } }, "then": { "properties": { "requiredEvidence": { "minItems": 1 } } } }
+      ]
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targetId", "artifacts", "criteria", "authority"],
+      "properties": {
+        "targetId": { "$ref": "#/$defs/id" },
+        "artifacts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/artifact" } },
+        "criteria": {
+          "type": "array",
+          "minItems": 1,
+          "contains": { "type": "object", "required": ["required"], "properties": { "required": { "const": true } } },
+          "items": { "$ref": "#/$defs/criterion" }
+        },
+        "authority": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["finalDecision"],
+          "properties": { "finalDecision": { "const": "human" } }
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateId", "targetFingerprint", "artifacts"],
+      "properties": {
+        "candidateId": { "$ref": "#/$defs/id" },
+        "targetFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "artifacts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/artifact" } }
+      }
+    },
+    "unknown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "status"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "statement": { "$ref": "#/$defs/trimmedString" },
+        "status": { "const": "unresolved" }
+      }
+    },
+    "coverageLimit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "statement": { "$ref": "#/$defs/trimmedString" }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "forEvidenceId"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "statement": { "$ref": "#/$defs/trimmedString" },
+        "forEvidenceId": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "criterionId", "sourceClass", "outcome", "claim", "artifacts", "coverageLimitIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "criterionId": { "$ref": "#/$defs/id" },
+        "sourceClass": { "$ref": "#/$defs/trimmedString" },
+        "outcome": { "enum": ["pass", "fail", "blocked", "unknown", "not-run", "fallback"] },
+        "claim": { "$ref": "#/$defs/trimmedString" },
+        "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
+        "coverageLimitIds": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidenceId", "targetFingerprint", "candidateFingerprint", "observations", "unresolvedUnknowns", "coverageLimits", "fallbacks"],
+      "properties": {
+        "evidenceId": { "$ref": "#/$defs/id" },
+        "targetFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "candidateFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "observations": { "type": "array", "items": { "$ref": "#/$defs/observation" } },
+        "unresolvedUnknowns": { "type": "array", "items": { "$ref": "#/$defs/unknown" } },
+        "coverageLimits": { "type": "array", "items": { "$ref": "#/$defs/coverageLimit" } },
+        "fallbacks": { "type": "array", "items": { "$ref": "#/$defs/fallback" } }
+      }
+    },
+    "assessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "label", "independence"],
+      "properties": {
+        "kind": { "enum": ["agent", "human", "tool", "mixed"] },
+        "label": { "$ref": "#/$defs/trimmedString" },
+        "independence": { "enum": ["same-context", "same-family", "external", "unknown"] }
+      }
+    },
+    "invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["invocationId", "targetFingerprint", "candidateFingerprint", "evidenceFingerprint", "assessor", "transport"],
+      "properties": {
+        "invocationId": { "$ref": "#/$defs/id" },
+        "targetFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "candidateFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "evidenceFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "assessor": { "$ref": "#/$defs/assessor" },
+        "transport": { "$ref": "#/$defs/trimmedString" }
+      }
+    },
+    "criterionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "result", "basisEvidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "result": { "enum": ["pass", "fail", "blocked", "unknown", "not-applicable"] },
+        "basisEvidenceIds": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "blocksReadiness", "status"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "statement": { "$ref": "#/$defs/trimmedString" },
+        "blocksReadiness": { "type": "boolean" },
+        "status": { "enum": ["open", "resolved"] }
+      }
+    },
+    "assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assessmentId", "invocationId", "targetFingerprint", "candidateFingerprint", "evidenceFingerprint", "proposedOutcome", "criterionResults", "findings", "unresolvedUnknowns", "coverageLimits"],
+      "properties": {
+        "assessmentId": { "$ref": "#/$defs/id" },
+        "invocationId": { "$ref": "#/$defs/id" },
+        "targetFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "candidateFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "evidenceFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "proposedOutcome": { "enum": ["ready-for-human", "remediation-required", "needs-human", "blocked"] },
+        "criterionResults": { "type": "array", "items": { "$ref": "#/$defs/criterionResult" } },
+        "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+        "unresolvedUnknowns": { "type": "array", "items": { "$ref": "#/$defs/unknown" } },
+        "coverageLimits": { "type": "array", "items": { "$ref": "#/$defs/coverageLimit" } }
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targetFingerprint", "candidateFingerprint", "evidenceFingerprint", "assessmentFingerprint"],
+      "properties": {
+        "targetFingerprint": { "oneOf": [{ "$ref": "#/$defs/fingerprint" }, { "type": "null" }] },
+        "candidateFingerprint": { "oneOf": [{ "$ref": "#/$defs/fingerprint" }, { "type": "null" }] },
+        "evidenceFingerprint": { "oneOf": [{ "$ref": "#/$defs/fingerprint" }, { "type": "null" }] },
+        "assessmentFingerprint": { "oneOf": [{ "$ref": "#/$defs/fingerprint" }, { "type": "null" }] }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decisionId", "action", "claimedActorClass", "authentication", "reason", "invocationId", "bindings"],
+      "properties": {
+        "decisionId": { "$ref": "#/$defs/id" },
+        "action": { "enum": ["authorize-assessment-retry", "accept-current", "reject-current", "defer-current", "abandon"] },
+        "claimedActorClass": { "const": "human" },
+        "authentication": { "const": "unverified" },
+        "reason": { "$ref": "#/$defs/trimmedString" },
+        "invocationId": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+        "bindings": { "$ref": "#/$defs/bindings" }
+      }
+    },
+    "eventHeader": {
+      "type": "object",
+      "required": ["schemaVersion", "protocolVersion", "lineageId", "eventId", "sequence", "priorEventFingerprint", "occurredAt", "type", "payload"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "protocolVersion": { "const": "0.7" },
+        "lineageId": { "$ref": "#/$defs/id" },
+        "eventId": { "$ref": "#/$defs/id" },
+        "sequence": { "$ref": "#/$defs/safeInteger", "minimum": 1 },
+        "priorEventFingerprint": { "oneOf": [{ "$ref": "#/$defs/fingerprint" }, { "type": "null" }] },
+        "occurredAt": { "type": "string", "format": "date-time", "pattern": "^\\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\\d|3[01])T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,9})?Z$" }
+      }
+    },
+    "event": {
+      "oneOf": [
+        { "$ref": "#/$defs/targetEvent" },
+        { "$ref": "#/$defs/candidateEvent" },
+        { "$ref": "#/$defs/evidenceEvent" },
+        { "$ref": "#/$defs/assessmentStartEvent" },
+        { "$ref": "#/$defs/assessmentCompleteEvent" },
+        { "$ref": "#/$defs/decisionEvent" }
+      ]
+    },
+    "targetEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventHeader" },
+        { "properties": { "type": { "const": "target-bound" }, "payload": { "type": "object", "additionalProperties": false, "required": ["target"], "properties": { "target": { "$ref": "#/$defs/target" } } } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "candidateEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventHeader" },
+        { "properties": { "type": { "const": "candidate-bound" }, "payload": { "type": "object", "additionalProperties": false, "required": ["candidate"], "properties": { "candidate": { "$ref": "#/$defs/candidate" } } } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "evidenceEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventHeader" },
+        { "properties": { "type": { "const": "evidence-recorded" }, "payload": { "type": "object", "additionalProperties": false, "required": ["evidence"], "properties": { "evidence": { "$ref": "#/$defs/evidence" } } } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "assessmentStartEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventHeader" },
+        { "properties": { "type": { "const": "assessment-started" }, "payload": { "type": "object", "additionalProperties": false, "required": ["invocation"], "properties": { "invocation": { "$ref": "#/$defs/invocation" } } } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "assessmentCompleteEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventHeader" },
+        { "properties": { "type": { "const": "assessment-completed" }, "payload": { "type": "object", "additionalProperties": false, "required": ["assessment"], "properties": { "assessment": { "$ref": "#/$defs/assessment" } } } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "decisionEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventHeader" },
+        { "properties": { "type": { "const": "decision-recorded" }, "payload": { "type": "object", "additionalProperties": false, "required": ["decision"], "properties": { "decision": { "$ref": "#/$defs/decision" } } } } }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

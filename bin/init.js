@@ -173,6 +173,9 @@ Usage:
   steadyspec check <change-id-or-path> --phase <proposal|apply|verify|archive> [--substrate docs] [--json]
   steadyspec cross-review --change <change-id-or-path> [--reviewer claude] [--mode design|review|debate|evaluate] [--run|--run-if-needed]
   steadyspec closure --change <change-id-or-path> --prepare|--status|--run-proofs|--check [--json]
+  steadyspec assurance reduce --trace <file> --json
+  steadyspec assurance fingerprint --domain <name> --input <file> --json
+  steadyspec assurance project-v06 --state <file> --json
   steadyspec hooks <install|uninstall|status> [--target claude|codex|both]
 
 Options:
@@ -735,6 +738,18 @@ async function main() {
       stdio: "inherit",
       windowsHide: true,
     });
+    if (result.error) throw result.error;
+    process.exitCode = result.status === null ? 1 : result.status;
+    return;
+  }
+  if (process.argv[2] === "assurance") {
+    const script = path.join(__dirname, "assurance.js");
+    if (!fs.existsSync(script)) {
+      console.error("[steadyspec] assurance reference process is not installed. Expected: " + script);
+      process.exitCode = 1;
+      return;
+    }
+    const result = spawnSync(process.execPath, [script, ...process.argv.slice(3)], { cwd: process.cwd(), stdio: "inherit", windowsHide: true });
     if (result.error) throw result.error;
     process.exitCode = result.status === null ? 1 : result.status;
     return;

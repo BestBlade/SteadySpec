@@ -21,7 +21,7 @@ const ALLOWED_ROOT_FILES = new Set([
   ".gitattributes",
   "LICENSE",
 ]);
-const ALLOWED_ROOT_DIRS = new Set([".github", "bin", "design", "docs", "en", "release-evidence", "scripts", "tests", "zh", "recipes", "schemas"]);
+const ALLOWED_ROOT_DIRS = new Set([".github", "bin", "design", "docs", "en", "protocol", "release-evidence", "scripts", "tests", "zh", "recipes", "schemas"]);
 const IGNORED_DEV_DIRS = new Set([".git", ".meta", "node_modules"]);
 const IGNORED_ROOT_DEV_DIRS = new Set([".git", ".meta", "node_modules", ".agents", ".codex", ".claude", ".steadyspec"]);
 const FORBIDDEN_NAMES = new Set([
@@ -105,7 +105,7 @@ function parseValidationArgs(argv) {
     const arg = argv[index];
     if (arg === "--suite") {
       const value = argv[index + 1];
-      if (!value) fail("--suite requires all, contract, cross-review, closure, install, or portability");
+      if (!value) fail("--suite requires all, assurance, contract, cross-review, closure, install, or portability");
       result.suite = value;
       index += 1;
     } else if (arg.startsWith("--")) {
@@ -117,7 +117,7 @@ function parseValidationArgs(argv) {
       fail(`unexpected validation argument: ${arg}`);
     }
   }
-  const allowed = new Set(["all", "contract", "cross-review", "closure", "install", "portability"]);
+  const allowed = new Set(["all", "assurance", "contract", "cross-review", "closure", "install", "portability"]);
   if (!allowed.has(result.suite)) fail(`unknown validation suite: ${result.suite}`);
   result.root = path.resolve(result.root);
   return result;
@@ -414,10 +414,11 @@ function requirePattern(root, file, pattern, label) {
 }
 
 function checkReleaseSurface(root, manifest, pkg) {
-  if (pkg.version !== "0.6.1" || manifest.version !== "0.6.1") {
-    fail("v0.6.1 release surface requires package.json and manifest.json version 0.6.1");
+  if (pkg.version !== "0.7.0" || manifest.version !== "0.7.0") {
+    fail("v0.7.0 candidate surface requires package.json and manifest.json version 0.7.0");
   }
 
+  requireText(root, "CHANGELOG.md", "## 0.7.0 (experimental assurance protocol candidate)");
   requireText(root, "CHANGELOG.md", "## 0.6.1 (source-only reliability correction)");
   requireText(root, "CHANGELOG.md", "## 0.4.0 (alpha)");
 
@@ -463,17 +464,17 @@ function checkSourceDistributionDocs(root, pkg) {
   }
   for (const [relative, anchors] of Object.entries({
     "README.md": ["published to the npm registry", "npm pack", "trusted-tag-or-commit", "git remote get-url origin", "git rev-parse HEAD", "cross-review-hook.js"],
-    "QUICKSTART.md": ["## Source-only install", "Agent-assisted installation contract", "npm pack", "git remote get-url origin", "git rev-parse HEAD", ".claude\\workflows"],
+    "QUICKSTART.md": ["## Source-only install", "Agent-assisted installation contract", "npm pack", "git remote get-url origin", "git rev-parse HEAD", "--include-v06-projection", ".claude\\workflows"],
     "en/README.md": ["source-distributed", "published to the npm registry"],
     "zh/README.md": ["没有发布到 npm registry", "npm pack", "git remote get-url origin", "git rev-parse HEAD", "cross-review-hook.js"],
-    "zh/QUICKSTART.md": ["没有发布到 npm registry", "commit SHA", "npm pack", "git remote get-url origin", "git rev-parse HEAD", "## Cross-agent 审查通道（v0.5）", ".claude\\workflows"],
+    "zh/QUICKSTART.md": ["没有发布到 npm registry", "commit SHA", "npm pack", "git remote get-url origin", "git rev-parse HEAD", "--include-v06-projection", "## Cross-agent 审查通道（v0.5）", ".claude\\workflows"],
   })) {
     const text = readText(path.join(root, relative));
     for (const anchor of anchors) if (!text.includes(anchor)) fail(`${relative} missing source-distribution anchor: ${anchor}`);
   }
   const evidenceManifest = readJson(path.join(root, "release-evidence", "v0.6.1", "manifest.json"));
-  if (evidenceManifest.version !== pkg.version || evidenceManifest.distribution && evidenceManifest.distribution.npmRegistryPublished !== false) {
-    fail("v0.6.1 release evidence must match the package version and preserve the no-registry boundary");
+  if (evidenceManifest.version !== "0.6.1" || evidenceManifest.distribution && evidenceManifest.distribution.npmRegistryPublished !== false) {
+    fail("historical v0.6.1 release evidence must preserve its version and no-registry boundary");
   }
   if (evidenceManifest.captureState !== "pre-release-candidate" || evidenceManifest.distribution && evidenceManifest.distribution.remoteReleaseState !== "external-to-capture") {
     fail("v0.6.1 release evidence must be a timeless pre-release capture whose remote release state stays external");
@@ -482,9 +483,25 @@ function checkSourceDistributionDocs(root, pkg) {
     fail("v0.6.1 pre-release evidence must disclose its uncommitted local identity and exclude unobserved remote results");
   }
   requireText(root, "release-evidence/v0.6.1/README.md", "Evidence capture: **pre-release candidate**.");
+  const currentEvidenceManifest = readJson(path.join(root, "release-evidence", "v0.7.0", "manifest.json"));
+  if (currentEvidenceManifest.version !== "0.7.0" || currentEvidenceManifest.protocolVersion !== "0.7") {
+    fail("current v0.7.0 release evidence must bind the package and protocol candidate versions");
+  }
+  if (currentEvidenceManifest.captureState !== "pre-release-candidate" || currentEvidenceManifest.capture?.sourceIdentity !== "uncommitted-working-tree" || currentEvidenceManifest.capture?.remoteResultsIncluded !== false) {
+    fail("v0.7.0 evidence must disclose a local uncommitted candidate and exclude unobserved remote results");
+  }
+  if (currentEvidenceManifest.distribution?.npmRegistryPublished !== false || currentEvidenceManifest.distribution?.npmPublicationBlocked !== true || currentEvidenceManifest.distribution?.remoteReleaseState !== "external-to-capture") {
+    fail("v0.7.0 evidence must preserve source-only distribution and external release authority");
+  }
+  if (currentEvidenceManifest.authorityAtCapture?.humanAccepted !== false || currentEvidenceManifest.authorityAtCapture?.tagAuthorized !== false || currentEvidenceManifest.authorityAtCapture?.githubReleaseAuthorized !== false || currentEvidenceManifest.authorityAtCapture?.npmPublishAuthorized !== false) {
+    fail("v0.7.0 evidence must not fabricate human acceptance or publication authority");
+  }
+  if (currentEvidenceManifest.evidence?.assuranceConformance !== "pass-local-53-total-51-core") fail("v0.7.0 evidence must report the current core/extension conformance split");
+  requireText(root, "release-evidence/v0.7.0/README.md", "Evidence capture: **pre-release candidate**.");
+  requireText(root, "release-evidence/v0.7.0/README.md", "No comparative effectiveness result exists");
   requireText(root, "SCOPE.md", "## v0.6 closure product boundary");
   const ci = readText(path.join(root, ".github", "workflows", "ci.yml"));
-  for (const anchor of ["windows-latest", "ubuntu-latest", "node: [18, 22, 24]", "windows-autocrlf-v060-upgrade", "fetch-depth: 0", "25cc20eb3f8a77d6972ce04b949533c1925a81d6", "validate:portability", "validate:install", "core.autocrlf=true", "permissions:", "contents: read"]) {
+  for (const anchor of ["windows-latest", "ubuntu-latest", "node: [18, 22, 24]", "windows-autocrlf-v060-upgrade", "fetch-depth: 0", "25cc20eb3f8a77d6972ce04b949533c1925a81d6", "validate:assurance", "validate:portability", "validate:install", "core.autocrlf=true", "permissions:", "contents: read"]) {
     if (!ci.includes(anchor)) fail(`source CI missing required boundary: ${anchor}`);
   }
   const upgradeJobMatch = ci.match(/(?:^|\n)  windows-autocrlf-v060-upgrade:\r?\n([\s\S]*?)(?=\n  [A-Za-z0-9_-]+:\r?\n|$)/);
@@ -494,6 +511,7 @@ function checkSourceDistributionDocs(root, pkg) {
     "git config core.autocrlf true",
     "git checkout --detach 25cc20eb3f8a77d6972ce04b949533c1925a81d6",
     "npm run validate:contract",
+    "npm run validate:assurance",
     "npm run validate:cross-review",
     "npm run validate:closure",
     "git status --porcelain",
@@ -513,6 +531,7 @@ function checkSourceDistributionDocs(root, pkg) {
     "zh/SCOPE.md",
     "zh/EVIDENCE.md",
     "release-evidence/v0.6.1/README.md",
+    "release-evidence/v0.7.0/README.md",
   ]);
 }
 
@@ -2833,33 +2852,33 @@ function checkV06ClosureContracts(root) {
   }
 }
 
-function checkActiveV06Identity(root, pkg) {
-  if (pkg.version !== "0.6.1") fail("active product identity check requires package version 0.6.1");
+function checkActiveProductIdentity(root, pkg) {
+  if (pkg.version !== "0.7.0") fail("active product identity check requires package version 0.7.0");
   const contracts = {
     "README.md": {
-      current: "v0.6.1 remains pre-1.0.",
+      current: "v0.7.0 remains pre-1.0.",
       stale: ["v0.4-alpha is alpha."],
       historical: "## v0.4 Docs Contract And Capability Lane",
     },
     "SCOPE.md": {
-      current: "the source-only v0.6.1 release defines specific boundaries",
+      current: "## v0.7 assurance protocol boundary",
       stale: ["the v0.4-alpha release defines", "Primary optimization target for v0.4-alpha", "SteadySpec v0.4-alpha is designed", "SteadySpec v0.4-alpha is not the right fit"],
       historical: "## v0.4 capability lane boundary",
     },
     "zh/README.md": {
-      current: "v0.6.1 仍处于 1.0 之前。",
+      current: "v0.7.0 仍处于 1.0 之前。",
       stale: ["v0.4-alpha 是 alpha。"],
       historical: "## v0.4 文档合同与能力通道",
     },
     "zh/SCOPE.md": {
-      current: "源码分发的 v0.6.1 明确了具体边界",
+      current: "## v0.7 assurance protocol 边界",
       stale: ["v0.4-alpha 明确了具体的边界", "v0.4-alpha 主要优化目标", "SteadySpec v0.4-alpha 是为", "SteadySpec v0.4-alpha 就不是正确选择"],
       historical: "## v0.4 能力通道边界",
     },
   };
   for (const [relative, contract] of Object.entries(contracts)) {
     const text = readText(path.join(root, relative));
-    if (!text.includes(contract.current)) fail(`${relative} must identify the active product boundary with its exact v0.6.1 anchor`);
+    if (!text.includes(contract.current)) fail(`${relative} must identify the active product boundary with its exact v0.7.0 anchor`);
     for (const stale of contract.stale) if (text.includes(stale)) fail(`${relative} still contains stale active identity: ${stale}`);
     if (!text.includes(contract.historical)) fail(`${relative} must preserve its legitimate v0.4 historical capability anchor`);
   }
@@ -4290,8 +4309,8 @@ function checkHumanDecisionTransactions(root) {
   fs.rmSync(repo, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }
 
-function checkV06PackedInstall(root, pkg) {
-  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "steadyspec-v06-packed-install-"));
+function checkPackedInstall(root, pkg) {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "steadyspec-packed-install-"));
   let failure = null;
   let summary = null;
   try {
@@ -4317,16 +4336,29 @@ function checkV06PackedInstall(root, pkg) {
     const requiredPackedFiles = [
       "package.json",
       "bin/init.js",
+      "bin/assurance.js",
       "bin/human-decision-transaction.js",
       "bin/closure.js",
       "bin/closure-fixtures.js",
       "bin/validate.js",
       "tests/portability-fixtures.js",
+      "tests/assurance-conformance.js",
+      "tests/fixtures/assurance/always-ready.js",
+      "tests/fixtures/assurance/incomplete-result.js",
       "release-evidence/v0.6.1/README.md",
       "release-evidence/v0.6.1/manifest.json",
+      "release-evidence/v0.7.0/README.md",
+      "release-evidence/v0.7.0/manifest.json",
       "schemas/closure-state-v1.schema.json",
       "schemas/acceptance-profile-v1.schema.json",
       "schemas/closure-config-v1.schema.json",
+      "protocol/ASSURANCE_PROTOCOL.md",
+      "protocol/EXPERIMENT.md",
+      "protocol/schemas/assurance-trace-v1.schema.json",
+      "protocol/schemas/assurance-result-v1.schema.json",
+      "protocol/conformance/cases.jsonl",
+      "protocol/examples/empty-trace.json",
+      "protocol/examples/minimal-ready-trace.json",
       "en/runtime/closure-env.js",
       "en/runtime/process-cleanup.js",
       "en/flows/steadyspec-verify-flow/SKILL.md",
@@ -4344,7 +4376,7 @@ function checkV06PackedInstall(root, pkg) {
     const leaked = [...packedFiles].filter((relative) => forbiddenPrefixes.some((prefix) => relative === prefix.slice(0, -1) || relative.startsWith(prefix)));
     if (leaked.length) throw new Error(`packed tarball leaked workspace paths: ${leaked.join(", ")}`);
 
-    writePackedSmokeJson(path.join(installDir, "package.json"), { name: "steadyspec-v06-packed-smoke", version: "1.0.0", private: true });
+    writePackedSmokeJson(path.join(installDir, "package.json"), { name: "steadyspec-packed-smoke", version: "1.0.0", private: true });
     validationProgress("install-isolated-global-prefix");
     const installResult = packedSmokeProcess(process.execPath, [npmCli, "install", "--global", "--prefix", globalPrefix, "--ignore-scripts", "--no-audit", "--no-fund", "--offline", tarball], installDir, 120000);
     if (installResult.status !== 0) throw packedSmokeFailure("isolated global npm install", installResult);
@@ -4364,6 +4396,20 @@ function checkV06PackedInstall(root, pkg) {
     for (const anchor of ["--evaluator-start", "--import-evaluator", "--decide <resume|approve|reject|reopen|abandon>"]) {
       if (!(help.stdout || "").includes(anchor)) throw new Error(`installed closure --help missing ${anchor}`);
     }
+
+    const assuranceTrace = path.join(installDir, "assurance-empty-trace.json");
+    const assuranceHelp = runInstalledShim(shim, ["assurance", "--help"], installDir);
+    if (assuranceHelp.status !== 0 || !/valid input, not ready-for-human/.test(assuranceHelp.stdout || "") || !(assuranceHelp.stdout || "").includes("project-v06")) throw new Error("installed assurance help lost the validity/authority or compatibility boundary");
+    writePackedSmokeJson(assuranceTrace, { schemaVersion: 1, protocolVersion: "0.7", lineageId: "packed-empty", events: [] });
+    const assurance = runInstalledShim(shim, ["assurance", "reduce", "--trace", assuranceTrace, "--json"], installDir);
+    const assuranceJson = parsePackedSmokeJson("installed assurance reduce", assurance);
+    if (assurance.status !== 0 || assuranceJson.assuranceState !== "target-required" || assuranceJson.ok !== true) throw new Error("installed assurance reference process did not preserve the empty-trace contract");
+    const installedReadyTrace = path.join(installedRoot, "protocol", "examples", "minimal-ready-trace.json");
+    const readyAssurance = runInstalledShim(shim, ["assurance", "reduce", "--trace", installedReadyTrace, "--json"], installDir);
+    const readyAssuranceJson = parsePackedSmokeJson("installed assurance ready trace", readyAssurance);
+    if (readyAssurance.status !== 0 || readyAssuranceJson.assuranceState !== "ready-for-human" || readyAssuranceJson.ok !== true) throw new Error("installed assurance reference process did not preserve the minimal-ready trace contract");
+    const installedConformance = packedSmokeProcess(process.execPath, [path.join(installedRoot, "tests", "assurance-conformance.js"), "--implementation", process.execPath, "--arg", path.join(installedRoot, "bin", "assurance.js")], installDir, 60000);
+    if (installedConformance.status !== 0 || !/profiles=core cases=51/.test(installedConformance.stdout || "")) throw packedSmokeFailure("installed assurance core conformance", installedConformance);
 
     const init = runInstalledShim(shim, ["init", "--runtime", "codex", "--substrate", "docs", "--closure", "manual", "--force"], installDir, 60000);
     if (init.status !== 0) throw packedSmokeFailure("installed init", init);
@@ -4578,7 +4624,7 @@ function checkV06PackedInstall(root, pkg) {
     fs.rmSync(temp, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   }
   if (failure) fail(`v0.6 fresh packed-install smoke: ${failure.message}`);
-  console.log(`[v0.6.1 source-install smoke] ${JSON.stringify(summary)}`);
+  console.log(`[v0.7 source-install smoke] ${JSON.stringify(summary)}`);
 }
 
 async function main() {
@@ -4616,6 +4662,38 @@ async function main() {
 
   const selected = (name) => args.suite === "all" || args.suite === name;
 
+  if (selected("assurance")) await runValidationSuite("assurance", async () => {
+    const required = [
+      "protocol/ASSURANCE_PROTOCOL.md",
+      "protocol/EXPERIMENT.md",
+      "protocol/schemas/assurance-trace-v1.schema.json",
+      "protocol/schemas/assurance-result-v1.schema.json",
+      "protocol/conformance/cases.jsonl",
+      "protocol/examples/empty-trace.json",
+      "protocol/examples/minimal-ready-trace.json",
+      "bin/assurance.js",
+      "tests/assurance-conformance.js",
+      "tests/fixtures/assurance/always-ready.js",
+      "tests/fixtures/assurance/incomplete-result.js",
+    ];
+    for (const relative of required) if (!fs.existsSync(path.join(root, relative))) fail(`assurance surface missing ${relative}`);
+    for (const relative of required.filter((item) => item.endsWith(".json"))) readJson(path.join(root, relative));
+    const traceSchema = readJson(path.join(root, "protocol", "schemas", "assurance-trace-v1.schema.json"));
+    if (traceSchema.$defs?.trimmedString?.pattern !== "^\\S(?:[\\s\\S]*\\S)?$") fail("assurance trace schema lost the reducer's trimmed-string acceptance boundary");
+    const occurredAtSchema = traceSchema.$defs?.eventHeader?.properties?.occurredAt;
+    if (occurredAtSchema?.format !== "date-time" || occurredAtSchema?.pattern !== "^\\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\\d|3[01])T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,9})?Z$") fail("assurance trace schema lost the reducer's calendar-valid uppercase-Z timestamp boundary");
+    const caseLines = readText(path.join(root, "protocol/conformance/cases.jsonl")).trim().split(/\r?\n/);
+    if (caseLines.length < 20) fail("assurance conformance catalog lost mandatory case breadth");
+    for (const line of caseLines) JSON.parse(line);
+    for (const anchor of ["experimental protocol candidate", "ready-for-human", "legacy-ready-claim-unverified", "Snapshot/currentness limit", "restricted canonical JSON", "model-independent core process profile", "--include-v06-projection", "complete strict result"]) requireText(root, "protocol/ASSURANCE_PROTOCOL.md", anchor);
+    const runnerText = readText(path.join(root, "tests", "assurance-conformance.js"));
+    for (const anchor of ["resultSchemaPath", "schemaErrors(output, resultSchema)", "protocolFingerprint(\"result\"", "includeV06Projection", "v06-projection"]) if (!runnerText.includes(anchor)) fail(`assurance conformance runner missing strict/profile boundary: ${anchor}`);
+    const result = spawnSync(process.execPath, [path.join(root, "tests", "assurance-conformance.js")], { cwd: root, encoding: "utf8", timeout: 60000, windowsHide: true });
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+    if (result.status !== 0) fail(`assurance conformance failed with exit ${result.status}`);
+  });
+
   if (selected("contract")) await runValidationSuite("contract", async () => {
     checkTransportEolEquivalenceContract();
     for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
@@ -4646,7 +4724,7 @@ async function main() {
     checkDocsSubstrateContract(root);
     checkReleaseSurface(root, manifest, pkg);
     checkSourceDistributionDocs(root, pkg);
-    checkActiveV06Identity(root, pkg);
+    checkActiveProductIdentity(root, pkg);
     checkEvidenceContinuityWorkflows(root);
   });
 
@@ -4666,7 +4744,7 @@ async function main() {
   });
 
   if (selected("install")) await runValidationSuite("install", async () => {
-    checkV06PackedInstall(root, pkg);
+    checkPackedInstall(root, pkg);
   });
 
   if (selected("portability")) await runValidationSuite("portability", async () => {

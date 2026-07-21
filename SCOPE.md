@@ -1,10 +1,31 @@
 # SteadySpec Scope and Boundaries
 
-SteadySpec is a reference skill pack of the anti-drift method described in [METHOD.md](METHOD.md). It provides five outward verbs (`explore` / `propose` / `apply` / `verify` / `archive`), each a small closed-loop that orchestrates anti-drift mechanisms with explicit responsibility routing. To deliver on that promise reliably, the source-only v0.6.1 release defines specific boundaries. Read this before adopting.
+SteadySpec contains the anti-drift method described in [METHOD.md](METHOD.md),
+an experimental v0.7 assurance protocol candidate, and a legacy software skill
+pack with five outward verbs (`explore` / `propose` / `apply` / `verify` /
+`archive`). These surfaces have different evidence and adoption boundaries.
 
-## v0.6.1 distribution boundary
+## v0.7 assurance protocol boundary
 
-v0.6.1 is distributed only through the official Git repository and is blocked
+The protocol is domain-neutral vocabulary and deterministic trace behavior, not
+evidence that it is useful in every domain. It binds exact target, candidate,
+evidence, assessment, invalidation, invocation, and declared-decision records.
+Its strongest state is `ready-for-human`, never acceptance or external action
+authority.
+
+v0.7 evidence covers the reference process and reusable black-box conformance
+cases, including a deliberately bad implementation. It does not cover causal
+reduction of drift, human burden, or recovery cost; external adoption; actor
+authentication; remote attestation; newest-snapshot rollback protection; team
+coordination; or semantic truth. Existing Codex/Claude workflows and the v0.6
+closure engine are not claimed to be conformant thin adapters.
+
+The protocol can be evaluated without installing the five verbs. Conversely,
+users may adopt the method or software recipe without using the protocol.
+
+## v0.7 source distribution boundary
+
+v0.7.0 is distributed only through the official Git repository and is blocked
 from npm publication by `package.json`. Users install a locally built tarball
 from a trusted tag or commit. Local validation and CI are bounded evidence, not
 registry publication, third-party adoption, semantic truth, or human release
@@ -71,7 +92,10 @@ The lane lets the agent expand directions, draft evidence contracts, pressure-te
 
 ## Single-developer assumption
 
-SteadySpec v0.6 is designed for **one author per change**. The "human" referenced in skills (`steadyspec-human-decision-record`, `steadyspec-strategy-rollup`, `verify-flow`, archive gates) means **future-you or a successor** — someone who needs to re-evaluate decisions without the original context.
+The legacy software skill pack is designed for **one author per change**. The
+"human" referenced in skills (`steadyspec-human-decision-record`,
+`steadyspec-strategy-rollup`, `verify-flow`, archive gates) means future-you or
+a successor who needs to re-evaluate decisions without the original context.
 
 What this means in practice:
 
@@ -93,8 +117,8 @@ To save users from misaligned expectations:
 - **It does not replace tests.** Tests are one form of observable check. SteadySpec asks whether the right thing was built; tests verify whether the built thing works.
 - **It does not enforce its own use.** You can install SteadySpec and never invoke a single verb. The package will not complain.
 - **Its support commands are bounded, not new methodology verbs.** In addition
-  to `init` and docs-mode `check`, the CLI exposes `cross-review`, `closure`,
-  and `hooks`. There is no top-level `update`, project-level `uninstall`, or
+  to `init` and docs-mode `check`, the CLI exposes `assurance`, `cross-review`,
+  `closure`, and `hooks`. There is no top-level `update`, project-level `uninstall`, or
   general `status`. `check` proves declared docs structure, not semantics;
   cross-review and closure retain their separate evidence limits. Upgrade by
   pinning and validating a new source revision, then previewing `init --force`.
@@ -117,7 +141,15 @@ SteadySpec applies its own method to itself. The records of those self-applicati
 - Successors inheriting the source repo may not see `.meta/`. That is intentional. Read the public CHANGELOG.md and `git log` for the durable history.
 - Treat `.meta/changes/` as SteadySpec's private substrate. **Do not adopt it as your project's substrate.** Use one of the substrates documented in the user-facing recipes.
 
-## Deciding whether SteadySpec fits your project
+## Deciding whether the protocol fits
+
+Use the v0.7 protocol candidate when an exact snapshot may cross agents,
+contexts, interruptions, or days and a stale or fabricated readiness claim
+would be materially costly. Do not use it merely to add ceremony to a short
+task. Until comparative pilots exist, treat adoption as dogfood and measure its
+burden against the strongest unassisted agent available to you.
+
+## Deciding whether the legacy software recipe fits your project
 
 SteadySpec fits when **all** of these are true:
 
@@ -127,4 +159,6 @@ SteadySpec fits when **all** of these are true:
 3. You expect the work to live long enough that future-you (or a successor) will need the records.
 4. You are willing to invoke the five verbs explicitly when the situation calls for them.
 
-If any of those is false, SteadySpec v0.6 is not the right fit. Use a lighter or different tool.
+If any of those is false, the legacy software recipe is not the right fit. Use
+a lighter or different tool; this does not by itself decide whether the smaller
+protocol surface is useful.

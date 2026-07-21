@@ -24,6 +24,8 @@ jobs:
           node-version: ${{ matrix.node }}
       - name: Contract suite
         run: npm run validate:contract
+      - name: Assurance conformance suite
+        run: npm run validate:assurance
       - name: Cross-review suite
         run: npm run validate:cross-review
       - name: Closure and transaction suite
@@ -52,7 +54,10 @@ jobs:
           $schemaFiles = @(
             'schemas/closure-state-v1.schema.json',
             'schemas/acceptance-profile-v1.schema.json',
-            'schemas/closure-config-v1.schema.json'
+            'schemas/closure-config-v1.schema.json',
+            'protocol/schemas/assurance-trace-v1.schema.json',
+            'protocol/schemas/assurance-result-v1.schema.json',
+            'protocol/conformance/cases.jsonl'
           )
           foreach ($schema in $schemaFiles) {
             $attr = git check-attr eol -- $schema
@@ -63,6 +68,7 @@ jobs:
             }
           }
           npm run validate:portability
+          npm run validate:assurance
           npm run validate:install
           git diff --exit-code
 
@@ -87,6 +93,7 @@ jobs:
           git checkout --detach 25cc20eb3f8a77d6972ce04b949533c1925a81d6
           git checkout --detach $target
           npm run validate:contract
+          npm run validate:assurance
           npm run validate:cross-review
           npm run validate:closure
           if (git status --porcelain) { throw 'upgrade replay changed tracked files' }

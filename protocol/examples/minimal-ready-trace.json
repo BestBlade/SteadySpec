@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "protocolVersion": "0.7",
+  "lineageId": "lineage-main",
+  "events": [
+    {
+      "schemaVersion": 1,
+      "protocolVersion": "0.7",
+      "lineageId": "lineage-main",
+      "eventId": "event-target",
+      "sequence": 1,
+      "priorEventFingerprint": null,
+      "occurredAt": "2026-07-22T00:00:01Z",
+      "type": "target-bound",
+      "payload": {
+        "target": {
+          "targetId": "target-main",
+          "artifacts": [
+            {
+              "id": "intent",
+              "locator": "spec/intent.md",
+              "contentDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "byteLength": 12
+            }
+          ],
+          "criteria": [
+            {
+              "id": "criterion-main",
+              "required": true,
+              "requiredEvidence": [
+                {
+                  "id": "proof-main",
+                  "allowedSourceClasses": [
+                    "deterministic-check"
+                  ]
+                }
+              ]
+            }
+          ],
+          "authority": {
+            "finalDecision": "human"
+          }
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "protocolVersion": "0.7",
+      "lineageId": "lineage-main",
+      "eventId": "event-candidate",
+      "sequence": 2,
+      "priorEventFingerprint": "sha256:10b242d9c5320f97d8cb005a2d1ccc82844469ba2e5b0c05b31fb924a1bbbf26",
+      "occurredAt": "2026-07-22T00:00:02Z",
+      "type": "candidate-bound",
+      "payload": {
+        "candidate": {
+          "candidateId": "candidate-main",
+          "targetFingerprint": "sha256:5f864613b680c6359a851a3ba3d2a0ca0dbe0c9ee654548d781b8273cb66107b",
+          "artifacts": [
+            {
+              "id": "output",
+              "locator": "dist/output.bin",
+              "contentDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "byteLength": 34
+            }
+          ]
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "protocolVersion": "0.7",
+      "lineageId": "lineage-main",
+      "eventId": "event-evidence",
+      "sequence": 3,
+      "priorEventFingerprint": "sha256:2f11cb7012f7bf109faac0e4a8e4b3ef9cdf6f6cf245ae019be6484852678ee2",
+      "occurredAt": "2026-07-22T00:00:03Z",
+      "type": "evidence-recorded",
+      "payload": {
+        "evidence": {
+          "evidenceId": "evidence-main",
+          "targetFingerprint": "sha256:5f864613b680c6359a851a3ba3d2a0ca0dbe0c9ee654548d781b8273cb66107b",
+          "candidateFingerprint": "sha256:a0751c9fb6f4f2ad30b10431d5949135a27a443a399915756b87b0450a49f511",
+          "observations": [
+            {
+              "id": "proof-main",
+              "criterionId": "criterion-main",
+              "sourceClass": "deterministic-check",
+              "outcome": "pass",
+              "claim": "The declared behavior passed the deterministic check.",
+              "artifacts": [
+                {
+                  "id": "proof-log",
+                  "locator": "evidence/proof.log",
+                  "contentDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "byteLength": 56
+                }
+              ],
+              "coverageLimitIds": []
+            }
+          ],
+          "unresolvedUnknowns": [],
+          "coverageLimits": [],
+          "fallbacks": []
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "protocolVersion": "0.7",
+      "lineageId": "lineage-main",
+      "eventId": "event-start",
+      "sequence": 4,
+      "priorEventFingerprint": "sha256:f033a14f60454bb7774116b3115798d6747592500ebe81fddf106cb8eaa81d10",
+      "occurredAt": "2026-07-22T00:00:04Z",
+      "type": "assessment-started",
+      "payload": {
+        "invocation": {
+          "invocationId": "invocation-main",
+          "targetFingerprint": "sha256:5f864613b680c6359a851a3ba3d2a0ca0dbe0c9ee654548d781b8273cb66107b",
+          "candidateFingerprint": "sha256:a0751c9fb6f4f2ad30b10431d5949135a27a443a399915756b87b0450a49f511",
+          "evidenceFingerprint": "sha256:eec2d3db154d016dd4a725862a8676416bf2e260068be47b6d2bbea6bb2895c8",
+          "assessor": {
+            "kind": "agent",
+            "label": "fixture-reviewer",
+            "independence": "same-family"
+          },
+          "transport": "fixture-process"
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "protocolVersion": "0.7",
+      "lineageId": "lineage-main",
+      "eventId": "event-complete",
+      "sequence": 5,
+      "priorEventFingerprint": "sha256:3012c7668bf64da0d416e79d99d1f87af88d2543402c6aceea976e10b547648e",
+      "occurredAt": "2026-07-22T00:00:05Z",
+      "type": "assessment-completed",
+      "payload": {
+        "assessment": {
+          "assessmentId": "assessment-main",
+          "invocationId": "invocation-main",
+          "targetFingerprint": "sha256:5f864613b680c6359a851a3ba3d2a0ca0dbe0c9ee654548d781b8273cb66107b",
+          "candidateFingerprint": "sha256:a0751c9fb6f4f2ad30b10431d5949135a27a443a399915756b87b0450a49f511",
+          "evidenceFingerprint": "sha256:eec2d3db154d016dd4a725862a8676416bf2e260068be47b6d2bbea6bb2895c8",
+          "proposedOutcome": "ready-for-human",
+          "criterionResults": [
+            {
+              "id": "criterion-main",
+              "result": "pass",
+              "basisEvidenceIds": [
+                "proof-main"
+              ]
+            }
+          ],
+          "findings": [],
+          "unresolvedUnknowns": [],
+          "coverageLimits": []
+        }
+      }
+    }
+  ]
+}

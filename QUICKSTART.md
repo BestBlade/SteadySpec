@@ -1,10 +1,64 @@
 # SteadySpec Quick Start
 
-SteadySpec is a reference skill pack of the anti-drift method. Five outward verbs, each a small closed-loop with anti-drift gates and responsibility routing. Read [SCOPE.md](SCOPE.md) before adopting.
+SteadySpec contains an anti-drift method, an experimental v0.7 assurance
+protocol candidate, and a legacy five-verb software skill pack. Read
+[SCOPE.md](SCOPE.md) before adopting.
+
+## Two-minute assurance demo
+
+From a source checkout, run:
+
+```bash
+node bin/assurance.js reduce --trace protocol/examples/empty-trace.json --json
+node bin/assurance.js reduce --trace protocol/examples/minimal-ready-trace.json --json
+npm run validate:assurance
+```
+
+The first result is valid but reports `target-required`; exit 0 means the trace
+is valid, not ready. The second trace is a complete synthetic example and
+returns `ready-for-human`; it is not evidence about this repository. The suite
+runs 53 static black-box cases: 51 model-independent core cases plus two
+explicit v0.6 projection-extension cases. It also checks that an always-ready
+mutant and an incomplete/forged-result mutant fail the core profile. No skill
+installation, project initialization, closure configuration, proof command, or
+agent account is needed.
+
+Read [protocol/ASSURANCE_PROTOCOL.md](protocol/ASSURANCE_PROTOCOL.md) before
+building a real trace. Use `steadyspec assurance fingerprint --domain <name>
+--input <file> --json` to reproduce protocol identities. A passing result is
+bounded process evidence, not semantic truth or human acceptance.
+
+To test another implementation as an external process, inspect the runner help
+and pass its executable plus repeated argv prefixes:
+
+```bash
+node tests/assurance-conformance.js --help
+node tests/assurance-conformance.js --implementation node --arg bin/assurance.js
+```
+
+Custom implementations run only the 51-case `core` profile. A process that also
+implements SteadySpec's optional legacy projection can opt into the two
+extension cases:
+
+```bash
+node tests/assurance-conformance.js --implementation node --arg bin/assurance.js --include-v06-projection
+```
+
+These negative controls are expected to exit non-zero because one claims every
+trace is ready and the other removes required result fields or forges the
+result fingerprint:
+
+```bash
+node tests/assurance-conformance.js --implementation node --arg tests/fixtures/assurance/always-ready.js
+node tests/assurance-conformance.js --implementation node --arg tests/fixtures/assurance/incomplete-result.js
+```
+
+The protocol/schema/conformance surfaces are experimental before 1.0 and may
+change incompatibly under a new `protocolVersion`.
 
 ## Source-only install
 
-SteadySpec v0.6.1 is **not published to the npm registry**. Do not run a
+SteadySpec v0.7.0 is **not published to the npm registry**. Do not run a
 registry install or `npx steadyspec`; an unqualified registry package is not a
 supported distribution of this project. Install only from the official source
 repository, pinned to a trusted tag or commit.
@@ -21,7 +75,7 @@ git rev-parse HEAD
 node --version  # must be 18 or newer
 npm run validate
 npm pack
-npm install --global .\steadyspec-0.6.1.tgz
+npm install --global .\steadyspec-0.7.0.tgz
 steadyspec --help
 ```
 
@@ -48,6 +102,9 @@ be required. Agent-assisted installation is not a second opaque installer.
 Auto-detects `.claude/` or `.codex/` in your project. Pass `--runtime claude` or `--runtime codex` to override. If both `openspec/` and `docs/changes/` exist, init prompts which substrate is canonical (`--substrate openspec` or `--substrate docs` to bypass the prompt). For docs-mode projects, `init` also installs a structural contract and templates under `.steadyspec/substrates/docs/`.
 
 ## Optional v0.6 closure under verify
+
+This is an advanced legacy recipe. It is not the normative v0.7 protocol or a
+required first-use path.
 
 Closure is opt-in support for long `verify` work; it is not a sixth governed
 verb. Start with manual routing:

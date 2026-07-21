@@ -1,10 +1,12 @@
 # SteadySpec 方法
 
-SteadySpec 是一个反漂移方法。v1 软件包把它应用在了软件 SDD 上，但方法本身关乎所有长时间的工作——那些意图、决策、产出、验证和最终记录会相互偏离的工作。
+SteadySpec 是一个反漂移方法。legacy 软件包把它应用在了软件 SDD 上，但方法本身关乎所有长时间的工作——那些意图、决策、产出、验证和最终记录会相互偏离的工作。
 
 核心主张很简单：工作失败通常不是因为没人写过意图。工作失败是因为后来的执行悄悄地编辑了意图，决策失去了归属者，验证被误当成真相，最终记录被清理干净了，以至于它不再描述实际发生过什么。
 
-本文档是这套方法的可移植版本。`recipes/software-sdd.md` 是软件参考实现。
+本文档是这套方法的可移植版本。[Assurance Protocol Candidate 0.7](../protocol/ASSURANCE_PROTOCOL.md)
+从方法中抽出一个机器可检查的声明边界；它不替代八条机制，也没有证明现实效果。
+[`recipes/software-sdd.md`](../recipes/software-sdd.md) 是 legacy 软件参考 recipe。
 
 ## 工作是怎么漂移的
 

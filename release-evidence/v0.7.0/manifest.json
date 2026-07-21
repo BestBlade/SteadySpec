@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "version": "0.7.0",
+  "protocolVersion": "0.7",
+  "captureState": "pre-release-candidate",
+  "capture": {
+    "observedAt": "2026-07-22",
+    "sourceIdentity": "uncommitted-working-tree",
+    "baseCommit": "d3438ea0d6b4bc196ff46c055b7360c5f63c5bc4",
+    "branch": "codex/v0.7-assurance-core",
+    "remoteResultsIncluded": false
+  },
+  "distribution": {
+    "kind": "official-git-source-plus-local-tarball",
+    "npmRegistryPublished": false,
+    "npmPublicationBlocked": true,
+    "intendedTag": "v0.7.0",
+    "remoteReleaseState": "external-to-capture"
+  },
+  "evidence": {
+    "assuranceConformance": "pass-local-53-total-51-core",
+    "alwaysReadyNegativeControl": "rejected-by-local-suite",
+    "contract": "pass-local",
+    "crossReview": "pass-local",
+    "closure": "pass-local",
+    "install": "pass-local",
+    "portability": "pass-local",
+    "composite": "pass-local-after-one-earlier-candidate-flake",
+    "windowsCiAtCapture": "not-observed",
+    "linuxCiAtCapture": "not-observed",
+    "comparativeEffectiveness": "not-run"
+  },
+  "authorityAtCapture": {
+    "humanAccepted": false,
+    "tagAuthorized": false,
+    "githubReleaseAuthorized": false,
+    "npmPublishAuthorized": false
+  }
+}

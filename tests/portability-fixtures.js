@@ -45,7 +45,7 @@ function schemaLineEndingContracts() {
 
 function repositoryLineEndingContract() {
   const attributes = fs.readFileSync(path.resolve(__dirname, "..", ".gitattributes"), "utf8");
-  for (const required of ["*.js text eol=lf", "*.json text eol=lf", "*.md text eol=lf", "*.yml text eol=lf", "*.yaml text eol=lf"]) {
+  for (const required of ["*.js text eol=lf", "*.json text eol=lf", "*.jsonl text eol=lf", "*.md text eol=lf", "*.yml text eol=lf", "*.yaml text eol=lf"]) {
     assert(attributes.includes(required), `.gitattributes missing ${required}`);
   }
 }

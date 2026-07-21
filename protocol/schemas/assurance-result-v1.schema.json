@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://steadyspec.dev/protocol/schemas/assurance-result-v1.schema.json",
+  "title": "SteadySpec assurance reduction result v1",
+  "oneOf": [
+    { "$ref": "#/$defs/valid" },
+    { "$ref": "#/$defs/invalid" }
+  ],
+  "$defs": {
+    "fingerprint": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "nullableFingerprint": { "oneOf": [{ "$ref": "#/$defs/fingerprint" }, { "type": "null" }] },
+    "state": { "enum": ["target-required", "candidate-required", "evidence-required", "assessment-required", "assessment-running", "remediation-required", "ready-for-human", "needs-human", "blocked", "abandoned"] },
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" },
+    "trimmedString": { "type": "string", "minLength": 1, "pattern": "^\\S(?:[\\s\\S]*\\S)?$" },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "locator", "contentDigest", "byteLength"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "locator": { "$ref": "#/$defs/trimmedString" },
+        "contentDigest": { "$ref": "#/$defs/fingerprint" },
+        "byteLength": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+      }
+    },
+    "unknown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "status"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "statement": { "$ref": "#/$defs/trimmedString" }, "status": { "const": "unresolved" } }
+    },
+    "coverageLimit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "statement": { "$ref": "#/$defs/trimmedString" } }
+    },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "forEvidenceId"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "statement": { "$ref": "#/$defs/trimmedString" }, "forEvidenceId": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] } }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "blocksReadiness", "status"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "statement": { "$ref": "#/$defs/trimmedString" }, "blocksReadiness": { "type": "boolean" }, "status": { "enum": ["open", "resolved"] } }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targetFingerprint", "candidateFingerprint", "evidenceFingerprint", "assessmentFingerprint"],
+      "properties": {
+        "targetFingerprint": { "$ref": "#/$defs/nullableFingerprint" },
+        "candidateFingerprint": { "$ref": "#/$defs/nullableFingerprint" },
+        "evidenceFingerprint": { "$ref": "#/$defs/nullableFingerprint" },
+        "assessmentFingerprint": { "$ref": "#/$defs/nullableFingerprint" }
+      }
+    },
+    "activeInvocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["invocationId", "targetFingerprint", "candidateFingerprint", "evidenceFingerprint", "assessor", "transport", "status", "startedByEventId"],
+      "properties": {
+        "invocationId": { "$ref": "#/$defs/id" },
+        "targetFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "candidateFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "evidenceFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "assessor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "label", "independence"],
+          "properties": {
+            "kind": { "enum": ["agent", "human", "tool", "mixed"] },
+            "label": { "$ref": "#/$defs/trimmedString" },
+            "independence": { "enum": ["same-context", "same-family", "external", "unknown"] }
+          }
+        },
+        "transport": { "$ref": "#/$defs/trimmedString" },
+        "status": { "enum": ["live", "stale-active"] },
+        "startedByEventId": { "$ref": "#/$defs/id" },
+        "invalidatedByEventId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "invalidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["layer", "previousFingerprint", "causedByEventId", "causedBySequence"],
+      "properties": {
+        "layer": { "enum": ["target", "candidate", "evidence", "assessment"] },
+        "previousFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "causedByEventId": { "$ref": "#/$defs/id" },
+        "causedBySequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decisionId", "action", "claimedActorClass", "authentication", "reason", "invocationId", "bindings", "current", "recordedByEventId"],
+      "properties": {
+        "decisionId": { "$ref": "#/$defs/id" },
+        "action": { "enum": ["authorize-assessment-retry", "accept-current", "reject-current", "defer-current", "abandon"] },
+        "claimedActorClass": { "const": "human" },
+        "authentication": { "const": "unverified" },
+        "reason": { "$ref": "#/$defs/trimmedString" },
+        "invocationId": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+        "bindings": { "$ref": "#/$defs/bindings" },
+        "current": { "type": "boolean" },
+        "recordedByEventId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "valid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "protocolVersion", "ok", "lineageId", "assuranceState", "nextAction", "acceptedSequence", "headEventFingerprint", "traceFingerprint", "bindings", "activeInvocation", "invalidations", "unresolvedUnknowns", "coverageLimits", "fallbacks", "findings", "decisions", "authorityBoundary", "resultFingerprint"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "protocolVersion": { "const": "0.7" },
+        "ok": { "const": true },
+        "lineageId": { "$ref": "#/$defs/id" },
+        "assuranceState": { "$ref": "#/$defs/state" },
+        "nextAction": { "$ref": "#/$defs/trimmedString" },
+        "acceptedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "headEventFingerprint": { "$ref": "#/$defs/nullableFingerprint" },
+        "traceFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "bindings": { "$ref": "#/$defs/bindings" },
+        "activeInvocation": { "oneOf": [{ "$ref": "#/$defs/activeInvocation" }, { "type": "null" }] },
+        "invalidations": { "type": "array", "items": { "$ref": "#/$defs/invalidation" } },
+        "unresolvedUnknowns": { "type": "array", "items": { "$ref": "#/$defs/unknown" } },
+        "coverageLimits": { "type": "array", "items": { "$ref": "#/$defs/coverageLimit" } },
+        "fallbacks": { "type": "array", "items": { "$ref": "#/$defs/fallback" } },
+        "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+        "decisions": { "type": "array", "items": { "$ref": "#/$defs/decision" } },
+        "authorityBoundary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["finalDecision", "actorAuthentication", "grantsExternalAuthority"],
+          "properties": {
+            "finalDecision": { "const": "human" },
+            "actorAuthentication": { "const": "unverified" },
+            "grantsExternalAuthority": { "const": false }
+          }
+        },
+        "resultFingerprint": { "$ref": "#/$defs/fingerprint" }
+      }
+    },
+    "invalid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "protocolVersion", "ok", "error"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "protocolVersion": { "const": "0.7" },
+        "ok": { "const": false },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "path", "eventId", "sequence", "message"],
+          "properties": {
+            "code": { "type": "string", "pattern": "^E_[A-Z0-9_]+$" },
+            "path": { "type": ["string", "null"] },
+            "eventId": { "type": ["string", "null"] },
+            "sequence": { "type": ["integer", "null"] },
+            "message": { "$ref": "#/$defs/trimmedString" }
+          }
+        },
+        "diagnosticContext": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["nonAuthoritative", "acceptedSequence", "lastValidState"],
+          "properties": {
+            "nonAuthoritative": { "const": true },
+            "acceptedSequence": { "type": "integer", "minimum": 0 },
+            "lastValidState": { "$ref": "#/$defs/state" }
+          }
+        }
+      }
+    }
+  }
+}

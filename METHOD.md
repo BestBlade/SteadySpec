@@ -4,7 +4,11 @@ SteadySpec is an anti-drift method. The v1 package applies it to software spec-d
 
 The core claim is simple: work does not usually fail because people never wrote an intent. It fails because later execution quietly edits the intent, decisions lose their owner, validation is mistaken for truth, and the final record is cleaned up until it no longer describes what happened.
 
-Use this document as the portable method. Use `recipes/software-sdd.md` as the software reference implementation.
+Use this document as the portable method. The experimental
+[Assurance Protocol Candidate 0.7](protocol/ASSURANCE_PROTOCOL.md) extracts a
+machine-checkable claim boundary from the method; it does not replace these
+eight mechanisms or prove their real-world effect. Use `recipes/software-sdd.md`
+as the legacy software reference recipe.
 
 ## How Work Drifts
 

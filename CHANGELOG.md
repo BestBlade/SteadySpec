@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.7.0 (experimental assurance protocol candidate)
+
+v0.7 separates SteadySpec's method, assurance protocol, implementations/
+adapters, and recipes without rewriting the working v0.6 closure lane.
+
+- **NEW: model- and role-independent protocol candidate.** Exact target,
+  candidate, evidence, assessment, invocation, invalidation, and declared
+  decision bindings determine one bounded assurance state. Critic, Builder,
+  Evaluator, the five verbs, and six software review dimensions are not core
+  requirements.
+- **NEW: restricted canonical JSON and domain-separated fingerprints.** Static
+  vectors cover key order, Unicode, line-ending identity, safe integers,
+  duplicate keys, and hash domains.
+- **NEW: reusable black-box conformance.** The runner accepts an arbitrary
+  executable/argv implementation, never imports reducer internals, validates
+  strict result shape, independently recomputes result fingerprints, and must
+  reject deliberately bad always-ready and malformed/forged-result processes.
+  The model-independent core profile is separate from the optional v0.6
+  projection extension.
+- **NEW: dependency-free reference process.** `steadyspec assurance reduce`,
+  `fingerprint`, and `project-v06` expose the protocol process boundary.
+- **ALIGNED: normative acceptance domain.** Trace schema and reducer both
+  require trimmed structured strings and calendar-valid uppercase-`Z` event
+  timestamps; invalid dates and `24:00` fail closed.
+- **COMPATIBILITY: honest legacy projection.** v0.6 state projection is
+  read-only, lossy, and non-conformant. A legacy `candidate-ready` state never
+  upgrades to v0.7 readiness without artifact reconstruction, which is
+  deferred.
+- **BOUNDARY: no effectiveness claim.** v0.7 preregisters a later
+  counterfactual pilot but ships no dataset, experiment result, external
+  adoption claim, actor authentication, or semantic-correctness guarantee.
+- **DISTRIBUTION: source-only remains.** The package is private and is not
+  published to the npm registry.
+
 ## 0.6.1 (source-only reliability correction)
 
 v0.6.1 repairs the third-party source distribution and validation boundary of

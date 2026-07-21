@@ -1,13 +1,20 @@
 # SteadySpec
 
-### Anti-drift methodology — packaged for software SDD, applicable beyond
+### Anti-drift method, experimental assurance protocol, and software SDD recipe
 
 Substrate-agnostic SDD methodology built around drift defense. This package is standalone: humans read it to understand the method; agents configure and install it for a target runtime.
 
-SteadySpec v0.6.1 is a source-distributed reference implementation of a general
-anti-drift method in the software spec-driven-development setting. It is not
+SteadySpec v0.7.0 is source-distributed. It separates the portable method, an
+experimental assurance protocol candidate, implementations/adapters, and the
+legacy software SDD recipe. It is not
 published to the npm registry. Use only the official Git repository pinned to a
 trusted tag or commit; do not use a registry install or `npx steadyspec`.
+
+The normative protocol candidate is
+[`../protocol/ASSURANCE_PROTOCOL.md`](../protocol/ASSURANCE_PROTOCOL.md). Its
+strongest claim, `ready-for-human`, is bounded input to a human checkpoint, not
+acceptance, semantic truth, merge, or release authority. Existing runtime
+workflows are not yet claimed as thin conformant adapters.
 
 The root README is the current English product overview. The `zh/` directory
 contains the maintained Chinese overview and operating guide.
@@ -53,12 +60,20 @@ When a user asks an agent to use this package in a project, the agent should:
 5. Use `steadyspec-workflow` when unsure which phase should run next.
 
 The init command auto-detects `.claude/` or `.codex/`; pass `--runtime claude`
-or `--runtime codex` to override. The bounded support CLI also provides docs
-`check`, `cross-review`, `closure`, and `hooks`; these are support commands, not
-new governed verbs. There is no top-level `update`, project-level `uninstall`,
-or general `status` command.
+or `--runtime codex` to override. `assurance` is an independent experimental
+protocol process. The legacy recipe support CLI provides docs `check`,
+`cross-review`, `closure`, and `hooks`; these are support commands, not new
+governed verbs. There is no top-level `update`, project-level `uninstall`, or
+general `status` command.
 
 ## Human Reading Path
+
+For the assurance protocol, read
+[`../protocol/ASSURANCE_PROTOCOL.md`](../protocol/ASSURANCE_PROTOCOL.md), its
+[`schemas`](../protocol/schemas/), static
+[`conformance cases`](../protocol/conformance/cases.jsonl), and the
+[`preregistered experiment`](../protocol/EXPERIMENT.md). These pre-1.0 surfaces
+are experimental and may change incompatibly under a new `protocolVersion`.
 
 For method study, read:
 

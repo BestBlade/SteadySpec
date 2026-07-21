@@ -1,8 +1,15 @@
 # SteadySpec Workflow Artifact Contract
 
-This file records the shared artifact contract for the Claude workflow scripts.
-It is intentionally small and manual. The workflow scripts remain the source of
-runtime behavior; this file names the formats they must agree on.
+This file records the shared artifact contract for the legacy bundled software
+workflow and closure recipe. Within that legacy surface, the workflow scripts
+remain the source of runtime behavior and this file names the formats they must
+agree on.
+
+It is not the normative source for the experimental v0.7 assurance protocol.
+That source is [protocol/ASSURANCE_PROTOCOL.md](protocol/ASSURANCE_PROTOCOL.md),
+with strict trace/result schemas and process conformance under `protocol/`.
+The legacy v0.6 closure lane has only a lossy state projection and is not
+claimed to be a conformant thin adapter.
 
 ## Scope
 

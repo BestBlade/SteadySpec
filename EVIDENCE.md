@@ -87,6 +87,20 @@ This section records the pre-release candidate capture. Current tag, GitHub
 Release, and remote CI status are external evidence and must be checked against
 the exact remote SHA; this historical capture is not itself a release claim.
 
+## v0.7.0 (experimental assurance protocol candidate)
+
+v0.7 separates the portable method, a model- and role-independent assurance
+protocol candidate, implementations/adapters, and legacy recipes. It adds a
+dependency-free reference reducer, strict trace/result schemas, static
+black-box conformance cases, an always-ready negative control, and a lossy
+non-conformant v0.6 projection. Public replay commands, candidate identity,
+observations, and residual unknowns are in
+[`release-evidence/v0.7.0/`](release-evidence/v0.7.0/README.md).
+
+This is local candidate evidence, not a causal result. It does not show that
+SteadySpec lowers drift or human burden, and it does not authorize a commit,
+tag, GitHub Release, npm publication, or adoption claim.
+
 ## What this proves (and doesn't)
 
 - The method produced a working orchestration layer from a standing start in a single-author setting
@@ -94,6 +108,8 @@ the exact remote SHA; this historical capture is not itself a release claim.
 - The docs-mode checker can reject missing structure and known archive truth hazards before a plain-docs change is treated as structurally ready
 - The v0.5/v0.6 runtimes have bounded local contract and installed-source evidence, with their platform and independence limits preserved
 - v0.6.1 source reliability results can be replayed from the public commands and manifest rather than relying only on the private `.meta` trail
+- v0.7 protocol behavior can be replayed at a black-box process boundary; its
+  effectiveness remains an unanswered experiment
 - The method has NOT been validated on multi-author teams, concurrent changes, or projects with issue-tracker substrates
 
 See [SCOPE.md](SCOPE.md) for what the reference skill pack does and does not promise.
