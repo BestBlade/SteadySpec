@@ -1,0 +1,11 @@
+{
+  "contractVersion": 1,
+  "status": "superseded-pre-release-contract",
+  "sourceCommit": "82da4603503be47e2b272b26aa618d410fe40fc1",
+  "englishPath": "PRODUCT.md",
+  "englishNormalizedSha256": "c03077a1130f3e258bd530a317b8b7f39ae36ac1c835a4aed0594780c4469582",
+  "chinesePath": "zh-PRODUCT.md",
+  "chineseNormalizedSha256": "871055c5b402f8566106003f13b124fa0375af92e1d1a6757feefd5e2080bc4e",
+  "supersededBy": 2,
+  "reason": "v1 prevented silent lifecycle demotion but over-bound the current reference architecture as product purpose"
+}

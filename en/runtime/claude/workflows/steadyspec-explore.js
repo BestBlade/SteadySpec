@@ -195,7 +195,9 @@ const substrateState = await agent(
    Priority:
    ${explicitChangeDir ? `1. USE THIS explicitly provided changeDir: "${explicitChangeDir}". Set primary="custom", changeDir="${explicitChangeDir}", archiveDir="${explicitChangeDir}/archive". Skip all detection.` : '1. No explicit changeDir provided.'}
    2. Read .steadyspec/substrate.json if it exists at ${root}/.steadyspec/substrate.json.
-      If present, extract primary, changeDir (if custom), lastAdopt, schemaVersion.
+      If present, extract primary, changeDir, lastAdopt, schemaVersion. Treat a
+      recorded custom changeDir as context only: custom routing requires an
+      explicit args.changeDir on every invocation.
    3. Auto-detect: if openspec/ exists → primary="openspec", changeDir="openspec/changes".
       If docs/changes/ exists with NNN-* subdirs → primary="docs", changeDir="docs/changes".
       If .meta/changes/ exists → primary="meta", changeDir=".meta/changes".
@@ -212,6 +214,13 @@ const substrateState = await agent(
 if (!substrateState) {
   log('ERROR: Could not read substrate state.')
   return { error: 'substrate-read-failed' }
+}
+if (substrateState.primary === 'custom' && !explicitChangeDir) {
+  return {
+    error: 'custom-change-dir-explicit-required',
+    status: 'blocked',
+    recommendedNext: 'Re-run with the explicit custom changeDir; recorded custom paths are context, not execution authority.',
+  }
 }
 
 log(`Substrate: ${substrateState.primary}${substrateState.exists ? '' : ' (no .steadyspec/substrate.json — recommend adopt)'}`)
@@ -275,22 +284,40 @@ if (effectiveMode === 'topical') {
      1. Read related substrate context — prior changes mentioning keywords from the topic.
         Look in ${archiveDir} for archive index; scan ${changeDir} for active changes.
      2. Surface the topic's known constraints from prior change records.
-     3. Identify at least one open question with a recommended answer.
-     4. List related prior changes that inform this topic.
+     3. Draft a non-canonical delegation boundary. Keep the user's source words,
+        but distinguish Authorized Outcome, Hard Constraints, Challengeable
+        Assumptions, Proposed Means, and Delegated Decisions. Do not freeze a
+        suggested implementation into the Authorized Outcome.
+     4. Identify open consequential challenges, their likely owner, and a
+        recommended answer. An unresolved human-owned challenge stays open.
+     5. List related prior changes that inform this topic.
 
      CRITICAL: Do NOT write any proposal artifacts. Stay in exploration.
      If intent converges, recommend "/steadyspec:propose <draft-intent>" but do NOT auto-transition.
 
-     Report: clarified intent, open questions, related prior changes, recommended next verb.`,
+     Report: clarified intent, draft delegation boundary, open questions,
+     related prior changes, recommended next verb.`,
     { label: 'topical-explore', phase: 'Report', schema: {
       type: 'object',
       properties: {
         clarifiedIntent: { type: 'string' },
+        delegationBoundary: {
+          type: 'object',
+          properties: {
+            authorizedOutcome: { type: 'string' },
+            hardConstraints: { type: 'array', items: { type: 'string' } },
+            challengeableAssumptions: { type: 'array', items: { type: 'string' } },
+            proposedMeans: { type: 'array', items: { type: 'string' } },
+            delegatedDecisions: { type: 'array', items: { type: 'string' } },
+            openChallenges: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['authorizedOutcome', 'hardConstraints', 'challengeableAssumptions', 'proposedMeans', 'delegatedDecisions', 'openChallenges'],
+        },
         openQuestions: { type: 'array', items: { type: 'string' } },
         relatedPriorChanges: { type: 'array', items: { type: 'string' } },
         recommendedNext: { type: 'string' },
       },
-      required: ['clarifiedIntent', 'openQuestions', 'recommendedNext'],
+      required: ['clarifiedIntent', 'delegationBoundary', 'openQuestions', 'recommendedNext'],
     }}
   )
 

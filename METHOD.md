@@ -1,23 +1,39 @@
 # SteadySpec Method
 
-SteadySpec is an anti-drift method. The v1 package applies it to software spec-driven development, but the method itself is about any long-running work where intent, decisions, outputs, validation, and final records can move apart.
+SteadySpec is a method for governing Agent delegation under retained external
+human accountability. Its current product applies the method to consequential
+software work where Agent throughput may exceed what the responsible person can
+practically reperform or inspect item by item.
 
-The core claim is simple: work does not usually fail because people never wrote an intent. It fails because later execution quietly edits the intent, decisions lose their owner, validation is mistaken for truth, and the final record is cleaned up until it no longer describes what happened.
+The method seeks purpose-faithful realization of available Agent capability. It
+addresses two coupled failures: work can drift away from authorized purpose and
+truth, and it can converge too early on a coherent but avoidably weak answer.
+The human may not be the strongest technical implementer; the human remains the
+current authority and consequence bearer for delegation, value, risk, and final
+acceptance. SteadySpec records and routes that relationship but does not create,
+authenticate, transfer, or discharge it.
 
 Use this document as the portable method. The experimental
 [Assurance Protocol Candidate 0.7](protocol/ASSURANCE_PROTOCOL.md) extracts a
 machine-checkable claim boundary from the method; it does not replace these
 eight mechanisms or prove their real-world effect. The software product applies
-the method through the canonical lifecycle `explore -> propose -> apply ->
-verify -> archive`; see [PRODUCT.md](PRODUCT.md) for its continuity and authority
-contract and `recipes/software-sdd.md` for the mapping.
+the method through the current normative, compatibility-protected lifecycle
+`explore -> propose -> apply -> verify -> archive`; see [PRODUCT.md](PRODUCT.md)
+for the stable purpose/current-architecture distinction and
+`recipes/software-sdd.md` for the mapping.
 
 SteadySpec has both rails and wings. The rails reduce silent drift and preserve
-responsibility and truth. The wings help a capable agent recover context,
+responsibility and truth. The wings help an Agent recover context,
 generate better questions, expand technical directions, and pressure-test a
 mainline when the human cannot supply a perfect prompt, implementation plan, or
 temporary domain expertise. Neither side transfers value, risk, direction, or
 final acceptance authority away from the human.
+
+The prompt is not automatically the purpose. The method distinguishes
+authorized outcomes and hard constraints from factual assumptions, problem
+framing, and proposed means. The Agent should challenge the latter and may
+recommend reopening the former, but it must not silently substitute its own
+purpose or risk decision.
 
 ## How Work Drifts
 
@@ -70,7 +86,11 @@ Skip intent (1), and you can't review against it later (5). Skip review (5), and
 
 The mechanisms are checkpoints along a path that work naturally drifts off of — each one catching the drift the previous checkpoint can't see.
 
-The story above happens to be about code. But the pattern (intent drifts, decisions lose their owner, records stop matching reality) is the same whether you're drafting a contract, writing a research paper, or outlining a novel. Swap the nouns; the drift stays the same.
+The story above happens to be about code. Similar failure shapes may appear in
+contracts, research, or creative work, but transfer is a hypothesis rather than
+validated effectiveness. Each domain must first define its own authority,
+evidence, harm, and finalization boundaries; swapping software nouns is not
+enough.
 
 ## Attention And Responsibility
 
@@ -85,7 +105,11 @@ The answer is a responsibility layer:
 3. Collapse low-risk agent-owned detail only after it remains auditable.
 4. Use a trust checkpoint before archive or handoff when confidence matters.
 
-This does not make the method heavier by default. It makes the heavy parts visible only where ownership or risk requires attention.
+This does not make the method heavier by default. It makes the heavy parts
+visible only where ownership or risk requires attention. Attention routing is
+triage, not proof of understanding or discharge of responsibility. When the
+decision basis is not understandable enough, route to deeper review, an
+appropriate expert, narrower delegation, or stop.
 
 ---
 
@@ -122,7 +146,7 @@ These appear throughout the mechanisms. Each names the thing whose absence is wh
 | **Intent record** | A short note, written before work starts, that says what you're trying to do and where the boundary is. The thing you can point at later. |
 | **Observable check** | A concrete signal that something happened — a passing test, a command output you can see, a reviewer's confirmation. Not "I think it works." |
 | **Output-vs-intent review** | After the work, comparing what was built against the original intent — not the tests, not the code quality. "Did we solve the problem we set out to solve?" |
-| **Human-owned decision** | A call about value, risk, priority, or direction that a process can record but cannot make. Only a person can say "this debt is acceptable" or "this risk is mine." |
+| **Human-owned decision** | A call whose authority remains with the responsible human under the current delegation model. An Agent can analyze and recommend; only the authorized principal can accept debt or risk in that relationship. |
 | **Drift** | The quiet gap between what was intended and what actually happened. Not a bug. Not a mistake. The natural tendency of work to wander when nobody's watching the boundary. |
 | **Decision ownership ledger** | A record of meaningful decisions with owner, risk, basis, reversibility, proof signal, override path, alternatives, and status. |
 | **Attention report** | A user-facing summary that shows must-read high-risk/user-owned decisions first, then medium/shared items, while keeping low-risk agent-owned decisions auditable. |
@@ -304,4 +328,7 @@ To adapt SteadySpec to a new domain, map the vocabulary first:
 5. Who owns value or risk decisions?
 6. What record will future workers trust after finalization?
 
-Then copy the eight mechanisms, not the software nouns. A research paper, contract, product brief, or novel outline can all use the same anti-drift shape while using different records and checks.
+Then use the eight mechanisms as a starting template, not a proven universal
+recipe. A research paper, contract, product brief, or novel outline may benefit
+from a similar shape, but the adaptation remains unvalidated until its own
+records, checks, authority, risks, and outcomes are tested.

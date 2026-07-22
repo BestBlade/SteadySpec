@@ -5,7 +5,9 @@ category: Workflow
 tags: [steadyspec, apply, workflow]
 ---
 
-SteadySpec apply verb. Loops slice-by-slice with TDD discipline (vertical slices via tracer bullets, no refactor while RED, no anticipating next slice, refactor only after all GREEN). TDD is the special case where the proof signal is an automated test; manual checks / fixture replay / runtime observation also count. Proofs are linked to decision ledger entries. Drift and re-slicing are recorded explicitly; re-slicing that changes scope, proof strategy, or user-visible outcome routes to the user.
+SteadySpec apply verb. Requires concrete ready delegation before code: Authorized Outcome, Hard Constraints, Challengeable Assumptions, Proposed Means, Delegated Decisions, and structured challenge authority references in change-relative `path.md#markdown-anchor` form whose targets/headings are read back. Placeholder, unresolved, Agent-self-authorized outcome/constraint, malformed reference, or unbound delegation states block. Assumptions and means may change only within delegation; Authorized Outcome or Hard Constraints require explicit human decision or concrete prior delegation. Then it loops slice-by-slice with proof/TDD discipline and records drift/re-slicing.
+
+On every substrate, run `steadyspec delegation-check --change <repo-relative-change-path> --phase apply --json` before implementation and stop on non-zero. It is direct structural artifact readback, not semantic proof or human acceptance.
 
 ---
 

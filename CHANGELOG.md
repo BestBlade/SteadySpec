@@ -8,14 +8,52 @@ attention/responsibility model, capability-without-drift, or working v0.6
 closure product.
 
 - **PRODUCT CONTINUITY: explicit contract and correction.** `PRODUCT.md` binds
-  the five canonical verbs, a per-change-record-only host-goal boundary, human
-  responsibility, capability support, additive assurance role, and human-owned
-  authority for product-identity changes. Its normalized English and Chinese
-  v1 content is pinned in validator code and both evidence manifests, including
-  a coordinated-rebinding negative fixture. The first local v0.7 candidate
-  (`3c35b39`) was rejected because it called the software lifecycle a legacy
-  recipe even though its technical validators passed; public evidence
-  preserves that failure.
+  the stable product purpose, current reference architecture, and human-owned
+  evolution boundary. Contract v2 defines delegation governance under retained
+  external human accountability, purpose fidelity, challenge without
+  usurpation, capability realization, evidence-bounded claims, and attention
+  triage. The five verbs remain current-normative and compatibility-protected,
+  but are explicitly a means rather than the product purpose. Exact v1 English
+  and Chinese contracts remain under `docs/product-contract-history/v1/`.
+  The first local v0.7 candidate (`3c35b39`) was rejected because it called the
+  lifecycle a legacy recipe; v1 correction `82da460` prevented that demotion but
+  was superseded after the user clarified the older, broader product purpose.
+- **NEW: executable delegation boundary.** Consequential proposals separate
+  Authorized Outcome, Hard Constraints, Challengeable Assumptions, Proposed
+  Means, Delegated Decisions, Challenge Resolution, and ready-or-needs-human
+  status. Explore drafts the layers; propose binds them; apply blocks missing or
+  unresolved authority; verify checks that assumption/means changes stayed
+  within delegation and that purpose/constraint changes have explicit human
+  authority. Authority refs use portable change-relative Markdown path/anchor
+  form; docs mode also resolves the target and heading. Archive repeats the
+  delegation gate on every substrate and requires a passing trust checkpoint
+  whose next action is archive. Docs contract version 2 makes this additive
+  gate machine-checkable; legacy one-string intent records require explicit
+  classification before a new apply pass.
+- **HARDENED: direct delegation artifact and archive binding.** The public
+  `steadyspec delegation-check` support command reads proposal, authority
+  targets, and (for archive) trust artifacts on OpenSpec, docs, `.meta`, and
+  custom change paths. Its fingerprint includes referenced authority bytes.
+  Archive prepare binds that fingerprint to the exact human transaction;
+  commit, replay, and recovery reject missing or stale bindings, including
+  pending state created before this contract. These checks establish structural
+  lineage only, not actor identity, semantic authority, or correctness.
+- **HARDENED: pre-write active-path identity.** Exact-candidate review found
+  that a custom base could be a symlink/junction alias into a built-in namespace
+  or outside the repository. `propose` wrote context/grill/proposal artifacts
+  before the later realpath-aware artifact check rejected that alias. The new
+  public `steadyspec delegation-path-check` command runs before every proposal
+  artifact write, binds the code-derived base/ID/root to the real project, and
+  rejects existing linked components and reserved aliases. Contract fixtures
+  use a real Windows junction (and the same POSIX path uses a directory symlink),
+  cover base/nested/active-child aliases, and require target proposal bytes to
+  remain unchanged. The check is still Agent-observed and does not prevent a
+  hostile host or a filesystem race after the check.
+- **EXPERIMENT: whole-product comparison remains future work.** A separate
+  design candidate asks whether SteadySpec adds value over the same Agent's
+  ordinary workflow on purpose fidelity, unsupported completion, human effort,
+  recovery cost, blind quality, and total cost. It is not yet pre-registered
+  and contains no result.
 
 - **NEW: model- and role-independent protocol candidate.** Exact target,
   candidate, evidence, assessment, invocation, invalidation, and declared

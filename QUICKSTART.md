@@ -1,9 +1,15 @@
 # SteadySpec Quick Start
 
-SteadySpec applies an anti-drift method through the canonical software change
-lifecycle `explore -> propose -> apply -> verify -> archive`. Read the compact
-[Product Continuity Contract](PRODUCT.md) and [SCOPE.md](SCOPE.md) before
-adopting.
+SteadySpec governs Agent delegation under retained external human
+accountability. It helps preserve authorized purpose, challenge questionable
+means, avoid premature low-ceiling convergence, and keep completion claims
+inside evidence. It does not create or discharge responsibility.
+
+The current software reference architecture applies that purpose through
+`explore -> propose -> apply -> verify -> archive`. Read the compact
+[Product Purpose and Continuity Contract](PRODUCT.md) and [SCOPE.md](SCOPE.md)
+before adopting. The five verbs are current normative means, not the product's
+ultimate purpose.
 
 ## Start with the canonical lifecycle
 
@@ -17,6 +23,22 @@ the five verbs as the change moves:
 /steadyspec:verify <change-id>
 /steadyspec:archive <change-id>
 ```
+
+For consequential work, `propose` does not treat `<intent>` as one indivisible
+authority statement. It records a delegation boundary:
+
+- **Authorized Outcome** and **Hard Constraints**: challengeable, but only the
+  authorized human/principal may change them unless prior delegation clearly
+  covers the change.
+- **Challengeable Assumptions** and **Proposed Means**: the Agent is expected to
+  test these instead of inheriting stale experience or a weak technical choice.
+- **Delegated Decisions** and **Challenge Resolution**: what the Agent may
+  revise, who owns a consequential disagreement, and how it was resolved.
+
+`apply` starts only at `Delegation Status: ready`. Missing classification,
+`needs-human`, or an unresolved consequential challenge routes back to
+explore/propose. This records authority; it does not prove that the chosen
+outcome or human decision is correct.
 
 A host agent goal or plan may sequence multiple changes. SteadySpec retains
 each change's own intent, evidence, and handoff records and aggregates strategy
@@ -227,9 +249,9 @@ Run any of these once to enter spec-aware mode for the session. The agent stays 
 | Verb | When to use | Example |
 |------|-------------|---------|
 | `/steadyspec:explore` | Ask "what's the project state, what debt, what's next" (no topic), OR think through a topic with project history loaded (with topic) | `/steadyspec:explore` for status; `/steadyspec:explore "refactor auth"` for topical |
-| `/steadyspec:propose` | Record intent for new work; auto-runs context-archaeology + grill + (optionally) debate to converge on a verified direction | `/steadyspec:propose "unify session timeout"` |
-| `/steadyspec:apply` | Implement a recorded change slice-by-slice; pauses on drift; offers in-place intent patch | `/steadyspec:apply 099` |
-| `/steadyspec:verify` | Run a trust checkpoint before archive, handoff, or risky continuation | `/steadyspec:verify 099` |
+| `/steadyspec:propose` | Separate authorized outcome/constraints from challengeable assumptions/means, record delegation and evidence, then harden the direction | `/steadyspec:propose "unify session timeout"` |
+| `/steadyspec:apply` | Require ready delegation, then implement slice-by-slice; pause and route authority when drift changes purpose/constraints | `/steadyspec:apply 099` |
+| `/steadyspec:verify` | Check authorized-purpose fit, delegation/challenge resolution, evidence, and risk before archive or handoff | `/steadyspec:verify 099` |
 | `/steadyspec:archive` | Close a change; auto-runs review-against-intent + doc-sync auto-scan + confirmed_by gate + durable truth gates + rollup-trigger check | `/steadyspec:archive 099` |
 
 Vibe mode (no slash command) is also valid — SteadySpec stays out of the way.
@@ -246,6 +268,25 @@ steadyspec check <change-id-or-path> --phase archive --substrate docs
 ```
 
 `check` validates required docs-mode structure, evidence fields, trust checkpoint fields, and archive truth hazards such as fallback/debt being presented as proof. It is a support command, not a sixth governed verb and not a replacement for `/steadyspec:verify`.
+
+For every substrate, directly validate the active delegation artifacts with:
+
+```bash
+steadyspec delegation-check --change <repo-relative-change-path> --phase apply --json
+steadyspec delegation-check --change <repo-relative-change-path> --phase verify --json
+steadyspec delegation-check --change <repo-relative-change-path> --phase archive --json
+```
+
+`propose` automatically runs `steadyspec delegation-path-check` before its first
+artifact write. For explicit custom routing this rejects an existing
+symlink/junction anywhere in the custom base or active child and blocks aliases
+into built-in namespaces. Do not bypass this preflight when adapting the
+workflow to another host.
+
+The archive form requires `Delegation Status: ready`, resolvable authority
+references, all five trust dimensions `pass`, and `Recommended Next: archive`. The
+archive transaction binds this artifact fingerprint across prepare/commit/resume.
+It remains structural evidence, not semantic truth or human acceptance.
 
 ## Cross-agent review lane (v0.5)
 
@@ -588,6 +629,6 @@ Remove-Item -LiteralPath .steadyspec -Recurse -ErrorAction SilentlyContinue
 ## Read next
 
 - [SCOPE.md](SCOPE.md) — agent tier matrix, single-developer assumption, what SteadySpec does NOT promise.
-- [PRODUCT.md](PRODUCT.md) - the product identity, canonical software lifecycle, and change-authority boundary.
-- [METHOD.md](METHOD.md) - the portable anti-drift method. The five verbs are its canonical software lifecycle; the domain-neutral method also transfers beyond software.
+- [PRODUCT.md](PRODUCT.md) - the product purpose, stable principles, current software reference lifecycle, and evolution boundary.
+- [METHOD.md](METHOD.md) - the portable reference method. The five verbs are its current software lifecycle; non-software transfer remains an unvalidated hypothesis.
 - [README.md](README.md) — full product overview, OpenSpec coexistence guidance, stability surface.

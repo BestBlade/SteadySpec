@@ -2,7 +2,7 @@
   "name": "steadyspec",
   "version": "0.7.0",
   "private": true,
-  "description": "Source-distributed anti-drift five-flow SDD lifecycle with optional agent assurance.",
+  "description": "Source-distributed method for purpose-faithful delegation of software work to AI agents under retained external human accountability.",
   "bin": {
     "steadyspec": "bin/init.js"
   },
@@ -41,6 +41,7 @@
     "bin/",
     "tests/",
     "release-evidence/",
+    "docs/",
     "protocol/",
     "schemas/",
     "en/",

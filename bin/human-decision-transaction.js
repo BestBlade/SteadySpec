@@ -3,7 +3,7 @@
 const fs = require("fs")
 const path = require("path")
 const crypto = require("crypto")
-const { checkDocsChange } = require("./docs-check")
+const { checkDelegationArtifacts, checkDocsChange } = require("./docs-check")
 
 const SCHEMA_VERSION = 1
 const CONTRACT_VERSION = 1
@@ -372,6 +372,13 @@ function manifestFromDirectory(repo, relativeRoot) {
 
 function expectedArchiveTarget(sourceRoot, substrate, changeId) {
   const builtIn = { docs: "docs/changes", openspec: "openspec/changes", meta: ".meta/changes" }
+  const matchingBuiltIn = Object.entries(builtIn).find(([, base]) => sourceRoot === `${base}/${changeId}`)
+  if (matchingBuiltIn && substrate !== matchingBuiltIn[0]) {
+    throw new TransactionError("ARCHIVE_SUBSTRATE_MISMATCH", `sourceRoot belongs to reserved ${matchingBuiltIn[0]} substrate, not ${substrate}`)
+  }
+  if (substrate === "custom" && Object.values(builtIn).some((base) => sourceRoot === base || sourceRoot.startsWith(`${base}/`))) {
+    throw new TransactionError("ARCHIVE_CUSTOM_RESERVED_ROOT", "custom substrate cannot claim a built-in active or archive namespace")
+  }
   const base = builtIn[substrate] || (substrate === "custom" ? path.posix.dirname(sourceRoot) : null)
   if (!base || sourceRoot !== `${base}/${changeId}`) throw new TransactionError("ARCHIVE_SOURCE", "sourceRoot does not match the selected substrate/change identity")
   return `${base}/archive/${changeId}`
@@ -458,6 +465,12 @@ function prepareArchive(repo, change, request) {
   if (insidePath(source.full, target.full) || insidePath(target.full, source.full)) throw new TransactionError("ARCHIVE_PATH_OVERLAP", "archive source and target must be disjoint directories")
   if (fs.existsSync(target.full)) throw new TransactionError("ARCHIVE_TARGET_EXISTS", "archive target must be absent at prepare", "stale", 3)
   if (request.docsCheckRequired !== (request.substrate === "docs")) throw new TransactionError("ARCHIVE_DOCS_POLICY", "docsCheckRequired must be true exactly for docs substrate")
+  const delegationPolicyIdentity = sha256(fs.readFileSync(path.join(__dirname, "docs-check.js")))
+  const delegationReport = checkDelegationArtifacts(source.full, { requireReady: true, requireTrustArchive: true })
+  if (!delegationReport.ok) {
+    const codes = delegationReport.results.filter((item) => item.severity === "error").map((item) => `${item.code}:${item.file}`)
+    throw new TransactionError("ARCHIVE_DELEGATION_NOT_READY", `archive delegation/trust artifacts are not ready: ${codes.join(", ")}`, "blocked", 3)
+  }
   const archiveBytes = parseBase64(request.archiveBase64, "archiveBase64")
   assertUtf8(archiveBytes, "archive bytes")
   const sourceManifest = manifestFromDirectory(repo, source.canonical)
@@ -481,6 +494,8 @@ function prepareArchive(repo, change, request) {
       substrate: request.substrate,
       docsCheckRequired: request.docsCheckRequired,
       docsCheckPolicyIdentity,
+      delegationPolicyIdentity,
+      delegationArtifactFingerprint: delegationReport.artifactFingerprint,
     },
     preview: {
       type: "exact-archive-finalize",
@@ -492,6 +507,7 @@ function prepareArchive(repo, change, request) {
       archiveBytes: archiveBytes.length,
       expectedTargetManifestHash: sha256(canonicalJson(targetEntries)),
       semanticBoundary: "Filesystem archived is not human acceptance, truth, merge, or release authority.",
+      delegationArtifactFingerprint: delegationReport.artifactFingerprint,
     },
     expectedPostconditions: {
       targetManifestHash: sha256(canonicalJson(targetEntries)),
@@ -500,6 +516,7 @@ function prepareArchive(repo, change, request) {
       stagingAbsent: true,
       retiredAbsent: true,
       docsCheckPassed: true,
+      delegationCheckPassed: true,
       filesystemState: "archived",
     },
   }
@@ -902,6 +919,8 @@ function validateCurrentPreimage(repo, pending) {
   const source = resolveRepoPath(repo, operation.sourceRoot, { mustExist: true, type: "directory", label: "archive source" })
   const manifest = manifestFromDirectory(repo, source.canonical)
   if (manifest.manifestHash !== operation.sourceManifestHash || !sameCanonical(manifest.entries, operation.sourceManifest)) throw new TransactionError("SOURCE_STALE", "archive source manifest changed after prepare", "stale", 3)
+  const delegationCheck = delegationCheckForLocation(repo, operation, source.canonical)
+  if (!delegationCheck.passed) throw new TransactionError("ARCHIVE_DELEGATION_STALE", `archive delegation/trust artifacts no longer match prepare: ${delegationCheck.errors.join(", ")}`, "stale", 3)
   const target = resolveRepoPath(repo, operation.targetRoot, { mustExist: false, label: "archive target" })
   if (fs.existsSync(target.full)) throw new TransactionError("TARGET_STALE", "archive target is no longer absent", "stale", 3)
   return { source, target, manifest }
@@ -1048,6 +1067,27 @@ function docsCheckForStaging(repo, operation, stagingRelative) {
   return { required: true, passed: errors.length === 0, policyIdentity: operation.docsCheckPolicyIdentity, errors }
 }
 
+function delegationCheckForLocation(repo, operation, relativeRoot) {
+  const currentPolicyIdentity = sha256(fs.readFileSync(path.join(__dirname, "docs-check.js")))
+  if (!HASH_PATTERN.test(operation.delegationPolicyIdentity || "") || operation.delegationPolicyIdentity !== currentPolicyIdentity) {
+    throw new TransactionError("DELEGATION_POLICY_STALE", "delegation-check policy is missing or changed after archive prepare", "stale", 3)
+  }
+  if (!HASH_PATTERN.test(operation.delegationArtifactFingerprint || "")) {
+    throw new TransactionError("DELEGATION_BINDING_MISSING", "archive pending state predates the required delegation artifact binding", "stale", 3)
+  }
+  const report = checkDelegationArtifacts(path.join(repo, ...relativeRoot.split("/")), { requireReady: true, requireTrustArchive: true })
+  const errors = report.results.filter((item) => item.severity === "error").map((item) => `${item.code}:${item.file}`)
+  const fingerprintMatch = report.artifactFingerprint === operation.delegationArtifactFingerprint
+  return {
+    required: true,
+    passed: report.ok && fingerprintMatch,
+    policyIdentity: currentPolicyIdentity,
+    artifactFingerprint: report.artifactFingerprint,
+    fingerprintMatch,
+    errors: fingerprintMatch ? errors : [...errors, "delegation-artifact-fingerprint-drift"],
+  }
+}
+
 function archivePostconditions(repo, pending, decision, journal) {
   const operation = pending.binding.operation
   const work = journal.workPaths
@@ -1055,11 +1095,13 @@ function archivePostconditions(repo, pending, decision, journal) {
   const archiveFile = path.join(repo, ...work.target.split("/"), "archive.md")
   const archiveMatches = !!bufferAt(archiveFile, operation.archiveSha256, operation.archiveBytes)
   const docsCheck = targetMatches ? docsCheckForStaging(repo, operation, work.target) : { required: operation.docsCheckRequired, passed: false, errors: ["target manifest unavailable"] }
+  const delegationCheck = targetMatches ? delegationCheckForLocation(repo, operation, work.target) : { required: true, passed: false, errors: ["target manifest unavailable"] }
   const passed = targetMatches && archiveMatches
     && !fs.existsSync(path.join(repo, ...work.source.split("/")))
     && !fs.existsSync(path.join(repo, ...work.staging.split("/")))
     && !fs.existsSync(path.join(repo, ...work.retired.split("/")))
     && docsCheck.passed
+    && delegationCheck.passed
     && readPending(repo, pending.decisionId).pending.pendingHash === pending.pendingHash
     && readDecision(repo, pending, pending.expectedDecisionPath).decision.decisionHash === decision.decisionHash
   return {
@@ -1071,6 +1113,7 @@ function archivePostconditions(repo, pending, decision, journal) {
     stagingAbsent: !fs.existsSync(path.join(repo, ...work.staging.split("/"))),
     retiredAbsent: !fs.existsSync(path.join(repo, ...work.retired.split("/"))),
     docsCheckPassed: docsCheck.passed,
+    delegationCheckPassed: delegationCheck.passed,
     filesystemState: "archived",
     authority: "filesystem-state-only-not-acceptance-merge-or-release",
   }
@@ -1078,6 +1121,9 @@ function archivePostconditions(repo, pending, decision, journal) {
 
 function commitArchive(repo, pending, decision, journal) {
   const operation = pending.binding.operation
+  if (!HASH_PATTERN.test(operation.delegationPolicyIdentity || "") || !HASH_PATTERN.test(operation.delegationArtifactFingerprint || "")) {
+    throw new TransactionError("DELEGATION_BINDING_MISSING", "archive pending state predates the required delegation/trust binding; abandon and prepare a new archive transaction", "stale", 3)
+  }
   let work
   if (!journal) {
     validateCurrentPreimage(repo, pending)
@@ -1097,6 +1143,15 @@ function commitArchive(repo, pending, decision, journal) {
   const retired = path.join(repo, ...work.retired.split("/"))
   const stagingMatches = () => manifestMatches(repo, work.staging, operation.expectedTargetManifest, operation.expectedTargetManifestHash)
   const targetMatches = () => manifestMatches(repo, work.target, operation.expectedTargetManifest, operation.expectedTargetManifestHash)
+  if (journal) {
+    const recoveryDelegationRoot = ["target-committed", "source-detached", "source-retired"].includes(journal.phase)
+      ? work.target
+      : work.source
+    const recoveryDelegation = delegationCheckForLocation(repo, operation, recoveryDelegationRoot)
+    if (!recoveryDelegation.passed) {
+      throw new TransactionError("ARCHIVE_DELEGATION_STALE", `archive recovery delegation/trust artifacts no longer match prepare: ${recoveryDelegation.errors.join(", ")}`, "stale", 3)
+    }
+  }
   if (["target-committed", "source-detached", "source-retired"].includes(journal.phase) && !docsCheckForStaging(repo, operation, work.target).passed) {
     throw new TransactionError("DOCS_TARGET_RECHECK", "bound docs check does not pass on the committed archive target; both sides are preserved when still available", "recovery-required", 4)
   }

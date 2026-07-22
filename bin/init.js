@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 const { spawnSync } = require("child_process");
-const { runDocsCheckCommand } = require("./docs-check");
+const { runDelegationCheckCommand, runDelegationPathCheckCommand, runDocsCheckCommand } = require("./docs-check");
 
 const DEFAULT_CROSS_REVIEW_RISKY_PATH_PATTERNS = [
   "^bin/",
@@ -171,6 +171,8 @@ Install SteadySpec into a project or run deterministic support checks.
 Usage:
   steadyspec init [options]
   steadyspec check <change-id-or-path> --phase <proposal|apply|verify|archive> [--substrate docs] [--json]
+  steadyspec delegation-path-check --change-id <id> --substrate <openspec|docs|meta|custom> --change-root <path> [--change-base <path>] [--json]
+  steadyspec delegation-check --change <repo-relative-change-path> --phase <proposal|apply|verify|archive> [--json]
   steadyspec cross-review --change <change-id-or-path> [--reviewer claude] [--mode design|review|debate|evaluate] [--run|--run-if-needed]
   steadyspec closure --change <change-id-or-path> --prepare|--status|--run-proofs|--check [--json]
   steadyspec assurance reduce --trace <file> --json
@@ -599,7 +601,7 @@ function writeSubstrateState(substrateFile, substrate, dryRun) {
   if (substrate.primary === "docs") {
     state.contract = {
       name: "steadyspec-docs",
-      version: 1,
+      version: 2,
       path: ".steadyspec/substrates/docs/contract.json",
       templates: ".steadyspec/substrates/docs/templates",
     };
@@ -765,6 +767,44 @@ async function main() {
     const result = spawnSync(process.execPath, [script, ...process.argv.slice(3)], { cwd: process.cwd(), stdio: "inherit", windowsHide: true });
     if (result.error) throw result.error;
     process.exitCode = result.status === null ? 1 : result.status;
+    return;
+  }
+  if (process.argv[2] === "delegation-check") {
+    const allowed = new Set(["delegation-check", "--change", "--phase", "--json"]);
+    for (let index = 2; index < process.argv.length; index += 1) {
+      const value = process.argv[index];
+      if (!allowed.has(value) && process.argv[index - 1] !== "--change" && process.argv[index - 1] !== "--phase") throw new Error(`Unknown delegation-check argument: ${value}`);
+    }
+    const changeIndex = process.argv.indexOf("--change");
+    const phaseIndex = process.argv.indexOf("--phase");
+    process.exitCode = runDelegationCheckCommand({
+      target: changeIndex === -1 ? "" : process.argv[changeIndex + 1],
+      phase: phaseIndex === -1 ? "apply" : process.argv[phaseIndex + 1],
+      json: process.argv.includes("--json"),
+      project: process.cwd(),
+    });
+    return;
+  }
+
+  if (process.argv[2] === "delegation-path-check") {
+    const allowed = new Set(["delegation-path-check", "--change-id", "--substrate", "--change-base", "--change-root", "--json"]);
+    const valued = new Set(["--change-id", "--substrate", "--change-base", "--change-root"]);
+    for (let index = 2; index < process.argv.length; index += 1) {
+      const value = process.argv[index];
+      if (!allowed.has(value) && !valued.has(process.argv[index - 1])) throw new Error(`Unknown delegation-path-check argument: ${value}`);
+    }
+    const valueAfter = (flag) => {
+      const index = process.argv.indexOf(flag);
+      return index === -1 ? "" : process.argv[index + 1];
+    };
+    process.exitCode = runDelegationPathCheckCommand({
+      changeId: valueAfter("--change-id"),
+      substrate: valueAfter("--substrate"),
+      changeBase: valueAfter("--change-base"),
+      changeRoot: valueAfter("--change-root"),
+      json: process.argv.includes("--json"),
+      project: process.cwd(),
+    });
     return;
   }
 

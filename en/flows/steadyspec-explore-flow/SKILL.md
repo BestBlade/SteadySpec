@@ -45,14 +45,25 @@ Goal: aggregate the real state of the project's spec workflow and produce a stat
 
 ## Topical mode (with topic)
 
-Goal: think with the user about a specific topic, with project history loaded, and hand off to `propose` if the topic converges into commit-ready intent.
+Goal: think with the user about a specific topic, with project history loaded,
+separate purpose from assumptions and means, and hand off to `propose` if the
+topic converges into commit-ready intent.
 
 1. Adopt-heuristic-check is already done on entry. Continue.
 2. Read related substrate context. If the topic mentions code areas with potentially unclear history, the situation calls for context-archaeology — surface this and let the agent reach for that primitive based on its description.
 3. Engage with the user on the topic. Surface the topic's known constraints, related prior changes, likely decision owners, obvious hard high-risk triggers, and at least one open question with a recommended answer per matt-style explore.
 4. If the topic has real direction forks, evidence-risk, mainline-risk, high-impact direction choice, or explicit "wings" / stronger-solution framing, the v0.4 capability lane may start here. You may create or update a compact `direction-map.md` or equivalent note, but every direction must remain `unknown`, `candidate`, or `parked`. Explore must not promote a direction to mainline.
-5. Stay in exploration. Do not write proposal artifacts during exploration. Do not implement code.
-6. If the user's input converges to a committable intent (problem statement is clear, boundary is roughly visible, the user signals readiness), do not auto-transition. Tell the user "ready to propose? `/steadyspec:propose <draft-intent>`" and stop.
+5. Draft, without canonizing, the delegation boundary: Authorized Outcome,
+   Hard Constraints, Challengeable Assumptions, Proposed Means, and Delegated
+   Decisions. Record open challenges and likely owner. Do not treat the user's
+   suggested implementation as part of the Authorized Outcome merely because
+   both appeared in one prompt.
+6. Stay in exploration. Do not write proposal artifacts during exploration. Do not implement code.
+7. If the user's input converges to a committable intent (the Authorized
+   Outcome is clear, hard constraints are distinguishable, consequential open
+   challenges have an owner, and the user signals readiness), do not
+   auto-transition. Tell the user "ready to propose? `/steadyspec:propose
+   <draft-intent>`" and stop.
 
 Per CON-9, the verb operates half-auto by default. At any decision point where the agent would do multiple things in sequence, ask the user "auto / step-through / skip" and let the answer set the mode for that invocation.
 
@@ -62,7 +73,11 @@ Aggregate read across all reads in this verb invocation should stay under approx
 
 ## Report
 
-Both modes produce a structured report to the user. Status mode emits the five-section report described above. Topical mode emits clarified intent + likely decision owners + high-risk triggers + open questions + recommended next verb (typically `propose` or staying in `explore`).
+Both modes produce a structured report to the user. Status mode emits the
+five-section report described above. Topical mode emits a draft delegation
+boundary + likely decision owners + high-risk triggers + open questions +
+recommended next verb (typically `propose` or staying in `explore`). This draft
+is exploratory, not a human-decision record.
 
 ## Failure modes (consult while running)
 

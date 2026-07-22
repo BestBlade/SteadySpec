@@ -1276,7 +1276,7 @@ function proofEnvironmentRecoveryContracts(packageRoot) {
       value = runClosure(packageRoot, fixture.tmp, ["--run-proofs"]);
       assert(value.state === "evaluator-required", "installed proof executable must run once after explicit resume");
     } finally {
-      fs.rmSync(fixture.tmp, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+      fs.rmSync(fixture.tmp, { recursive: true, force: true, maxRetries: 100, retryDelay: 100 });
     }
   }
 }
@@ -1297,7 +1297,7 @@ function proofSpawnRecoveryContracts(packageRoot) {
     value = runClosure(packageRoot, fixture.tmp, ["--run-proofs"]);
     assert(value.state === "evaluator-required", "installed proof executable must run once after explicit resume");
   } finally {
-    fs.rmSync(fixture.tmp, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    fs.rmSync(fixture.tmp, { recursive: true, force: true, maxRetries: 100, retryDelay: 100 });
   }
 }
 

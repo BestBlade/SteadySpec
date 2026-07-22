@@ -1,24 +1,58 @@
 # SteadySpec
 
-### A method for working with agents - and keeping responsibility visible
+### Governing Agent delegation when real-world responsibility still belongs to people
 
 [中文版本](zh/README.md) | [中文方法论文档](zh/METHOD.md)
 
-Long-running work with AI agents has a quiet failure mode: the agent slowly
-edits the intent, decisions lose their owner, a coherent but low-ceiling answer
-is selected too early, validation is mistaken for truth, and the final record
-is cleaned up until it no longer describes what happened. SteadySpec combines:
+AI agents can perform an increasing share of consequential software work, often
+faster than the responsible person can practically reperform or inspect it.
+That does not make the person technically superior, and it does not move the
+surrounding organizational or legal responsibility to the Agent.
+
+SteadySpec governs that delegation. It helps an Agent stay faithful to
+authorized purpose, challenge questionable means without silently changing the
+purpose, avoid premature low-ceiling convergence, and keep completion claims
+inside observed evidence. Its stable product principles are:
+
+1. purpose fidelity and challenge without usurpation;
+2. capability realization without premature convergence;
+3. evidence-bounded claim integrity;
+4. human authority that is not confused with semantic truth; and
+5. attention routing that triages responsibility decisions without discharging
+   them.
+
+The current reference architecture uses:
 
 1. a domain-neutral [anti-drift method](METHOD.md);
-2. the canonical software change lifecycle
+2. the current normative, compatibility-protected software lifecycle
    `explore -> propose -> apply -> verify -> archive`;
-3. attention and responsibility routing so people decide value, risk, and
-   direction without needing to supervise every implementation detail; and
-4. capability mechanisms that help a strong agent search, question, and
-   pressure-test beyond an imperfect prompt or temporary domain gap.
+3. skills and mechanisms such as context archaeology, grill, debate, proof,
+   review, and strategy rollup; and
+4. optional closure and assurance support at higher-risk finalization edges.
 
 The stable relationship between these parts is recorded in the
-[Product Continuity Contract](PRODUCT.md). A host agent's goal or planning
+[Product Purpose and Continuity Contract](PRODUCT.md). The five verbs and eight
+mechanisms are current means, not SteadySpec's ultimate purpose. They remain
+protected public architecture: changing them requires a versioned, human-owned
+migration rather than an ordinary refactor.
+
+v0.7 makes the purpose/means boundary executable in consequential proposals.
+The Agent records the Authorized Outcome and Hard Constraints separately from
+Challengeable Assumptions, Proposed Means, and Delegated Decisions. It is
+expected to challenge weak assumptions and means, but it cannot use technical
+confidence to silently replace human-owned purpose or constraints. Missing or
+unresolved delegation is `needs-human` and blocks apply; this authority record
+does not make the resulting decision true or correct.
+
+Resolved challenge authority uses change-relative
+`path.md#markdown-heading-anchor` references. Docs mode checks that the target
+and heading exist inside the change. Verify binds the trust result; archive on
+every substrate requires a ready boundary, all five persisted trust gates
+`pass`, and
+Recommended Next `archive`. These are structural lineage checks, not actor
+authentication or proof that the referenced decision is sufficient.
+
+A host agent's goal or planning
 facility may sequence multiple changes. SteadySpec retains each change's own
 records and aggregates strategy signals; it does not define goal-to-change
 lineage or completion semantics, or claim to own or authenticate the host goal.
@@ -145,6 +179,21 @@ The capability lane is not autonomy and not a sixth verb. High-risk direction, p
 ## Docs substrate check
 
 Docs-backed projects can use `steadyspec check <change-id-or-path> --phase proposal|apply|verify|archive --substrate docs` to validate SteadySpec's docs-mode artifact structure. This is a deterministic support check, not a sixth governed verb and not a semantic proof that the work is correct.
+
+All substrates can use `steadyspec delegation-check --change
+<repo-relative-change-path> --phase proposal|apply|verify|archive --json` for
+model-independent readback of the active delegation artifacts. Archive phase
+requires a ready proposal plus a passing archive recommendation, and the archive
+transaction binds that artifact fingerprint across prepare, commit, and resume.
+This proves structural lineage only, not correctness, actor identity, or human
+acceptance.
+
+Before `propose` writes any artifact, its runtime also invokes the read-only
+`steadyspec delegation-path-check` preflight. It binds the code-derived active
+root to the real project, rejects existing symlink/junction components, and
+prevents a custom base from aliasing a built-in namespace. This is path-identity
+evidence at check time, not protection against a hostile host or a later
+filesystem race.
 
 ## v0.5 Cross-Agent Review Lane
 
@@ -464,7 +513,7 @@ The reference skill pack is alpha. Full matrix in [SCOPE.md](SCOPE.md).
 ```text
 steadyspec/
   METHOD.md             # domain-neutral anti-drift method
-  PRODUCT.md            # normative product identity and change authority
+  PRODUCT.md            # normative product purpose, reference architecture, and evolution boundary
   SCOPE.md              # tier matrix, single-developer assumption, no-promise list
   QUICKSTART.md         # 5 verbs + install + manual cleanup
   README.md             # this file
@@ -509,6 +558,9 @@ steadyspec/
   release-evidence/
     v0.6.1/             # public candidate evidence and machine-readable state
     v0.7.0/             # public protocol-candidate evidence and residual unknowns
+  docs/
+    product-contract-history/  # recoverable superseded contracts and coverage maps
+    experiments/               # product experiment designs; no implied preregistration or result
   schemas/              # closure/config/acceptance JSON schemas
   manifest.json         # install spec
   package.json
@@ -554,15 +606,15 @@ top-level `update` or project-level `uninstall` command. See
 v0.7.0 remains pre-1.0. The assurance protocol, schemas, conformance catalog,
 and reference process are explicitly experimental. They may change
 incompatibly before 1.0; a semantic change must use a new `protocolVersion` and
-be recorded in [CHANGELOG.md](CHANGELOG.md). The following canonical software
-lifecycle surfaces are intended to remain stable unless an explicit human-owned
-product decision versions [PRODUCT.md](PRODUCT.md):
+be recorded in [CHANGELOG.md](CHANGELOG.md). The following current normative,
+compatibility-protected software surfaces remain stable unless an explicit
+human-owned migration versions [PRODUCT.md](PRODUCT.md):
 
 - Outward verb names: `/steadyspec:explore`, `/steadyspec:propose`, `/steadyspec:apply`, `/steadyspec:verify`, `/steadyspec:archive`.
 - Verb-flow SKILL names: `steadyspec-<verb>-flow`.
 - Primitive SKILL names: current `steadyspec-*` names.
 - METHOD.md structure: the eight mechanism sections remain addressable; content may expand.
-- CLI meaning: `steadyspec init` installs the runtime skills, verb-flows, runtime adapters, docs contract/templates when docs mode is selected, and writes project state. `steadyspec check` validates docs-mode artifact structure and known archive truth hazards.
+- CLI meaning: `steadyspec init` installs the runtime skills, verb-flows, runtime adapters, docs contract/templates when docs mode is selected, and writes project state. `steadyspec check` validates docs-mode artifact structure and known archive truth hazards. `steadyspec delegation-check` directly validates the current change's structural delegation lineage on every substrate; archive transactions bind its artifact fingerprint.
 - State schema: `.steadyspec/substrate.json` uses `schemaVersion: 1`; fields may be added, not silently removed, within that schema version.
 
 ## Method first
@@ -573,7 +625,7 @@ Read [METHOD.md](METHOD.md) to learn the domain-neutral anti-drift mechanisms. R
 
 If you are evaluating the method:
 
-1. [PRODUCT.md](PRODUCT.md) — product identity, canonical lifecycle, and change authority
+1. [PRODUCT.md](PRODUCT.md) — product purpose, stable principles, current reference architecture, and change authority
 2. [METHOD.md](METHOD.md) — the portable anti-drift thought (8 mechanisms, domain-neutral)
 3. [EVIDENCE.md](EVIDENCE.md) — the dogfood record (what happened when the method was applied to itself)
 4. [SCOPE.md](SCOPE.md) — does the reference skill pack fit your project?

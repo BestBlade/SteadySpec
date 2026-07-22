@@ -1,8 +1,10 @@
 # Software SDD Recipe
 
-This is the canonical SteadySpec software mapping: the general anti-drift method
-in `METHOD.md` applied through the outward lifecycle `explore -> propose ->
-apply -> verify -> archive`. A host goal or plan may sequence multiple changes;
+This is SteadySpec's current normative, compatibility-protected software
+reference mapping: the delegation-governance method in `METHOD.md` applied
+through `explore -> propose -> apply -> verify -> archive`. The lifecycle is a
+means of realizing the product purpose, not the purpose itself. A host goal or
+plan may sequence multiple changes;
 SteadySpec retains each change's own records and aggregates strategy signals.
 It does not define goal-to-change lineage or completion semantics or own that
 goal. Optional cross-review, closure, and assurance mechanisms support this

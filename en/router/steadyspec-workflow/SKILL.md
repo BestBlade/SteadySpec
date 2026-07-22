@@ -15,14 +15,25 @@ Use when the user wants an end-to-end SDD flow or is unsure which SDD skill to u
 2. Select one change id before reading state.
    Use the active issue/change directory when unambiguous; ask when multiple changes or no target change are plausible.
 3. Look for valid current-state artifacts for that change:
-   - intent record
+   - intent record, including a delegation boundary for consequential work:
+     Authorized Outcome, Hard Constraints, Challengeable Assumptions, Proposed
+     Means, Delegated Decisions, Challenge Resolution, and Delegation Status
    - evidence record
    - review record
    - doc-sync record
    - decision records
    - strategy/roadmap notes
    Use `../../phases.md` for artifact names and record validity when the substrate has no project-local convention.
-   Empty sections do not count as records. If intent changed after evidence/review, treat downstream records as stale.
+   Empty sections do not count as records. A consequential intent record is not
+   valid for apply when these layers are collapsed into one prompt string or
+   Delegation Status is not `ready`. Route it to explore/propose for
+   classification; do not guess ownership. If intent changed after
+   evidence/review, treat downstream records as stale.
+   After propose writes a consequential record, require a passing `steadyspec
+   delegation-check --change <repo-relative-change-path> --phase proposal
+   --json` observation before routing it to apply. A missing/failed observation
+   routes back to propose; it is structural lineage evidence, not semantic
+   acceptance.
 4. Route by decision tree:
    - if no valid intent record: historical uncertainty -> `steadyspec-context-archaeology`; unclear plan -> `steadyspec-explore`; forked direction -> `steadyspec-debate`; otherwise -> `steadyspec-propose`
    - elif no valid evidence record -> `steadyspec-apply`
@@ -31,7 +42,17 @@ Use when the user wants an end-to-end SDD flow or is unsure which SDD skill to u
    - elif a human-owned decision is pending -> `steadyspec-human-decision-record`
    - elif repeated strategic signals appear -> `steadyspec-strategy-rollup`
    - else -> `steadyspec-archive`
-   Do not start implementation before intent and evidence expectations exist.
+   Any route to `steadyspec-propose` MUST use a propose implementation that
+   runs `steadyspec delegation-path-check` against the code-derived substrate,
+   change base, change ID, and active root before its first context, grill,
+   debate, findings, proposal, design, spec, or task write. Non-zero, identity
+   mismatch, or a symlink/junction component routes to a stopped propose state
+   with zero proposal artifact writes; the router must not substitute a
+   post-write `delegation-check` for this pre-write gate.
+   Do not start implementation before intent, a ready delegation boundary, and
+   evidence expectations exist. The Agent may challenge every layer, but a
+   change to Authorized Outcome or Hard Constraints requires an explicit human
+   decision or unambiguous prior delegation.
    Do not archive before review and doc sync are complete or explicitly not applicable.
 5. Escalate level only when ambiguity, drift, risk, or missing evidence appears.
 
@@ -42,3 +63,4 @@ Report selected level, substrate, artifacts found/missing, next skill, human dec
 - Fails when missing, empty, or stale artifacts are treated as completed phases.
 - Fails when ambiguous state is routed by default instead of pausing.
 - Fails when the router starts doing phase work instead of handing off.
+- Fails when it routes to a propose surface that lacks the code-owned pre-write path gate.

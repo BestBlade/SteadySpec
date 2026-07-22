@@ -1,18 +1,56 @@
 # SteadySpec
 
-### 与 Agent 长期协作，同时让责任保持可见
+### 当现实责任仍由人承担时，治理对 Agent 的委托
 
-长时间跟 AI Agent 协作，有一个安静的失败模式：Agent 慢慢改了你的意图，
-决策丢了归属，一个自洽但低上限的答案被过早选中，验证被当成真相，最终
-记录被清理到不再描述实际发生过什么。SteadySpec 把以下内容组合起来：
+AI Agent 可以承担越来越多重要的软件工作，产出速度甚至超过责任主体逐项
+重做或检查的能力。这不代表人一定比 Agent 更懂技术，也不会自动把周围组织
+或法律关系中的现实责任转移给 Agent。
+
+SteadySpec 治理这类委托：帮助 Agent 忠实于已经授权的目的，在不静默修改
+目的的前提下质疑可疑手段，避免过早收敛到低上限方案，并让完成声明不超过
+已观察证据。稳定产品原则包括：
+
+1. 目的保真与质疑而不越权；
+2. 避免过早收敛的能力兑现；
+3. 证据边界内的声明完整性；
+4. 不被误当成语义真理的人的权力；
+5. 分诊责任决策但不解除责任的注意力路由。
+
+当前参考架构组合了：
 
 1. 领域无关的[反漂移方法](METHOD.md)；
-2. `explore -> propose -> apply -> verify -> archive` 五动词规范生命周期；
-3. 注意力与责任路由，让人决定价值、风险和方向，而不必监督所有实现细节；
-4. 能力机制，帮助强 Agent 超越不完美提问或临时领域知识缺口，展开并压力
-   测试更好的方向。
+2. `explore -> propose -> apply -> verify -> archive` 当前规范且受兼容保护的
+   软件生命周期；
+3. 上下文考古、grill、debate、proof、review 和 strategy rollup 等机制；
+4. 高风险收口边界上的可选 closure 与 assurance 支持。
 
-这些部分的稳定关系写在[产品连续性合同](PRODUCT.md)里。宿主 Agent 的 goal
+这些部分的稳定关系写在[产品目的与连续性合同](PRODUCT.md)里。五个动词和
+八项机制是当前手段，不是 SteadySpec 的最终目的；改变这些公共架构需要
+版本化、由人负责的迁移，而不是普通 refactor。
+
+v0.7 还把目的/手段边界落到了重要工作的提案里：Agent 要把 Authorized
+Outcome（授权结果）和 Hard Constraints（硬约束），与 Challengeable
+Assumptions（可质疑假设）、Proposed Means（建议手段）及 Delegated
+Decisions（已委托决策）分开记录。它应主动质疑薄弱假设与手段，但不能凭技术
+自信静默替换人所拥有的目的或约束。缺失或未解决的委托会标记为
+`needs-human` 并阻止 apply；这份权力记录也不表示最后决策一定正确。
+
+已经解决的 challenge 必须用相对 change 的
+`path.md#markdown-heading-anchor` 记录授权来源；所有 substrate 都可以用
+`steadyspec delegation-check --change <repo-relative-change-path> --phase
+proposal|apply|verify|archive --json` 直接回读目标文件与标题。verify 绑定 trust
+结果，所有 substrate 的 archive 都要求委托边界 ready、五个 trust gate 全部
+为 `pass` 且 Recommended Next 为 `archive`。
+归档事务会在 prepare 时绑定 proposal/trust 指纹，并在 commit 与恢复时复核。
+这些只证明结构血缘，不认证当事人，也不证明引用内容足以授权。
+
+在 `propose` 写入任何工件之前，运行时还会调用只读的
+`steadyspec delegation-path-check`。它把代码推导出的 active root 绑定到真实
+项目路径，拒绝现存的 symlink/junction 路径组件，并阻止 custom base 别名到
+内置命名空间。这只是检查时刻的路径身份凭据，不能防御恶意宿主或检查后的
+文件系统竞态。
+
+宿主 Agent 的 goal
 或 plan 能力可以串联多个 change。SteadySpec 保存每个 change 自身的记录并
 汇总策略信号；它不定义 goal 到 change 的血缘或完成语义，也不拥有或认证
 宿主 goal。
@@ -120,13 +158,14 @@ steadyspec init --runtime codex --substrate docs
 ```text
 steadyspec/
   METHOD.md             # 领域无关的反漂移方法
-  PRODUCT.md            # 产品身份、五动词生命周期和变更权限
+  PRODUCT.md            # 产品目的、稳定原则、当前参考架构和演进权限
   EVIDENCE.md           # 吃自己狗粮的记录
   SCOPE.md              # Tier 矩阵、单开发者假设、不承诺清单
   QUICKSTART.md         # 五个动词 + 安装 + 手动卸载
   README.md             # 本文件
   CHANGELOG.md
   protocol/             # 实验协议、schema、conformance、示例与实验预注册
+  docs/                 # 历史产品合同、迁移覆盖图和未预注册/未运行的全产品实验设计
   .github/workflows/ci.yml  # Windows/Linux 源码验证
   zh/                   # 中文翻译
   recipes/
@@ -203,18 +242,18 @@ v0.7.0 仍处于 1.0 之前。Assurance protocol、schema、conformance catalog
 - 动词流 SKILL 名：`steadyspec-<verb>-flow`。
 - 原语 SKILL 名：当前的 `steadyspec-*`。
 - METHOD.md 结构：八个机制段落保持可定位；内容可以扩展。
-- CLI 含义：`steadyspec init` 安装运行时技能、动词流、运行时适配器；选择 docs 模式时还会安装 docs contract/templates 并写项目状态。`steadyspec check` 校验 docs 模式 artifact 结构和已知 archive truth 风险。
+- CLI 含义：`steadyspec init` 安装运行时技能、动词流、运行时适配器；选择 docs 模式时还会安装 docs contract/templates 并写项目状态。`steadyspec check` 校验 docs 模式 artifact 结构和已知 archive truth 风险。`steadyspec delegation-check` 在所有 substrate 上直接校验当前 change 的结构委托血缘；archive 事务会绑定其工件指纹。
 - 状态结构：`.steadyspec/substrate.json` 用 `schemaVersion: 1`；在那个结构版本内字段只增不删。
 
 ## 方法优先
 
-先读 [PRODUCT.md](PRODUCT.md) 了解产品身份和变更权限，再读 [METHOD.md](METHOD.md) 了解领域无关的反漂移机制。读 [recipes/software-sdd.md](../recipes/software-sdd.md) 看方法怎么映射成软件 SDD 动词和原语。读 [recipes/research-paper.md](../recipes/research-paper.md) 看一个紧凑的非软件迁移示例。
+先读 [PRODUCT.md](PRODUCT.md) 了解产品目的、稳定原则、当前架构和演进权限，再读 [METHOD.md](METHOD.md) 了解领域无关的参考机制。读 [recipes/software-sdd.md](../recipes/software-sdd.md) 看方法怎么映射成软件 SDD 动词和原语。读 [recipes/research-paper.md](../recipes/research-paper.md) 看一个尚未验证有效性的非软件迁移示例。
 
 ## 给人看的阅读路径
 
 如果你在评估这套方法：
 
-1. [PRODUCT.md](PRODUCT.md) —— 产品身份、五动词生命周期和变更权限
+1. [PRODUCT.md](PRODUCT.md) —— 产品目的、稳定原则、当前参考架构和变更权限
 2. [METHOD.md](METHOD.md) —— 可移植的反漂移思想（8 条机制，领域无关）
 3. [EVIDENCE.md](EVIDENCE.md) —— 吃自己狗粮的记录（方法用在自己身上发生了什么）
 4. [SCOPE.md](SCOPE.md) —— 参考技能包适合你的项目吗？

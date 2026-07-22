@@ -111,6 +111,59 @@ can make future contract changes require an explicit code/version decision; it
 cannot prove human approval or prevent that explicit coordinated edit from
 being wrong.
 
+After that correction, the user supplied the original product rationale: the
+durable problem is the delegation gap created when Agents perform more real
+work than a responsible person can practically redo or inspect, while external
+authority and consequences still remain with that person or organization. This
+showed that Product Contract v1, although useful, over-bound the current
+five-flow architecture as product purpose. Contract v2 preserves exact v1
+content in `docs/product-contract-history/v1/`, moves purpose and stable
+principles above mechanisms, and keeps the five verbs compatibility-protected
+as the current software reference architecture.
+
+The next structured review found that this distinction was still prose-only:
+installed flows accepted one intent string and could freeze a questionable
+means into purpose. The accepted P1 correction adds the delegation boundary to
+router/explore/propose/apply/verify and their Codex/Claude surfaces, plus docs
+contract version 2. The checker fixtures now reject missing fields,
+`needs-human` at apply, `ready` paired with an unresolved challenge, malformed
+authority refs, and missing docs targets/headings. Deterministic archive now
+repeats the delegation/trust gate for every substrate rather than relying only
+on the docs checker. This proves only the declared structural gate, not correct
+semantic classification, actor identity, or adequacy of the referenced decision.
+
+The next Critic/Evaluator round found that an Agent-returned archive checkpoint
+could still be trusted without deterministic artifact binding, and that an old
+pending archive transaction could resume before the workflow's new gather gate.
+The accepted correction adds `steadyspec delegation-check`, direct proposal,
+trust, authority-target and heading readback across OpenSpec/docs/`.meta`/custom
+layouts, authority-byte fingerprinting, and archive transaction prepare/commit/
+recovery binding. Negative fixtures cover missing targets/headings, traversal,
+missing or blocked trust, and legacy pending records without the binding. The
+installed-source smoke also executes the public command before exercising the
+archive lifecycle. This closes the observed bypass; it still does not attest
+who authored an authority record or whether its decision is substantively wise.
+
+A later exact-candidate review found another write-before-check bypass: an
+explicit custom base could be a symlink/junction resolving into a built-in
+namespace or outside the repository. The lexical workflow gate accepted it,
+then `propose` could write context, grill, or proposal files before the later
+realpath-aware `delegation-check` rejected the path. The correction adds the
+public read-only `steadyspec delegation-path-check`, runs it before the first
+proposal artifact write, and propagates the zero-write rule through the
+canonical primitive, governed path, router, flow, and Codex/Claude adapters.
+Contract fixtures exercise base, nested, and active-child links with a real
+Windows junction; the same fixture selects a directory symlink on POSIX. They
+also require proposal target bytes to remain unchanged, and installed-source
+smoke executes both path and artifact checks. This is same-Agent-observed path
+evidence at check time, not hostile-host attestation or protection from a
+post-check filesystem race. POSIX execution remains unobserved in this capture.
+
+This clarification is user-authorized product direction, not effectiveness
+evidence. The whole-product comparison in
+[`docs/experiments/whole-product-pilot.md`](docs/experiments/whole-product-pilot.md)
+is a design candidate, not yet pre-registered, and has no run or result.
+
 This is local candidate evidence, not a causal result. It does not show that
 SteadySpec lowers drift or human burden, and it does not authorize a commit,
 tag, GitHub Release, npm publication, or adoption claim.
@@ -119,7 +172,9 @@ tag, GitHub Release, npm publication, or adoption claim.
 
 - The method produced a working orchestration layer from a standing start in a single-author setting
 - The method caught its own blind spots when an external reviewer was introduced
-- The docs-mode checker can reject missing structure and known archive truth hazards before a plain-docs change is treated as structurally ready
+- The docs-mode checker can reject missing delegation structure, non-ready
+  apply, and known archive truth hazards before a plain-docs change is treated
+  as structurally ready
 - The v0.5/v0.6 runtimes have bounded local contract and installed-source evidence, with their platform and independence limits preserved
 - v0.6.1 source reliability results can be replayed from the public commands and manifest rather than relying only on the private `.meta` trail
 - v0.7 protocol behavior can be replayed at a black-box process boundary; its

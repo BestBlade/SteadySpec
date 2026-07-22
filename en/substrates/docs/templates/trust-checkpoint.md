@@ -8,6 +8,7 @@ schemaVersion: 1
 |-------|-------|
 | Change | <change id> |
 | Intent Match | pass |
+| Delegation Review | pass |
 | Evidence Credibility | pass |
 | Risk Routing Review | pass |
 | Debt/Fallback Visibility | pass |

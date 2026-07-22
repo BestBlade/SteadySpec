@@ -1,7 +1,8 @@
 # SteadySpec Workflow Artifact Contract
 
-This file records the shared artifact contract for SteadySpec's canonical
-five-flow software change lifecycle and its optional closure support. The
+This file records the shared artifact contract for SteadySpec's current
+normative, compatibility-protected five-flow software reference lifecycle and
+its optional closure support. The
 workflow scripts remain the source of runtime behavior and this file names the
 formats they must agree on.
 
@@ -11,7 +12,8 @@ That narrower source is
 trace/result schemas and process conformance under `protocol/`. The old v0.6
 closure state format has only a lossy state projection and is not a conformant
 thin adapter. That compatibility limit does not make this workflow contract or
-the closure support product legacy. Their relationship is bound by
+the closure support product legacy. This lifecycle is a current means rather
+than the product's ultimate purpose. Their relationship is bound by
 [PRODUCT.md](PRODUCT.md).
 
 ## Scope
@@ -207,18 +209,90 @@ The substrate state records:
 {
   "contract": {
     "name": "steadyspec-docs",
-    "version": 1,
+    "version": 2,
     "path": ".steadyspec/substrates/docs/contract.json",
     "templates": ".steadyspec/substrates/docs/templates"
   }
 }
 ```
 
+### Delegation boundary
+
+For consequential work, `proposal.md` MUST distinguish the user's whole prompt
+into a delegation boundary instead of treating the prompt as one indivisible
+intent string:
+
+| Field | Meaning |
+|-------|---------|
+| Authorized Outcome | The result the authorized principal is asking the Agent to pursue. |
+| Hard Constraints | Human-owned value, risk, policy, or compatibility limits the Agent may challenge but MUST NOT silently change. Use `None recorded` when the principal has set none. |
+| Challengeable Assumptions | Factual or causal beliefs that may be wrong and that the Agent is expected to test. Use `None identified` only after an explicit challenge pass. |
+| Proposed Means | The current implementation direction or technical means; it is not automatically part of the authorized outcome. |
+| Delegated Decisions | Decisions the Agent may make or revise without another human transaction, including the limits of that delegation. |
+| Challenge Resolution | A pointer to the structured `## Challenge Resolution` table described below. |
+| Delegation Status | `ready` only when the layers are distinguished and no consequential challenge remains unresolved; otherwise `needs-human`. |
+
+The Agent MAY challenge every field. It MAY revise assumptions, proposed means,
+and delegated decisions within the recorded delegation. It MUST NOT silently
+adopt a change to Authorized Outcome or Hard Constraints. Such a change needs
+an explicit human decision record or prior delegation that unambiguously covers
+the change. Human approval records authority, not semantic correctness.
+
+The structured challenge table uses:
+
+| Finding ID | Finding | Layer | Owner | Status | Authority Basis | Authority Ref | Resolution |
+|------------|---------|-------|-------|--------|-----------------|---------------|------------|
+
+`Layer` is `authorized-outcome`, `hard-constraint`, `assumption`, `means`, or
+`delegated-decision`. `Status` is `resolved`, `within-delegation`, or
+`unresolved`. `Authority Basis` is `human-decision`, `prior-delegation`,
+`agent-delegation`, or `not-required`.
+
+For `authorized-outcome` and `hard-constraint`, `resolved` requires owner
+`user` or `shared`, basis `human-decision`, and a concrete decision artifact
+reference. `within-delegation` requires basis `prior-delegation` and a concrete
+reference to the earlier delegation. `owner: agent` plus `resolved` can never
+self-authorize a change to those two layers. Resolved changes in other layers
+also require a concrete authority reference. `ready` rejects unresolved,
+unknown, placeholder, or unreferenced states. These rules prove structural
+authority lineage only; they do not authenticate the actor or prove the
+decision correct.
+
+An Authority Ref is a portable, change-relative
+`path/to/artifact.md#markdown-heading-anchor`. Absolute paths, traversal,
+backslashes, bare prose, and missing fragments are invalid. The deterministic
+workflow gates validate this shape. Before any proposal artifact write,
+`steadyspec delegation-path-check --change-id <id> --substrate <openspec|docs|meta|custom> --change-root <path> [--change-base <path>] --json`
+binds the code-derived active root to the real project, rejects existing
+symlink/junction components, and prevents custom routing from resolving into a
+built-in namespace. On every substrate, `steadyspec delegation-check --change <repo-relative-change-path> --phase proposal|apply|verify|archive --json`
+directly reads `proposal.md`, resolves
+the target Markdown file and heading inside the active change, and rejects a
+missing/non-ready boundary. Archive phase also directly requires
+`trust-checkpoint.md` with Delegation Review `pass` and Recommended Next
+`archive`. Existence still does not prove that the referenced text semantically
+covers the challenged decision or authenticate its author.
+
+`propose` may preserve `needs-human` as an honest incomplete state. `apply`
+MUST NOT start consequential implementation until Delegation Status is `ready`.
+`verify` checks the result against Authorized Outcome and Hard Constraints,
+checks whether assumption/means challenges were resolved by the recorded owner,
+and treats unauthorized purpose change as `blocked`, not as an improved result.
+`archive` repeats the delegation gate on every substrate and also requires a
+current trust checkpoint with Delegation Review `pass` and Recommended Next
+`archive`; docs checking is additional defense, not the sole archive guard.
+Archive prepare binds the model-independent delegation artifact fingerprint to
+the exact filesystem transaction. Commit, replay, and recovery reject a missing,
+changed, or stale binding before claiming archived postconditions.
+Legacy proposals that expose only `## Intent` require classification into this
+boundary before a new apply pass; the checker does not guess the missing owner.
+
 `steadyspec check <change-id-or-path> --phase proposal|apply|verify|archive
 --substrate docs` validates structure, not semantic truth. Missing
 `schemaVersion: 1` is a legacy warning. Missing required phase anchors, missing
-required evidence/trust fields, and archive claims that convert fallback/debt
-into proof are errors.
+delegation fields, unresolved delegation at apply/verify, missing required
+evidence/trust fields, and archive claims that convert fallback/debt into proof
+are errors.
 
 The checker is a support command, not a sixth governed verb.
 
@@ -849,6 +923,19 @@ current pending/approve-decision binding, and a fresh target docs check may
 return filesystem `archived`. That state is not human acceptance, truth, merge,
 publication, or release authority.
 
+Workflow custom routing is intentionally invocation-bound: `changeDir` must be
+supplied explicitly on every propose/apply/verify/archive call and denotes the
+custom change base; the active root is `<changeDir>/<change-id>`. A custom path
+remembered in `.steadyspec/substrate.json` is discovery context, not execution
+authority. Built-in namespaces and their archive descendants cannot be claimed
+as custom. Before propose writes `context.md`, `grill.md`, debate material, or
+`proposal.md`, the public `delegation-path-check` command must pass against the
+exact code-derived base and active root; an existing linked/junction component
+fails closed. The later public `delegation-check` command receives the exact
+active change root and reads the resulting artifacts. The preflight does not
+defeat a hostile host or a filesystem race that changes the path after the
+check; those remain explicit operational boundaries.
+
 Apply/archive workflow code owns the argv and decision path, requires an exact
 non-empty `changeDir` on every resume, and requires exact
 argv/exit/single-JSON/change-root agreement. Before commit or cancel it runs the
@@ -1049,6 +1136,7 @@ archive and does not replace tests.
 |-------|-------|
 | Change | <change id> |
 | Intent Match | pass|gap|blocked |
+| Delegation Review | pass|misclassified|blocked |
 | Evidence Credibility | pass|gap|blocked |
 | Risk Routing Review | pass|misclassified|blocked |
 | Debt/Fallback Visibility | pass|gap|blocked |
@@ -1056,6 +1144,10 @@ archive and does not replace tests.
 ```
 
 The checkpoint must name any proof claim that is too broad for its evidence.
+Any `blocked` gate or `misclassified` delegation/risk gate must route to
+`re-open-intent` or `stop`. `archive` is structurally eligible only when all
+five gates are `pass`; visible `gap` remains a migration state, not archive
+proof.
 
 ### Handoff Snapshot
 

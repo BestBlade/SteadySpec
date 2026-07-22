@@ -16,16 +16,42 @@ One of SteadySpec's five outward verbs: explore -> propose -> apply -> verify ->
 
 ## Inputs to gather before writing
 
-1. The intent string (the user's own words for what this change is about).
+1. The intent string (the user's own words for what this change is about). It
+   is source material, not yet proof that Authorized Outcome, Hard Constraints,
+   assumptions, means, and delegated decisions have been distinguished.
 2. The substrate (per `.steadyspec/substrate.json` or detection: openspec / docs/changes / new docs/changes).
 3. The next change number for the substrate (NNN), and the slug derived from the intent.
 4. Project history relevant to the intent: prior changes mentioning related code areas, modules, or keywords. Read substrate's archive index, not the full archive.
 5. Existing responsibility records for related changes: decision ledger entries, accepted debt, fallback, and high-risk decisions that may constrain this proposal.
 6. If the intent mentions code areas with potentially unclear history, the situation calls for context-archaeology - surface this and let the agent reach for that primitive based on its description.
 
+Once the substrate, change ID, code-derived base, and active root are known,
+run `steadyspec delegation-path-check --change-id <id> --substrate
+<openspec|docs|meta|custom> --change-root <active-root> [--change-base
+<custom-base>] --json` before writing `context.md`, `grill.md`, debate output,
+or `proposal.md`. Non-zero, identity drift, or any linked/junction component
+blocks all proposal artifact writes. This is model-independent path readback at
+check time, not protection from a hostile host or a post-check filesystem race.
+
 ## Hardening the intent
 
 Before writing artifacts, the intent must be sharpened. Per CON-9 half-auto, ask the user "ready to harden intent? auto / step-through / skip" and proceed accordingly.
+
+The hardening pass MUST produce a delegation boundary as defined by
+`ARTIFACT_CONTRACT.md`: Authorized Outcome, Hard Constraints, Challengeable
+Assumptions, Proposed Means, Delegated Decisions, Challenge Resolution, and
+Delegation Status. Challenge factual assumptions and proposed means even when
+the user supplied them. Do not silently rewrite the Authorized Outcome or Hard
+Constraints. If a consequential challenge is unresolved or ownership is
+unclear, preserve `Delegation Status: needs-human`; do not manufacture `ready`.
+Each consequential challenge is a structured row with finding ID, layer,
+owner, status, authority basis, authority reference, and resolution. A resolved
+Authorized Outcome/Hard Constraint change requires a user/shared human-decision
+reference; `within-delegation` requires a concrete prior-delegation reference.
+The reference is change-relative `path.md#markdown-heading-anchor`; every flow
+must read back the target and heading inside the change, and docs mode also
+enforces that deterministically. The Agent cannot cite itself as authority for
+changing those layers.
 
 If grill, debate, or cross-agent review could apply and no project default is
 clear, ask which Agent Collaboration Mode to use before starting long-running
@@ -64,11 +90,17 @@ Per CON-9 half-auto, ask the user "ready to write proposal artifacts? auto / ste
 
 On auto / step-through:
 
-1. Write to `<substrate>/changes/<NNN>-<slug>/proposal.md` (or substrate's equivalent). The proposal contains, at minimum: the intent (in the user's own words), the boundary (in scope / out of scope as separate lists), non-goals, evidence required for completion, stop conditions (what would pause apply and require updating intent), decision ledger, risk routing summary, and attention report.
+1. Write to `<substrate>/changes/<NNN>-<slug>/proposal.md` (or substrate's
+   equivalent). The proposal contains, at minimum: the intent (in the user's
+   own words); the delegation boundary and challenge resolution; the boundary
+   (in scope / out of scope as separate lists); non-goals; evidence required
+   for completion; stop conditions (what would pause apply and require updating
+   intent); decision ledger; risk routing summary; and attention report.
 2. Link basis: reference the grill outputs and debate findings (if any) by file path. Do not inline them.
 3. If capability lane triggered, add or link the direction map, selection findings, evidence contract, and `## Mainline Decision` section when the default path matters. Parked directions remain parked; rejected directions need a reason; unresolved evidence remains visible.
 4. Add inherits-from: list prior change IDs that influenced this proposal (from step 4 of "Inputs to gather"). If none, omit.
-5. If the substrate is docs mode and `steadyspec check` is available, run `steadyspec check <change-id-or-path> --phase proposal --substrate docs` after writing. If it fails, report the checker errors and do not describe the proposal as structurally ready.
+5. On every substrate, run `steadyspec delegation-check --change <repo-relative-change-path> --phase proposal --json` after writing. If it fails, report the checker errors, stay in propose, and do not recommend apply. This is direct structural artifact readback, not semantic truth or human acceptance.
+6. If the substrate is docs mode and `steadyspec check` is available, run `steadyspec check <change-id-or-path> --phase proposal --substrate docs` after writing. If it fails, report the checker errors and do not describe the proposal as structurally ready.
 
 On cancel-keeping-grill-and-debate: do not write the proposal artifact, but preserve any grill / debate output files for a later resumed propose-flow invocation.
 
@@ -81,8 +113,13 @@ Aggregate read across all reads in this verb invocation should stay under approx
 The verb's report contains:
 
 - **Artifact location** (full path to proposal.md and any sibling artifacts created)
+- **Delegation path preflight** (`steadyspec delegation-path-check`) result from before the first artifact write
 - **Docs check** (`steadyspec check --phase proposal`) result when substrate is docs mode
+- **Delegation artifact check** (`steadyspec delegation-check --phase proposal`) result on every substrate
 - **Intent** (the hardened one-line statement)
+- **Delegation boundary** (Authorized Outcome / Hard Constraints /
+  Challengeable Assumptions / Proposed Means / Delegated Decisions / Challenge
+  Resolution / ready-or-needs-human)
 - **Boundary** (in scope / out of scope summary)
 - **Evidence plan** (what proof is required for completion)
 - **Capability lane** (not triggered, or direction map / findings / evidence contract / mainline decision paths)
@@ -99,5 +136,9 @@ The verb's report contains:
 - **FM-confident-language-over-uncertainty:** open questions and unresolved findings carry forward into the proposal explicitly, not buried in confident artifact prose.
 - **FM-horizontal-tasks:** if implementation tasks are needed in the proposal, write them as vertical slices (one slice = one provable behavior). Do not write tasks as horizontal layers (DB → service → UI in sequence) when one vertical slice could prove the behavior end-to-end.
 - **FM-risk-hidden-in-agent-choice:** a proposal must not hide high-risk decisions behind agent-owned "implementation detail" language. If a hard high-risk trigger applies, route the decision to the user and mark it must-read.
+- **FM-prompt-as-monolithic-purpose:** do not freeze a user's suggested means or
+  questionable factual premise into Authorized Outcome merely because it was
+  written in the same sentence. Preserve the source prompt, classify the
+  layers, challenge them, and record who resolved each consequential challenge.
 - **FM-capability-lane-on-trivial-work:** optional lane artifacts on routine cleanup are drift toward ceremony. Do not create them unless a trigger is present.
 - **FM-same-model-as-independent-validation:** debate can sharpen the choice, but it must not be described as independent validation when the same agent/model supplied the scrutiny.

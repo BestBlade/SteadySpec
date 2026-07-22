@@ -1,16 +1,68 @@
 {
   "name": "steadyspec",
   "version": "0.7.0",
-  "description": "Source-distributed anti-drift five-flow SDD lifecycle with optional agent assurance.",
+  "description": "Source-distributed method for purpose-faithful delegation of software work to AI agents under retained external human accountability.",
   "productContract": {
-    "schemaVersion": 1,
+    "descriptorSchemaVersion": 1,
+    "contractVersion": 2,
     "path": "PRODUCT.md",
-    "normalizedSha256": "c03077a1130f3e258bd530a317b8b7f39ae36ac1c835a4aed0594780c4469582",
+    "normalizedSha256": "c071a8e41f0d3dec756e071b9a3f539e7eb6cff0841578e1fdeacd571477a9f2",
     "zhPath": "zh/PRODUCT.md",
-    "zhNormalizedSha256": "871055c5b402f8566106003f13b124fa0375af92e1d1a6757feefd5e2080bc4e",
-    "canonicalChangeLifecycle": ["explore", "propose", "apply", "verify", "archive"],
-    "assuranceRole": "optional-additive-claim-integrity-support",
-    "productIdentityChangeAuthority": "human-owned-unverified"
+    "zhNormalizedSha256": "80abacd23a1586c27c010a72e9f7166ad2ad8ebd06c9ad8a08851d103a7a0bb8",
+    "core": {
+      "operatingPremise": "external-human-accountability-retained",
+      "problem": "delegated-work-exceeds-practical-human-reperformance",
+      "objective": "support-purpose-faithful-agent-capability-realization",
+      "effectivenessStatus": "unvalidated-product-hypothesis",
+      "invariants": [
+        "authorized-purpose-fidelity",
+        "challenge-without-unilateral-purpose-change",
+        "capability-realization-without-premature-convergence",
+        "evidence-bounded-claim-integrity",
+        "human-authority-is-not-semantic-truth",
+        "attention-routing-is-not-accountability-discharge"
+      ]
+    },
+    "referenceArchitecture": {
+      "portableMethod": {
+        "status": "current-normative-reference",
+        "shape": "eight-mechanism-rails-and-wings"
+      },
+      "softwareLifecycle": {
+        "status": "current-normative-compatibility-protected",
+        "verbs": ["explore", "propose", "apply", "verify", "archive"]
+      },
+      "assuranceRole": "optional-claim-integrity-support"
+    },
+    "evolution": {
+      "authority": "human-owned-unverified",
+      "requiredForCoreOrReferenceChange": [
+        "contract-version-bump",
+        "explicit-human-decision-record",
+        "old-to-new-coverage-map",
+        "compatibility-or-migration-plan",
+        "evidence-boundary",
+        "changelog-and-release-evidence"
+      ],
+      "currentMigration": {
+        "humanDecisionRecord": "release-evidence/v0.7.0/README.md#product-continuity-rejection-and-two-stage-correction",
+        "coverageMap": "docs/product-contract-history/v1/migration-to-v2.md",
+        "coverageMapNormalizedSha256": "c73af59aa59aa8a5700172dbdadcef04bc89c0550402eeee03149c3b9856095a",
+        "compatibilityPlan": "docs/product-contract-history/v1/migration-to-v2.md#compatibility-and-migration",
+        "evidenceBoundary": "PRODUCT.md#effectiveness-and-evidence-boundary",
+        "changelog": "CHANGELOG.md#070-experimental-assurance-protocol-candidate",
+        "releaseEvidence": "release-evidence/v0.7.0/README.md"
+      },
+      "supersedes": {
+        "contractVersion": 1,
+        "sourceCommit": "82da4603503be47e2b272b26aa618d410fe40fc1",
+        "englishPath": "docs/product-contract-history/v1/PRODUCT.md",
+        "englishNormalizedSha256": "c03077a1130f3e258bd530a317b8b7f39ae36ac1c835a4aed0594780c4469582",
+        "chinesePath": "docs/product-contract-history/v1/zh-PRODUCT.md",
+        "chineseNormalizedSha256": "871055c5b402f8566106003f13b124fa0375af92e1d1a6757feefd5e2080bc4e",
+        "reason": "separate-product-purpose-from-current-reference-architecture"
+      }
+    }
   },
   "languages": ["en"],
   "install": {

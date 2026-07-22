@@ -1,12 +1,17 @@
 # SteadySpec Scope and Boundaries
 
-SteadySpec applies the anti-drift method in [METHOD.md](METHOD.md) through a
-canonical software change lifecycle with five outward verbs (`explore` /
-`propose` / `apply` / `verify` / `archive`). Attention/responsibility routing
-and capability-without-drift are part of that product. v0.7 adds an optional,
-experimental assurance protocol candidate beneath verification, handoff, and
-truthful finalization. These surfaces have different evidence and adoption
-boundaries; their stable relationship is defined in [PRODUCT.md](PRODUCT.md).
+SteadySpec governs delegation of consequential software work under retained
+external human accountability. It aims to support purpose fidelity, challenge
+without usurpation, capability realization, evidence-bounded claims, and
+attention-scalable human decisions. It does not create or discharge
+responsibility and does not assume the person is technically superior.
+
+The current software reference architecture applies [METHOD.md](METHOD.md)
+through five normative, compatibility-protected outward verbs (`explore` /
+`propose` / `apply` / `verify` / `archive`). v0.7 adds an optional,
+experimental assurance protocol beneath verification, handoff, and truthful
+finalization. Purpose, stable principles, current architecture, and evolution
+rules are separated in [PRODUCT.md](PRODUCT.md).
 
 ## Product continuity and host-goal boundary
 
@@ -17,10 +22,23 @@ cross-change strategy signals. It does not define goal-to-change lineage or
 completion semantics; does not own, authenticate, or guarantee the host goal
 state; and does not claim that multiple changes produce an unbiased result.
 
-Changing the product problem, five canonical verbs, human responsibility,
-capability-without-drift, or the subordinate role of support mechanisms is a
-human-owned product decision under [PRODUCT.md](PRODUCT.md). Validators can
-make contract changes visible; they cannot authenticate approval.
+Changing the stable core or current reference architecture is a human-owned,
+versioned product decision under [PRODUCT.md](PRODUCT.md). It requires a
+coverage map, compatibility/migration treatment, evidence boundary, and public
+history. Validators make declared changes visible; they cannot authenticate
+approval, informed understanding, or legal accountability.
+
+## Product effectiveness boundary
+
+SteadySpec has not shown causal improvement over a strong Agent baseline. The
+current implementation, conformance, and dogfood evidence is primarily bounded
+to declared single-operator software environments. Team use, non-software work,
+and materially different authority models remain unvalidated transfers.
+
+The future whole-product experiment design candidate is recorded in
+[docs/experiments/whole-product-pilot.md](docs/experiments/whole-product-pilot.md).
+It is not yet pre-registered. Repository validators, assurance conformance, and
+cross-agent agreement do not answer that experiment.
 
 ## v0.7 assurance protocol boundary
 
@@ -39,7 +57,7 @@ closure engine are not claimed to be conformant thin adapters.
 
 The protocol can be evaluated without installing the five verbs because its
 conformance boundary is intentionally smaller than SteadySpec product
-conformance. Ordinary users may adopt the canonical lifecycle without using the
+conformance. Ordinary users may adopt the current software lifecycle without using the
 protocol. Neither independence statement makes the protocol a replacement
 product.
 
@@ -73,17 +91,22 @@ complete proof-process isolation, correctness about unprovided reality, POSIX
 reviewer execution, multi-author coordination, or release authority. v0.6.1
 adds source portability and CI contracts without expanding those authorities.
 
-## Agent capability tiers
+## Historical Agent capability bands
 
-SteadySpec relies on agents reading SKILL descriptions, matching them to user intent, loading the right skill, and following the constraints inside it. This is not free; it depends on agent capability.
+SteadySpec relies on Agents reading SKILL descriptions, matching them to user
+intent, loading the right skill, and following constraints. The bands below are
+historical targeting notes last revised 2026-07-22, not current support claims
+or guarantees. A model/runtime/task combination is verified only when release
+evidence names that exact combination and observation.
 
 | Tier | Agents | Status |
 |------|--------|--------|
-| **Tier 1** | Claude Opus 4.x and above; GPT-5 and above | Full support. Skills auto-trigger on natural language; constraints are followed without explicit reminder. |
-| **Tier 2** | **DeepSeek-V4-Pro** (the affordable open-source baseline that defines Tier 2); Claude Sonnet 4.5 and above; GPT-4o-class; equivalents | **Primary optimization target for v0.6.** Skills auto-trigger on slash commands and skill descriptions. MUST-prefixed steps are followed reliably. Soft directives may need user reinforcement. |
+| **Tier 1** | Historical examples: Claude Opus 4.x; GPT-5-class | Expected strong-fit band, unverified for a current release unless exact model/runtime/task evidence is linked. Do not infer support from the model name. |
+| **Tier 2** | Historical examples: **DeepSeek-V4-Pro**, Claude Sonnet 4.5, GPT-4o-class | Historical optimization band. One bounded DeepSeek-V4-Pro flow-to-primitive spike is recorded in [EVIDENCE.md](EVIDENCE.md); this is not reliable-adherence evidence for every task or the other examples. |
 | **Tier 3** | Claude Sonnet < 4.5; Claude Haiku; GPT-3.5 and below; local models under 30B; any model with limited tool-use reliability | **Not promised.** SteadySpec may load skills, but auto-triggering, MUST-step adherence, and failure-mode self-checks are not reliable. Use with explicit user guidance per turn or consider a different methodology. |
 
-If you cannot tell which tier your agent is in, assume Tier 3.
+If no exact current observation applies, treat the combination as unverified
+and use the Tier 3 operating caution.
 
 ## When to use which path
 

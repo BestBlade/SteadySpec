@@ -1,16 +1,27 @@
 # SteadySpec
 
-### Governed agent work with visible responsibility
+### Governing Agent delegation under retained external human accountability
 
-Substrate-agnostic SDD methodology built around drift defense. This package is standalone: humans read it to understand the method; agents configure and install it for a target runtime.
+This package governs consequential software work delegated to Agents. It helps
+preserve authorized purpose, challenge questionable means without usurpation,
+avoid premature low-ceiling convergence, and keep claims inside evidence. It
+does not create, transfer, or discharge responsibility.
 
-SteadySpec v0.7.0 is source-distributed. The canonical software change lifecycle
-is `explore -> propose -> apply -> verify -> archive`; attention/responsibility
-and capability-without-drift remain part of the product. The experimental
+SteadySpec v0.7.0 is source-distributed. The current normative,
+compatibility-protected software reference lifecycle is
+`explore -> propose -> apply -> verify -> archive`. It is a means of realizing
+the product purpose, not the purpose itself. The experimental
 assurance protocol is optional claim-integrity support, not a successor to the
-five flows. Their relationship is bound by [../PRODUCT.md](../PRODUCT.md). It is not
+five flows. Their relationship is bound by the v2
+[Product Purpose and Continuity Contract](../PRODUCT.md). It is not
 published to the npm registry. Use only the official Git repository pinned to a
 trusted tag or commit; do not use a registry install or `npx steadyspec`.
+
+For consequential work, v0.7 proposal surfaces separate Authorized Outcome and
+Hard Constraints from Challengeable Assumptions, Proposed Means, and Delegated
+Decisions. The Agent is expected to challenge assumptions and means, but a
+missing, unresolved, or `needs-human` delegation boundary blocks apply instead
+of letting technical confidence silently rewrite purpose.
 
 The normative protocol candidate is
 [`../protocol/ASSURANCE_PROTOCOL.md`](../protocol/ASSURANCE_PROTOCOL.md). Its
@@ -23,7 +34,8 @@ contains the maintained Chinese overview and operating guide.
 
 ## Purpose
 
-This package adds a drift-defense layer to SDD workflows with proof-gated execution:
+This package applies the product purpose through a drift-defense SDD reference
+architecture with proof-gated execution:
 
 ```text
 Intent first.
@@ -34,6 +46,8 @@ Archive records truth.
 ```
 
 It is not tied to OpenSpec or any single spec substrate. It runs on plain docs, OpenSpec, issue trackers, or project-local protocols, and hardens the SDD lifecycle so agents do not silently turn intent, decisions, evidence, or archive truth into something else. TDD-style loops, diagnosis, prototypes, and vertical slices are execution proof tools inside this lifecycle.
+
+`steadyspec delegation-check --change <repo-relative-change-path> --phase proposal|apply|verify|archive --json` directly validates structural delegation lineage on every substrate. Archive phase requires a passing archive trust recommendation, and the archive transaction binds the resulting artifact fingerprint. This is not semantic truth or human acceptance.
 
 For the domain-neutral method, read [../METHOD.md](../METHOD.md). For adaptations, see [software-sdd.md](../recipes/software-sdd.md) and [research-paper.md](../recipes/research-paper.md).
 

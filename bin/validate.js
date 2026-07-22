@@ -56,6 +56,26 @@ const REQUIRED_ROOT_FILES = [
 const CJK_REGEX = /[一-鿿　-〿＀-￯]/;
 const PRODUCT_CONTRACT_V1_SHA256 = "c03077a1130f3e258bd530a317b8b7f39ae36ac1c835a4aed0594780c4469582";
 const ZH_PRODUCT_CONTRACT_V1_SHA256 = "871055c5b402f8566106003f13b124fa0375af92e1d1a6757feefd5e2080bc4e";
+const PRODUCT_CONTRACT_V2_SHA256 = "c071a8e41f0d3dec756e071b9a3f539e7eb6cff0841578e1fdeacd571477a9f2";
+const ZH_PRODUCT_CONTRACT_V2_SHA256 = "80abacd23a1586c27c010a72e9f7166ad2ad8ebd06c9ad8a08851d103a7a0bb8";
+const PRODUCT_CONTRACT_V1_METADATA_SHA256 = "9e1f8ced46554ffa5764773f5bbb05913d39f036ac1d547110c568213c19d3e7";
+const PRODUCT_V1_TO_V2_COVERAGE_SHA256 = "c73af59aa59aa8a5700172dbdadcef04bc89c0550402eeee03149c3b9856095a";
+const PRODUCT_CORE_INVARIANTS = [
+  "authorized-purpose-fidelity",
+  "challenge-without-unilateral-purpose-change",
+  "capability-realization-without-premature-convergence",
+  "evidence-bounded-claim-integrity",
+  "human-authority-is-not-semantic-truth",
+  "attention-routing-is-not-accountability-discharge",
+];
+const PRODUCT_EVOLUTION_REQUIREMENTS = [
+  "contract-version-bump",
+  "explicit-human-decision-record",
+  "old-to-new-coverage-map",
+  "compatibility-or-migration-plan",
+  "evidence-boundary",
+  "changelog-and-release-evidence",
+];
 
 let activeSuite = null;
 let activeSuiteStartedAt = 0;
@@ -86,6 +106,50 @@ function warn(message) {
 
 function validationProgress(detail) {
   console.log(`[validate] PROGRESS suite=${activeSuite || "startup"} detail=${detail}`);
+}
+
+function readyDelegationProposalFixture(title = "fixture") {
+  return `schemaVersion: 1
+
+# Proposal: ${title}
+
+## Delegation Boundary
+
+| Field | Value |
+|-------|-------|
+| Authorized Outcome | Deliver the explicitly authorized fixture outcome. |
+| Hard Constraints | Preserve compatibility. |
+| Challengeable Assumptions | The proposed means may be replaced after challenge. |
+| Proposed Means | Use a reversible fixture implementation. |
+| Delegated Decisions | Agent may choose reversible implementation details. |
+| Challenge Resolution | none-raised |
+| Delegation Status | ready |
+
+## Challenge Resolution
+
+| Finding ID | Finding | Layer | Owner | Status | Authority Basis | Authority Ref | Resolution |
+|------------|---------|-------|-------|--------|-----------------|---------------|------------|
+| none | No consequential challenge raised. | none | none | none-raised | not-required | none | No resolution required. |
+`;
+}
+
+function archiveTrustFixture(changeId = "fixture") {
+  return `schemaVersion: 1
+
+# Trust Checkpoint: ${changeId}
+
+## Trust Checkpoint
+
+| Field | Value |
+|-------|-------|
+| Change | ${changeId} |
+| Intent Match | pass |
+| Delegation Review | pass |
+| Evidence Credibility | pass |
+| Risk Routing Review | pass |
+| Debt/Fallback Visibility | pass |
+| Recommended Next | archive |
+`;
 }
 
 async function runValidationSuite(name, action) {
@@ -346,6 +410,7 @@ function checkDocsSubstrateContract(root) {
   }
 
   const contract = readJson(path.join(root, "en/substrates/docs/contract.json"));
+  if (contract.version !== 2) fail("docs substrate contract must identify delegation-boundary contract version 2");
   for (const phase of ["proposal", "apply", "verify", "archive"]) {
     if (!contract.phases || !contract.phases[phase]) {
       fail(`docs substrate contract missing phase: ${phase}`);
@@ -353,16 +418,42 @@ function checkDocsSubstrateContract(root) {
   }
 
   const initText = readText(path.join(root, "bin/init.js"));
-  if (!initText.includes("runDocsCheckCommand") || !initText.includes("steadyspec check")) {
+  if (!initText.includes("runDocsCheckCommand") || !initText.includes("steadyspec check") || !initText.includes("runDelegationPathCheckCommand") || !initText.includes("steadyspec delegation-path-check")) {
     fail("bin/init.js must route the steadyspec check support command");
   }
 
   const docsCheckText = readText(path.join(root, "bin/docs-check.js"));
   for (const code of [
     "DOCS_PROPOSAL_MISSING_ANCHOR",
+    "DOCS_PROPOSAL_MISSING_DELEGATION_FIELD",
+    "DOCS_PROPOSAL_DELEGATION_NOT_CONCRETE",
+    "DOCS_PROPOSAL_DUPLICATE_DELEGATION_FIELD",
+    "DOCS_PROPOSAL_DELEGATION_SECTION_AMBIGUOUS",
+    "DOCS_PROPOSAL_INVALID_CHALLENGE_AUTHORITY",
+    "DOCS_PROPOSAL_INVALID_CHALLENGE_TABLE",
+    "DOCS_APPLY_DELEGATION_NOT_READY",
     "DOCS_EVIDENCE_MISSING_FIELD",
-    "DOCS_TRUST_MISSING_RECOMMENDED_NEXT",
+    "DOCS_TRUST_MISSING_SECTION",
+    "validateTrustCheckpointSection",
+    "MISSING_CHANGE",
+    "DUPLICATE_CHANGE",
+    "CHANGE_MISMATCH",
+    "MISSING_GATE_FIELD",
+    "DUPLICATE_GATE_FIELD",
+    "INVALID_GATE_VALUE",
+    "BLOCKER_ROUTE_CONFLICT",
+    "ARCHIVE_WITH_NONPASSING_GATE",
+    "MISSING_RECOMMENDED_NEXT",
+    "DUPLICATE_RECOMMENDED_NEXT",
+    "INVALID_RECOMMENDED_NEXT",
+    "NEXT_NOT_ARCHIVE",
     "DOCS_ARCHIVE_DEBT_AS_PROOF",
+    "DELEGATION_CHANGE_PATH_INVALID",
+    "DELEGATION_PATH_LINKED_COMPONENT",
+    "DELEGATION_PATH_CUSTOM_REALPATH_RESERVED",
+    "DELEGATION_TRUST_MISSING",
+    "DELEGATION_TRUST_SECTION_MISSING",
+    "DELEGATION_TRUST",
   ]) {
     if (!docsCheckText.includes(code)) {
       fail(`bin/docs-check.js missing docs checker error code: ${code}`);
@@ -401,6 +492,584 @@ function checkDocsSubstrateContract(root) {
       fail(`${file} must surface docs substrate contract health`);
     }
   }
+
+  const proposalTemplate = readText(path.join(root, "en/substrates/docs/templates/proposal.md"));
+  for (const anchor of [
+    "## Delegation Boundary",
+    "Authorized Outcome",
+    "Hard Constraints",
+    "Challengeable Assumptions",
+    "Proposed Means",
+    "Delegated Decisions",
+    "Challenge Resolution",
+    "Delegation Status",
+  ]) if (!proposalTemplate.includes(anchor)) fail(`docs proposal template missing delegation boundary anchor: ${anchor}`);
+
+  const { checkDelegationArtifacts, checkDocsChange, resolveDelegationPathPlan } = require(path.join(root, "bin", "docs-check.js"));
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "steadyspec-delegation-docs-"));
+  try {
+    const proposalPath = path.join(fixtureRoot, "proposal.md");
+    const proposal = (status, resolution, outcome = "Deliver Y.", challengeRowOverride = "") => `schemaVersion: 1
+
+# Proposal: delegation fixture
+
+## Intent
+
+Use X to deliver Y.
+
+## Delegation Boundary
+
+| Field | Value |
+|-------|-------|
+| Authorized Outcome | ${outcome} |
+| Hard Constraints | Preserve compatibility. |
+| Challengeable Assumptions | X is the best means. |
+| Proposed Means | Use X. |
+| Delegated Decisions | Agent may replace X with a reversible alternative. |
+| Challenge Resolution | See ## Challenge Resolution |
+| Delegation Status | ${status} |
+
+## Challenge Resolution
+
+| Finding ID | Finding | Layer | Owner | Status | Authority Basis | Authority Ref | Resolution |
+|------------|---------|-------|-------|--------|-----------------|---------------|------------|
+${challengeRowOverride || (resolution === "none-raised"
+  ? "| none | No consequential challenge raised. | none | none | none-raised | not-required | none | None. |"
+  : resolution.startsWith("unresolved")
+    ? "| F1 | Decide whether X is acceptable. | means | user | unresolved | not-required | none | Awaiting owner decision. |"
+    : "| F1 | Decide whether X is acceptable. | means | user | resolved | human-decision | human-decision.md#D1 | User retained outcome and resolved the means question. |")}
+
+## Boundary
+
+In: fixture. Out: production.
+
+## Evidence Required
+
+Observable fixture.
+
+## Stop Conditions
+
+Purpose changes.
+
+## Decision Ledger
+
+None recorded.
+
+## Risk Routing
+
+None recorded.
+
+## Attention Report
+
+None recorded.
+`;
+    fs.writeFileSync(path.join(fixtureRoot, "human-decision.md"), "# D1\n\nFixture human decision.\n", "utf8");
+    fs.writeFileSync(proposalPath, proposal("needs-human", "unresolved: user must decide X"), "utf8");
+    const unresolvedApply = checkDocsChange(fixtureRoot, "apply");
+    if (!unresolvedApply.results.some((item) => item.code === "DOCS_APPLY_DELEGATION_NOT_READY")) fail("docs checker negative fixture failed to block needs-human delegation at apply");
+    fs.writeFileSync(proposalPath, proposal("ready", "none-raised", "unresolved"), "utf8");
+    const unresolvedOutcome = checkDocsChange(fixtureRoot, "apply");
+    if (!unresolvedOutcome.results.some((item) => item.code === "DOCS_PROPOSAL_DELEGATION_NOT_CONCRETE")) fail("docs checker negative fixture failed to reject ready plus unresolved Authorized Outcome");
+    fs.writeFileSync(proposalPath, proposal("ready", "none-raised", "<result the authorized principal wants>"), "utf8");
+    const placeholderOutcome = checkDocsChange(fixtureRoot, "apply");
+    if (!placeholderOutcome.results.some((item) => item.code === "DOCS_PROPOSAL_DELEGATION_NOT_CONCRETE")) fail("docs checker negative fixture failed to reject ready plus template Authorized Outcome");
+    fs.writeFileSync(proposalPath, proposal("ready", "none-raised").replace("| Authorized Outcome | Deliver Y. |", "| Authorized Outcome | Deliver Y. |\n| Authorized Outcome | Deliver Z. |"), "utf8");
+    const duplicateOutcome = checkDocsChange(fixtureRoot, "apply");
+    if (!duplicateOutcome.results.some((item) => item.code === "DOCS_PROPOSAL_DUPLICATE_DELEGATION_FIELD")) fail("docs checker negative fixture accepted an ambiguous duplicate Authorized Outcome");
+    const decoyBoundary = proposal("ready", "none-raised")
+      .replace("## Delegation Boundary", "## Decoy Metadata")
+      .replace("## Challenge Resolution", "## Delegation Boundary\n\nUNRESOLVED\n\n## Challenge Resolution");
+    fs.writeFileSync(proposalPath, decoyBoundary, "utf8");
+    const decoyBoundaryResult = checkDocsChange(fixtureRoot, "apply");
+    if (!decoyBoundaryResult.results.some((item) => item.code === "DOCS_PROPOSAL_MISSING_DELEGATION_FIELD" || item.code === "DOCS_APPLY_DELEGATION_NOT_READY")) fail("docs checker accepted ready fields from outside the canonical Delegation Boundary section");
+    fs.writeFileSync(proposalPath, `${proposal("ready", "none-raised")}\n## Delegation Boundary\n\nUNRESOLVED\n\n## Challenge Resolution\n\nUNRESOLVED\n`, "utf8");
+    const duplicateSections = checkDocsChange(fixtureRoot, "apply");
+    if (!duplicateSections.results.some((item) => item.code === "DOCS_PROPOSAL_DELEGATION_SECTION_AMBIGUOUS")) fail("docs checker accepted duplicate canonical delegation sections");
+    fs.writeFileSync(proposalPath, proposal("ready", "none-raised", "Deliver Y.", "| none | TBD | hard-constraint | agent | none-raised | human-decision | proposal.md#delegation-boundary | TBD |"), "utf8");
+    const forgedNoneRaised = checkDocsChange(fixtureRoot, "apply");
+    if (!forgedNoneRaised.results.some((item) => item.code === "DOCS_PROPOSAL_INVALID_CHALLENGE_AUTHORITY" && item.message.includes("invalid-none-raised-sentinel"))) fail("docs checker negative fixture accepted a forged none-raised sentinel row");
+    fs.writeFileSync(proposalPath, proposal("ready", "none-raised").replace("\n## Boundary", "\n| F1 | Remove compatibility | hard-constraint | agent | resolved | agent-delegation | none |\n\n## Boundary"), "utf8");
+    const malformedChallengeRow = checkDocsChange(fixtureRoot, "apply");
+    if (!malformedChallengeRow.results.some((item) => item.code === "DOCS_PROPOSAL_INVALID_CHALLENGE_TABLE" && item.message.includes("column-count-7"))) fail("docs checker negative fixture silently discarded a malformed self-authorizing challenge row");
+    const duplicateFindingRow = "| F1 | Select X. | means | agent | resolved | agent-delegation | human-decision.md#D1 | Selected X. |\n| F1 | Select Y. | means | agent | resolved | agent-delegation | human-decision.md#D1 | Selected Y. |";
+    fs.writeFileSync(proposalPath, proposal("ready", "resolved", "Deliver Y.", duplicateFindingRow), "utf8");
+    const duplicateFinding = checkDocsChange(fixtureRoot, "apply");
+    if (!duplicateFinding.results.some((item) => item.code === "DOCS_PROPOSAL_INVALID_CHALLENGE_TABLE" && item.message.includes("duplicate-finding-id"))) fail("docs checker negative fixture accepted duplicate Challenge Resolution finding IDs");
+    fs.writeFileSync(proposalPath, proposal("ready", "resolved", "Deliver Y.", "| F1 | Remove compatibility. | hard-constraint | agent | resolved | agent-delegation | proposal.md#delegation-boundary | Agent removed it. |"), "utf8");
+    const selfAuthorizedCoreChange = checkDocsChange(fixtureRoot, "apply");
+    if (!selfAuthorizedCoreChange.results.some((item) => item.code === "DOCS_PROPOSAL_INVALID_CHALLENGE_AUTHORITY")) fail("docs checker negative fixture failed to reject Agent self-authorization over a hard constraint");
+    fs.writeFileSync(proposalPath, proposal("ready", "resolved", "Deliver Y.", "| F1 | Revise the authorized outcome. | authorized-outcome | agent | within-delegation | prior-delegation | none | Agent changed it. |"), "utf8");
+    const unboundPriorDelegation = checkDocsChange(fixtureRoot, "apply");
+    if (!unboundPriorDelegation.results.some((item) => item.code === "DOCS_PROPOSAL_INVALID_CHALLENGE_AUTHORITY")) fail("docs checker negative fixture failed to reject an unbound prior-delegation claim");
+    fs.writeFileSync(proposalPath, proposal("ready", "resolved", "Deliver Y.", "| F1 | Revise the authorized outcome. | authorized-outcome | agent | within-delegation | prior-delegation | because-I-say-so | Agent changed it. |"), "utf8");
+    const prosePriorDelegation = checkDocsChange(fixtureRoot, "apply");
+    if (!prosePriorDelegation.results.some((item) => item.code === "DOCS_PROPOSAL_INVALID_CHALLENGE_AUTHORITY")) fail("docs checker negative fixture failed to reject a prose prior-delegation reference");
+    fs.writeFileSync(proposalPath, proposal("ready", "resolved", "Deliver Y.", "| F1 | Revise the authorized outcome. | authorized-outcome | agent | within-delegation | prior-delegation | missing.md#decision | Agent changed it. |"), "utf8");
+    const missingPriorDelegation = checkDocsChange(fixtureRoot, "apply");
+    if (!missingPriorDelegation.results.some((item) => item.code === "DOCS_PROPOSAL_INVALID_CHALLENGE_AUTHORITY" && item.message.includes("authority-ref-target-missing"))) fail("docs checker negative fixture failed to reject a missing prior-delegation artifact");
+    fs.writeFileSync(proposalPath, proposal("ready", "resolved", "Deliver Y.", "| F1 | Revise the authorized outcome. | authorized-outcome | agent | within-delegation | prior-delegation | proposal.md#missing-heading | Agent changed it. |"), "utf8");
+    const missingPriorDelegationAnchor = checkDocsChange(fixtureRoot, "apply");
+    if (!missingPriorDelegationAnchor.results.some((item) => item.code === "DOCS_PROPOSAL_INVALID_CHALLENGE_AUTHORITY" && item.message.includes("authority-ref-anchor-missing"))) fail("docs checker negative fixture failed to reject a missing prior-delegation anchor");
+    fs.writeFileSync(proposalPath, proposal("ready", "unresolved: user must decide X"), "utf8");
+    const inconsistentProposal = checkDocsChange(fixtureRoot, "proposal");
+    if (!inconsistentProposal.results.some((item) => item.code === "DOCS_PROPOSAL_UNRESOLVED_CHALLENGE")) fail("docs checker negative fixture failed to reject ready plus unresolved challenge");
+    fs.writeFileSync(proposalPath, proposal("ready", "resolved: user retained outcome and delegated means choice"), "utf8");
+    const readyApply = checkDocsChange(fixtureRoot, "apply");
+    if (readyApply.results.some((item) => item.severity === "error")) fail(`docs checker positive delegation fixture failed: ${readyApply.results.map((item) => item.code).join(", ")}`);
+    fs.writeFileSync(proposalPath, proposal("ready", "none-raised").replace("Deliver Y.", "Deliver A \\| B."), "utf8");
+    const escapedPipeApply = checkDocsChange(fixtureRoot, "apply");
+    if (escapedPipeApply.results.some((item) => item.severity === "error")) fail(`docs checker rejected its workflow composer escaped-pipe form: ${escapedPipeApply.results.map((item) => item.code).join(", ")}`);
+    fs.writeFileSync(proposalPath, proposal("ready", "resolved: user retained outcome and delegated means choice"), "utf8");
+    const trustPath = path.join(fixtureRoot, "trust-checkpoint.md");
+    const trust = (delegationReview, recommendedNext) => `schemaVersion: 1
+
+# Trust Checkpoint: delegation fixture
+
+## Trust Checkpoint
+
+| Field | Value |
+|-------|-------|
+| Change | ${path.basename(fixtureRoot)} |
+| Intent Match | ${delegationReview === "pass" ? "pass" : "blocked"} |
+| Delegation Review | ${delegationReview} |
+| Evidence Credibility | pass |
+| Risk Routing Review | pass |
+| Debt/Fallback Visibility | pass |
+| Recommended Next | ${recommendedNext} |
+`;
+    fs.writeFileSync(trustPath, trust("blocked", "archive"), "utf8");
+    const blockedArchive = checkDocsChange(fixtureRoot, "verify");
+    if (!blockedArchive.results.some((item) => item.code === "DOCS_TRUST_BLOCKER_ROUTE_CONFLICT")) fail("docs checker negative fixture failed to block delegationReview=blocked plus archive");
+    fs.writeFileSync(trustPath, trust("misclassified", "continue"), "utf8");
+    const misclassifiedContinue = checkDocsChange(fixtureRoot, "verify");
+    if (!misclassifiedContinue.results.some((item) => item.code === "DOCS_TRUST_BLOCKER_ROUTE_CONFLICT")) fail("docs checker negative fixture failed to block delegationReview=misclassified plus continue");
+    fs.writeFileSync(trustPath, trust("pass", "archive"), "utf8");
+    const passArchive = checkDocsChange(fixtureRoot, "verify");
+    if (passArchive.results.some((item) => item.severity === "error")) fail(`docs checker positive trust route fixture failed: ${passArchive.results.map((item) => item.code).join(", ")}`);
+    fs.writeFileSync(trustPath, trust("pass", "archive").replace("| Change |", "| Change | wrong-"), "utf8");
+    const crossChangeTrust = checkDocsChange(fixtureRoot, "verify");
+    if (!crossChangeTrust.results.some((item) => item.code === "DOCS_TRUST_CHANGE_MISMATCH")) fail("docs checker accepted a trust checkpoint bound to another change");
+    fs.writeFileSync(trustPath, trust("pass", "archive").replace("| Evidence Credibility | pass |", "| Evidence Credibility | blocked |"), "utf8");
+    const blockedEvidenceArchive = checkDocsChange(fixtureRoot, "verify");
+    if (!blockedEvidenceArchive.results.some((item) => item.code === "DOCS_TRUST_ARCHIVE_WITH_NONPASSING_GATE")) fail("docs checker accepted archive while evidence credibility was blocked");
+  } finally {
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+
+  const delegationRepo = fs.mkdtempSync(path.join(os.tmpdir(), "steadyspec-delegation-artifacts-"));
+  try {
+    const validPreflight = resolveDelegationPathPlan(delegationRepo, {
+      changeId: "001-new",
+      substrate: "custom",
+      changeBase: "custom/preflight",
+      changeRoot: "custom/preflight/001-new",
+    });
+    if (!validPreflight.ok || validPreflight.activeRoot !== "custom/preflight/001-new" || !/^sha256:[a-f0-9]{64}$/.test(validPreflight.pathIdentityFingerprint || "")) fail(`delegation path preflight rejected a valid nonexistent child: ${validPreflight.results.map((item) => item.code).join(", ")}`);
+    const pathPreflightCli = spawnSync(process.execPath, [path.join(root, "bin", "init.js"), "delegation-path-check", "--change-id", "001-new", "--substrate", "custom", "--change-root", "custom/preflight/001-new", "--change-base", "custom/preflight", "--json"], { cwd: delegationRepo, encoding: "utf8", timeout: 30000, windowsHide: true });
+    let pathPreflightJson = null;
+    try { pathPreflightJson = JSON.parse(pathPreflightCli.stdout); } catch (error) { /* asserted below */ }
+    if (pathPreflightCli.status !== 0 || pathPreflightJson?.ok !== true || pathPreflightJson?.phase !== "path-preflight" || pathPreflightJson?.activeRoot !== "custom/preflight/001-new") fail(`delegation-path-check CLI rejected a valid nonexistent child: status=${pathPreflightCli.status} stdout=${String(pathPreflightCli.stdout || "").trim()} stderr=${String(pathPreflightCli.stderr || "").trim()}`);
+
+    const layouts = [
+      "openspec/changes/001-open",
+      "docs/changes/001-docs",
+      ".meta/changes/001-meta",
+      "custom/changes/001-custom",
+    ];
+    for (const relative of layouts) {
+      const changeDir = path.join(delegationRepo, ...relative.split("/"));
+      fs.mkdirSync(changeDir, { recursive: true });
+      const proposalContent = readyDelegationProposalFixture(relative);
+      fs.writeFileSync(path.join(changeDir, "proposal.md"), proposalContent, "utf8");
+      fs.writeFileSync(path.join(changeDir, "trust-checkpoint.md"), archiveTrustFixture(path.posix.basename(relative)), "utf8");
+      const report = checkDelegationArtifacts(changeDir, { requireReady: true, requireTrustArchive: true });
+      if (!report.ok || report.proposalContent !== proposalContent || report.trustGates?.change !== path.posix.basename(relative) || !/^sha256:[a-f0-9]{64}$/.test(report.artifactFingerprint || "")) fail(`delegation artifact checker rejected substrate ${relative}: ${report.results.map((item) => item.code).join(", ")}`);
+      const cli = spawnSync(process.execPath, [path.join(root, "bin", "init.js"), "delegation-check", "--change", relative, "--phase", "archive", "--json"], { cwd: delegationRepo, encoding: "utf8", timeout: 30000, windowsHide: true });
+      let cliJson = null;
+      try { cliJson = JSON.parse(cli.stdout); } catch (error) { /* asserted below */ }
+      if (cli.status !== 0 || cliJson?.ok !== true || cliJson?.phase !== "archive" || cliJson?.artifactFingerprint !== report.artifactFingerprint) fail(`delegation-check CLI did not bind substrate ${relative}: status=${cli.status} stdout=${String(cli.stdout || "").trim()} stderr=${String(cli.stderr || "").trim()}`);
+    }
+
+    const docsBase = path.join(delegationRepo, "docs", "changes");
+    const linkedCases = [
+      { label: "base-link", link: path.join(delegationRepo, "custom-link"), base: "custom-link", root: "custom-link/001-linked", target: docsBase },
+      { label: "nested-link", link: path.join(delegationRepo, "custom", "nested-link"), base: "custom/nested-link", root: "custom/nested-link/001-linked", target: docsBase },
+      { label: "active-link", link: path.join(delegationRepo, "custom", "active", "001-linked"), base: "custom/active", root: "custom/active/001-linked", target: path.join(docsBase, "001-docs") },
+    ];
+    for (const linked of linkedCases) {
+      fs.mkdirSync(path.dirname(linked.link), { recursive: true });
+      try {
+        fs.symlinkSync(linked.target, linked.link, process.platform === "win32" ? "junction" : "dir");
+      } catch (error) {
+        if (error && ["EPERM", "EACCES", "ENOTSUP"].includes(error.code)) {
+          warn(`delegation path ${linked.label} negative skipped: ${error.code}`);
+          continue;
+        }
+        throw error;
+      }
+      const wouldWriteProposal = linked.label === "active-link" ? path.join(linked.target, "proposal.md") : path.join(linked.target, "001-linked", "proposal.md");
+      const beforeProposalBytes = fs.existsSync(wouldWriteProposal) ? fs.readFileSync(wouldWriteProposal) : null;
+      const linkedPlan = resolveDelegationPathPlan(delegationRepo, { changeId: "001-linked", substrate: "custom", changeBase: linked.base, changeRoot: linked.root });
+      if (linkedPlan.ok || !linkedPlan.results.some((item) => item.code === "DELEGATION_PATH_LINKED_COMPONENT")) fail(`delegation path preflight accepted ${linked.label}`);
+      const linkedCli = spawnSync(process.execPath, [path.join(root, "bin", "init.js"), "delegation-path-check", "--change-id", "001-linked", "--substrate", "custom", "--change-root", linked.root, "--change-base", linked.base, "--json"], { cwd: delegationRepo, encoding: "utf8", timeout: 30000, windowsHide: true });
+      let linkedJson = null;
+      try { linkedJson = JSON.parse(linkedCli.stdout); } catch (error) { /* asserted below */ }
+      const afterProposalBytes = fs.existsSync(wouldWriteProposal) ? fs.readFileSync(wouldWriteProposal) : null;
+      const proposalUnchanged = beforeProposalBytes === null ? afterProposalBytes === null : afterProposalBytes !== null && beforeProposalBytes.equals(afterProposalBytes);
+      if (linkedCli.status !== 2 || linkedJson?.ok !== false || !linkedJson?.results?.some((item) => item.code === "DELEGATION_PATH_LINKED_COMPONENT") || !proposalUnchanged) fail(`delegation-path-check CLI did not fail closed without writes for ${linked.label}`);
+    }
+
+    const negativeRelative = ".meta/changes/001-meta";
+    const negativeDir = path.join(delegationRepo, ...negativeRelative.split("/"));
+    const proposalPath = path.join(negativeDir, "proposal.md");
+    const trustPath = path.join(negativeDir, "trust-checkpoint.md");
+    const resolvedProposal = (authorityRef) => readyDelegationProposalFixture("authority fixture").replace(
+      "| none | No consequential challenge raised. | none | none | none-raised | not-required | none | No resolution required. |",
+      `| F1 | Select the implementation means. | means | agent | resolved | agent-delegation | ${authorityRef} | Selected within delegated means. |`,
+    );
+    fs.writeFileSync(proposalPath, resolvedProposal("missing.md#decision"), "utf8");
+    let report = checkDelegationArtifacts(negativeDir, { requireReady: true, requireTrustArchive: true });
+    if (!report.results.some((item) => item.message.includes("authority-ref-target-missing"))) fail("delegation artifact checker accepted a missing authority target");
+    fs.writeFileSync(proposalPath, resolvedProposal("authority.md#decision"), "utf8");
+    fs.writeFileSync(path.join(negativeDir, "authority.md"), "# Decision\n\nVersion one.\n", "utf8");
+    report = checkDelegationArtifacts(negativeDir, { requireReady: true, requireTrustArchive: true });
+    if (!report.ok || report.authorityArtifacts?.[0]?.path !== "authority.md") fail("delegation artifact checker did not bind a valid authority artifact");
+    const firstAuthorityFingerprint = report.artifactFingerprint;
+    fs.writeFileSync(path.join(negativeDir, "authority.md"), "# Decision\n\nVersion two.\n", "utf8");
+    report = checkDelegationArtifacts(negativeDir, { requireReady: true, requireTrustArchive: true });
+    if (!report.ok || report.artifactFingerprint === firstAuthorityFingerprint) fail("delegation artifact fingerprint ignored authority target byte drift");
+    fs.writeFileSync(path.join(negativeDir, "authority.md"), "# Other\n", "utf8");
+    report = checkDelegationArtifacts(negativeDir, { requireReady: true, requireTrustArchive: true });
+    if (!report.results.some((item) => item.message.includes("authority-ref-anchor-missing"))) fail("delegation artifact checker accepted a missing authority anchor");
+    fs.writeFileSync(proposalPath, resolvedProposal("../authority.md#decision"), "utf8");
+    report = checkDelegationArtifacts(negativeDir, { requireReady: true, requireTrustArchive: true });
+    if (!report.results.some((item) => item.message.includes("resolved-challenge-without-authority-ref"))) fail("delegation artifact checker accepted a traversal authority reference");
+    fs.writeFileSync(proposalPath, readyDelegationProposalFixture("missing trust"), "utf8");
+    fs.rmSync(trustPath);
+    report = checkDelegationArtifacts(negativeDir, { requireReady: true, requireTrustArchive: true });
+    if (!report.results.some((item) => item.code === "DELEGATION_TRUST_MISSING")) fail("delegation artifact checker accepted an archive without trust-checkpoint.md");
+    fs.writeFileSync(trustPath, archiveTrustFixture("001-meta").replace("| Delegation Review | pass |", "| Delegation Review | blocked |"), "utf8");
+    report = checkDelegationArtifacts(negativeDir, { requireReady: true, requireTrustArchive: true });
+    if (!report.results.some((item) => item.code === "DELEGATION_TRUST_BLOCKER_ROUTE_CONFLICT" || item.code === "DELEGATION_TRUST_ARCHIVE_WITH_NONPASSING_GATE")) fail("delegation artifact checker accepted a blocked trust checkpoint");
+    fs.writeFileSync(trustPath, `${archiveTrustFixture("001-meta")}| Delegation Review | blocked |\n`, "utf8");
+    report = checkDelegationArtifacts(negativeDir, { requireReady: true, requireTrustArchive: true });
+    if (!report.results.some((item) => item.code === "DELEGATION_TRUST_DUPLICATE_GATE_FIELD")) fail("delegation artifact checker accepted ambiguous duplicate trust fields");
+    const decoyTrust = archiveTrustFixture("001-meta").replace("## Trust Checkpoint", "## Decoy Metadata") + "\n## Trust Checkpoint\n\nUNRESOLVED\n";
+    fs.writeFileSync(trustPath, decoyTrust, "utf8");
+    report = checkDelegationArtifacts(negativeDir, { requireReady: true, requireTrustArchive: true });
+    if (!report.results.some((item) => item.code === "DELEGATION_TRUST_MISSING_GATE_FIELD")) fail("delegation artifact checker accepted pass/archive fields from outside the canonical Trust Checkpoint section");
+    fs.writeFileSync(trustPath, `${archiveTrustFixture("001-meta")}\n## Trust Checkpoint\n\n| Field | Value |\n|---|---|\n| Delegation Review | blocked |\n| Recommended Next | stop |\n`, "utf8");
+    report = checkDelegationArtifacts(negativeDir, { requireReady: true, requireTrustArchive: true });
+    if (!report.results.some((item) => item.code === "DELEGATION_TRUST_SECTION_MISSING")) fail("delegation artifact checker accepted duplicate canonical trust sections");
+    fs.writeFileSync(trustPath, archiveTrustFixture("another-change"), "utf8");
+    report = checkDelegationArtifacts(negativeDir, { requireReady: true, requireTrustArchive: true });
+    if (!report.results.some((item) => item.code === "DELEGATION_TRUST_CHANGE_MISMATCH")) fail("delegation artifact checker accepted cross-change trust identity");
+    fs.writeFileSync(trustPath, archiveTrustFixture("001-meta").replace("| Risk Routing Review | pass |", "| Risk Routing Review | misclassified |"), "utf8");
+    report = checkDelegationArtifacts(negativeDir, { requireReady: true, requireTrustArchive: true });
+    if (!report.results.some((item) => item.code === "DELEGATION_TRUST_ARCHIVE_WITH_NONPASSING_GATE")) fail("delegation artifact checker accepted archive with a misclassified risk route");
+    const traversal = spawnSync(process.execPath, [path.join(root, "bin", "init.js"), "delegation-check", "--change", "../outside", "--phase", "archive", "--json"], { cwd: delegationRepo, encoding: "utf8", timeout: 30000, windowsHide: true });
+    let traversalJson = null;
+    try { traversalJson = JSON.parse(traversal.stdout); } catch (error) { /* asserted below */ }
+    if (traversal.status !== 2 || traversalJson?.results?.[0]?.code !== "DELEGATION_CHANGE_PATH_INVALID") fail("delegation-check CLI accepted a traversal change path");
+  } finally {
+    fs.rmSync(delegationRepo, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
+}
+
+function checkDelegationBoundaryContract(root) {
+  const surfaces = {
+    "ARTIFACT_CONTRACT.md": ["### Delegation boundary", "Authorized Outcome", "Delegation Status", "MUST NOT silently", "path/to/artifact.md#markdown-heading-anchor", "steadyspec delegation-path-check", "steadyspec delegation-check"],
+    "en/router/steadyspec-workflow/SKILL.md": ["Authorized Outcome", "Delegation Status", "do not guess ownership", "steadyspec delegation-path-check", "zero proposal artifact writes"],
+    "en/router/steadyspec-workflow/agents/interface.yaml": ["Authorized Outcome", "Never guess missing ownership", "steadyspec delegation-path-check", "zero proposal writes"],
+    "en/flows/steadyspec-explore-flow/SKILL.md": ["Authorized Outcome", "Proposed Means", "draft delegation"],
+    "en/flows/steadyspec-propose-flow/SKILL.md": ["Authorized Outcome", "Delegation Status", "FM-prompt-as-monolithic-purpose", "steadyspec delegation-path-check"],
+    "en/primitives/steadyspec-propose/SKILL.md": ["Authorized Outcome", "Delegation Status", "MUST NOT silently", "steadyspec delegation-path-check", "zero proposal artifact writes"],
+    "en/primitives/steadyspec-propose/references/governed-proposal-path.md": ["Authorized Outcome", "needs-human", "blocks apply", "steadyspec delegation-path-check", "zero writes"],
+    "en/flows/steadyspec-apply-flow/SKILL.md": ["Authorized Outcome", "Hard Constraints", "FM-better-solution-usurps-purpose", "steadyspec delegation-check"],
+    "en/flows/steadyspec-verify-flow/SKILL.md": ["Authorized Outcome", "Delegation Status", "FM-authority-equals-truth", "steadyspec delegation-check"],
+    "en/flows/steadyspec-archive-flow/SKILL.md": ["Delegation Boundary", "path.md#markdown-anchor", "FM-archive-bypasses-delegation", "steadyspec delegation-check"],
+    "en/runtime/codex/agents/steadyspec-explore-flow.yaml": ["Authorized Outcome", "Do not freeze"],
+    "en/runtime/codex/agents/steadyspec-propose-flow.yaml": ["Authorized Outcome", "Delegation Status", "steadyspec delegation-path-check"],
+    "en/runtime/codex/agents/steadyspec-apply-flow.yaml": ["Authorized Outcome", "technical superiority", "steadyspec delegation-check"],
+    "en/runtime/codex/agents/steadyspec-verify-flow.yaml": ["Authorized Outcome", "self-authorized", "steadyspec delegation-check"],
+    "en/runtime/codex/agents/steadyspec-archive-flow.yaml": ["Delegation Boundary", "path.md#anchor", "defense in depth", "steadyspec delegation-check"],
+    "en/runtime/claude/commands/steadyspec/explore.md": ["Authorized Outcome", "Delegated Decisions"],
+    "en/runtime/claude/commands/steadyspec/propose.md": ["Authorized Outcome", "Delegation Status", "steadyspec delegation-path-check"],
+    "en/runtime/claude/commands/steadyspec/apply.md": ["Authorized Outcome", "explicit human decision", "steadyspec delegation-check"],
+    "en/runtime/claude/commands/steadyspec/verify.md": ["authorized-outcome", "delegation/challenge resolution", "steadyspec delegation-check"],
+    "en/runtime/claude/commands/steadyspec/archive.md": ["Delegation Boundary", "path.md#anchor", "defense in depth", "steadyspec delegation-check"],
+    "en/runtime/claude/workflows/steadyspec-explore.js": ["delegationBoundary", "authorizedOutcome", "Do not freeze"],
+    "en/runtime/claude/workflows/steadyspec-propose.js": ["delegationBoundary", "delegation-boundary-inconsistent", "## Delegation Boundary"],
+    "en/runtime/claude/workflows/steadyspec-apply.js": ["DELEGATION_BOUNDARY_SCHEMA", "delegation-boundary-not-ready", "MUST PRESERVE", "runDelegationArtifactCheck"],
+    "en/runtime/claude/workflows/steadyspec-verify.js": ["DELEGATION_BOUNDARY_SCHEMA", "delegationReview", "delegationGate.gateFailed", "runDelegationArtifactCheck"],
+    "en/runtime/claude/workflows/steadyspec-archive.js": ["DELEGATION_BOUNDARY_SCHEMA", "ARCHIVE_TRUST_CHECKPOINT_SCHEMA", "archive-delegation-or-trust-not-ready", "runDelegationArtifactCheck"],
+  };
+  for (const [relative, anchors] of Object.entries(surfaces)) {
+    const content = readText(path.join(root, relative));
+    for (const anchor of anchors) if (!content.includes(anchor)) fail(`${relative} missing delegation-boundary runtime contract: ${anchor}`);
+  }
+
+  const installRoot = fs.mkdtempSync(path.join(os.tmpdir(), "steadyspec-delegation-install-"));
+  try {
+    const install = spawnSync(process.execPath, [
+      path.join(root, "bin", "init.js"),
+      "--runtime", "codex",
+      "--substrate", "docs",
+      "--force",
+    ], { cwd: installRoot, encoding: "utf8", timeout: 30000, windowsHide: true });
+    if (install.status !== 0) fail(`delegation-boundary Codex install fixture failed: ${install.stderr || install.stdout}`);
+    const installedState = readJson(path.join(installRoot, ".steadyspec", "substrate.json"));
+    const installedContract = readJson(path.join(installRoot, ".steadyspec", "substrates", "docs", "contract.json"));
+    if (installedState.contract?.version !== 2 || installedContract.version !== 2) fail("installed docs substrate lost delegation-boundary contract version 2");
+    const installedSurfaces = {
+      ".codex/skills/steadyspec-workflow/SKILL.md": ["Authorized Outcome", "do not guess ownership"],
+      ".codex/skills/steadyspec-propose-flow/SKILL.md": ["Delegation Status", "FM-prompt-as-monolithic-purpose"],
+      ".codex/skills/steadyspec-apply-flow/SKILL.md": ["FM-better-solution-usurps-purpose", "require Delegation Status `ready`"],
+      ".codex/skills/steadyspec-verify-flow/SKILL.md": ["FM-authority-equals-truth", "unauthorized outcome/constraint change"],
+      ".codex/skills/steadyspec-archive-flow/SKILL.md": ["FM-archive-bypasses-delegation", "path.md#markdown-anchor"],
+      ".codex/skills/steadyspec-propose-flow/agents/openai.yaml": ["Authorized Outcome", "Delegation Status"],
+      ".codex/skills/steadyspec-archive-flow/agents/openai.yaml": ["Delegation Boundary", "defense in depth"],
+      ".steadyspec/substrates/docs/templates/proposal.md": ["## Delegation Boundary", "Challenge Resolution", "Delegation Status"],
+    };
+    for (const [relative, anchors] of Object.entries(installedSurfaces)) {
+      const content = readText(path.join(installRoot, ...relative.split("/")));
+      for (const anchor of anchors) if (!content.includes(anchor)) fail(`installed ${relative} missing delegation-boundary contract: ${anchor}`);
+    }
+  } finally {
+    fs.rmSync(installRoot, { recursive: true, force: true });
+  }
+}
+
+async function checkDelegationBoundaryWorkflowGates(root) {
+  const begin = "// BEGIN DELEGATION GATE PURE";
+  const end = "// END DELEGATION GATE PURE";
+  const relatives = [
+    "en/runtime/claude/workflows/steadyspec-propose.js",
+    "en/runtime/claude/workflows/steadyspec-apply.js",
+    "en/runtime/claude/workflows/steadyspec-verify.js",
+    "en/runtime/claude/workflows/steadyspec-archive.js",
+  ];
+  const helperNames = ["unfinishedDelegationValue", "authorityRefParts", "concreteAuthorityRef", "delegationGateErrors", "archiveDelegationGate", "finalizeDelegationCheckpoint", "docsProposalSchemaPrefix", "canonicalActiveChangePath", "deriveActiveChangeIdentity", "activeChangeContextErrors", "delegationBoundaryReadbackErrors"];
+  const sources = relatives.map((relative) => {
+    const content = readText(path.join(root, relative));
+    const beginMatches = [...content.matchAll(/^\/\/ BEGIN DELEGATION GATE PURE$/gm)];
+    const endMatches = [...content.matchAll(/^\/\/ END DELEGATION GATE PURE$/gm)];
+    if (beginMatches.length !== 1 || endMatches.length !== 1 || content.includes(`+${begin}`)) fail(`${relative} delegation gate markers must be exact standalone lines`);
+    const start = beginMatches[0].index + beginMatches[0][0].length;
+    const finish = endMatches[0].index;
+    if (finish <= start) fail(`${relative} missing delegation gate pure helper block`);
+    const block = content.slice(start, finish).trim();
+    const executablePrefix = content.slice(0, endMatches[0].index + endMatches[0][0].length).replace(/^export\s+/gm, "");
+    const sandbox = {};
+    try {
+      vm.runInNewContext(`${executablePrefix}\nthis.delegationApi = { ${helperNames.join(", ")} };`, sandbox, { timeout: 1000 });
+    } catch (error) {
+      fail(`${relative} delegation helpers are not callable from their actual source prefix: ${error.message}`);
+    }
+    for (const name of helperNames) if (typeof sandbox.delegationApi?.[name] !== "function") fail(`${relative} delegation helper ${name} is not actual-source-scope callable`);
+    return { block, api: sandbox.delegationApi };
+  });
+  const blocks = sources.map((source) => source.block);
+  requirePureBlockEquivalent(blocks[0], blocks[1], "propose and apply delegation gate pure helper blocks");
+  requirePureBlockEquivalent(blocks[1], blocks[2], "apply and verify delegation gate pure helper blocks");
+  requirePureBlockEquivalent(blocks[2], blocks[3], "verify and archive delegation gate pure helper blocks");
+
+  const api = sources[0].api;
+  const base = {
+    authorizedOutcome: "Deliver Y.",
+    hardConstraints: ["Preserve compatibility."],
+    challengeableAssumptions: ["X is the best means."],
+    proposedMeans: ["Use X."],
+    delegatedDecisions: ["Agent may choose reversible implementation details."],
+    challengeResolution: [],
+    status: "ready",
+  };
+  if (api.delegationGateErrors(base, true).length) fail("delegation gate positive no-challenge fixture failed");
+  for (const [label, mutation, expected] of [
+    ["missing", null, "delegation-boundary-missing"],
+    ["needs-human", { ...base, status: "needs-human" }, "delegation-status-not-ready"],
+    ["unresolved-outcome", { ...base, authorizedOutcome: "unresolved" }, "authorized-outcome-not-concrete"],
+    ["placeholder-outcome", { ...base, authorizedOutcome: "<result the authorized principal wants>" }, "authorized-outcome-not-concrete"],
+    ["missing-hard-constraints", { ...base, hardConstraints: [] }, "hard-constraints-not-concrete"],
+    ["unresolved-hard-constraints", { ...base, hardConstraints: ["unresolved"] }, "hard-constraints-not-concrete"],
+    ["missing-challengeable-assumptions", { ...base, challengeableAssumptions: [] }, "challengeable-assumptions-not-concrete"],
+    ["unresolved-challengeable-assumptions", { ...base, challengeableAssumptions: ["unresolved"] }, "challengeable-assumptions-not-concrete"],
+    ["unresolved-challenge", { ...base, challengeResolution: [{ findingId: "F1", layer: "means", owner: "user", status: "unresolved", authorityBasis: "not-required", authorityRef: "none" }] }, "F1:challenge-unresolved"],
+    ["agent-self-authorized-core-change", { ...base, challengeResolution: [{ findingId: "F1", layer: "hard-constraint", owner: "agent", status: "resolved", authorityBasis: "agent-delegation", authorityRef: "proposal.md#delegation-boundary" }] }, "F1:core-change-without-human-decision"],
+    ["unbound-prior-delegation", { ...base, challengeResolution: [{ findingId: "F1", layer: "authorized-outcome", owner: "agent", status: "within-delegation", authorityBasis: "prior-delegation", authorityRef: "none" }] }, "F1:core-change-without-prior-delegation"],
+    ["prose-prior-delegation", { ...base, challengeResolution: [{ findingId: "F1", layer: "authorized-outcome", owner: "agent", status: "within-delegation", authorityBasis: "prior-delegation", authorityRef: "because-I-say-so" }] }, "F1:core-change-without-prior-delegation"],
+    ["traversal-prior-delegation", { ...base, challengeResolution: [{ findingId: "F1", layer: "authorized-outcome", owner: "agent", status: "within-delegation", authorityBasis: "prior-delegation", authorityRef: "../proposal.md#decision-ledger" }] }, "F1:core-change-without-prior-delegation"],
+    ["unfinished-challenge-row", { ...base, challengeResolution: [{ findingId: "", finding: "", layer: "means", owner: "agent", status: "resolved", authorityBasis: "agent-delegation", authorityRef: "proposal.md#decision-ledger", resolution: "" }] }, "unknown:unfinished-challenge-resolution"],
+  ]) {
+    const errors = api.delegationGateErrors(mutation, true);
+    if (!errors.includes(expected)) fail(`delegation gate negative fixture ${label} failed: ${errors.join(", ")}`);
+  }
+  for (const validResolution of [
+    { findingId: "F1", finding: "Resolve the authorized outcome.", layer: "authorized-outcome", owner: "user", status: "resolved", authorityBasis: "human-decision", authorityRef: "human-decision.md#D1", resolution: "The user retained the outcome." },
+    { findingId: "F2", finding: "Apply the delegated compatibility exception.", layer: "hard-constraint", owner: "agent", status: "within-delegation", authorityBasis: "prior-delegation", authorityRef: "proposal.md#D2", resolution: "The prior delegation covers this exception." },
+  ]) if (api.delegationGateErrors({ ...base, challengeResolution: [validResolution] }, true).length) fail("delegation gate positive authority-reference fixture failed");
+
+  const checkpoint = {
+    intentMatch: "pass",
+    delegationReview: "pass",
+    evidenceCredibility: "pass",
+    riskRoutingReview: "pass",
+    debtFallbackVisibility: "pass",
+    recommendedNext: "archive",
+    pendingUserDecisions: [],
+    evidenceGaps: [],
+  };
+  for (const [label, errors, review] of [
+    ["missing", ["delegation-boundary-missing"], "pass"],
+    ["needs-human", ["delegation-status-not-ready"], "pass"],
+    ["ready-unresolved", ["F1:challenge-unresolved"], "pass"],
+    ["review-misclassified", [], "misclassified"],
+    ["review-blocked", [], "blocked"],
+  ]) {
+    const finalized = api.finalizeDelegationCheckpoint(errors, { ...checkpoint, delegationReview: review });
+    if (!finalized.gateFailed || !["re-open-intent", "stop"].includes(finalized.checkpoint.recommendedNext)) fail(`delegation verify gate negative fixture ${label} did not fail closed`);
+    if (errors.length > 0 && finalized.checkpoint.intentMatch !== "blocked") fail(`delegation verify gate negative fixture ${label} did not expose an invalid delegation boundary`);
+  }
+  const pass = api.finalizeDelegationCheckpoint([], checkpoint);
+  if (pass.gateFailed || pass.checkpoint.recommendedNext !== "archive" || pass.checkpoint.delegationReview !== "pass") fail("delegation verify gate positive pass+archive fixture failed");
+  const gap = api.finalizeDelegationCheckpoint([], { ...checkpoint, evidenceCredibility: "gap" });
+  if (gap.gateFailed || gap.checkpoint.recommendedNext !== "continue") fail("delegation verify gate did not withhold archive while preserving a non-blocking evidence gap");
+  const blocked = api.finalizeDelegationCheckpoint([], { ...checkpoint, evidenceCredibility: "blocked" });
+  if (!blocked.gateFailed || blocked.checkpoint.recommendedNext !== "stop") fail("delegation verify gate accepted a blocked non-delegation trust dimension");
+  const readyTrust = { present: true, intentMatch: "pass", delegationReview: "pass", evidenceCredibility: "pass", riskRoutingReview: "pass", debtFallbackVisibility: "pass", recommendedNext: "archive", sourcePath: "trust-checkpoint.md" };
+  if (api.archiveDelegationGate(base, readyTrust).gateFailed) fail("archive delegation gate positive fixture failed");
+  for (const [label, boundary, trust, expected] of [
+    ["boundary-missing", null, readyTrust, "delegation-boundary-missing"],
+    ["checkpoint-missing", base, { present: false, delegationReview: "missing", recommendedNext: "missing", sourcePath: "" }, "trust-checkpoint-missing"],
+    ["review-blocked", base, { ...readyTrust, delegationReview: "blocked" }, "delegation-review-blocked"],
+    ["review-misclassified", base, { ...readyTrust, delegationReview: "misclassified" }, "delegation-review-misclassified"],
+    ["evidence-blocked", base, { ...readyTrust, evidenceCredibility: "blocked" }, "evidence-credibility-blocked"],
+    ["risk-misclassified", base, { ...readyTrust, riskRoutingReview: "misclassified" }, "risk-routing-review-misclassified"],
+    ["next-continue", base, { ...readyTrust, recommendedNext: "continue" }, "trust-recommended-next-continue"],
+  ]) {
+    const result = api.archiveDelegationGate(boundary, trust);
+    if (!result.gateFailed || ![...result.delegationErrors, ...result.trustErrors].includes(expected)) fail(`archive delegation gate negative fixture ${label} failed`);
+  }
+  if (api.docsProposalSchemaPrefix("docs") !== "schemaVersion: 1\n\n" || api.docsProposalSchemaPrefix("openspec") !== "") fail("delegation proposal schema prefix must mark new docs proposals without contaminating OpenSpec");
+  const docsIdentity = api.deriveActiveChangeIdentity("001-change", "docs", null, "docs/changes/001-change");
+  if (!docsIdentity.ok || docsIdentity.proposalPath !== "docs/changes/001-change/proposal.md") fail("active change identity positive docs fixture failed");
+  const customIdentity = api.deriveActiveChangeIdentity("change", "custom", "custom/changes", "custom/changes/change");
+  if (!customIdentity.ok) fail("active change identity positive custom fixture failed");
+  for (const invalid of [
+    api.deriveActiveChangeIdentity("001-change", "none", null, "docs/changes/001-change"),
+    api.deriveActiveChangeIdentity("001-change", "custom", null, "custom/changes/001-change"),
+    api.deriveActiveChangeIdentity("001-change", "custom", "docs/changes", "docs/changes/001-change"),
+    api.deriveActiveChangeIdentity("001-change", "custom", "Docs/changes", "Docs/changes/001-change"),
+    api.deriveActiveChangeIdentity("changes", "custom", "docs", "docs/changes"),
+    api.deriveActiveChangeIdentity("changes", "custom", "Docs", "Docs/changes"),
+    api.deriveActiveChangeIdentity("changes", "custom", "openspec", "openspec/changes"),
+    api.deriveActiveChangeIdentity("changes", "custom", ".meta", ".meta/changes"),
+    api.deriveActiveChangeIdentity("001-change", "custom", "docs.", "docs./001-change"),
+    api.deriveActiveChangeIdentity("001-change", "custom", "NUL", "NUL/001-change"),
+    api.deriveActiveChangeIdentity("001-change", "docs", null, "docs/changes/another-change"),
+  ]) if (invalid.ok) fail("active change identity negative fixture was accepted");
+  if (api.activeChangeContextErrors({ changeId: "other", changeDir: docsIdentity.activeRoot, proposalPath: docsIdentity.proposalPath, evidencePath: docsIdentity.evidencePath }, docsIdentity).length === 0) fail("active change context accepted a cross-change id");
+  if (api.delegationBoundaryReadbackErrors(base, JSON.parse(JSON.stringify(base))).length > 0) fail("delegation boundary deterministic readback positive fixture failed");
+  if (!api.delegationBoundaryReadbackErrors(base, { ...base, authorizedOutcome: "Different outcome." }).includes("delegation-boundary-readback-mismatch")) fail("delegation boundary deterministic readback accepted a changed outcome");
+
+  const proposeText = readText(path.join(root, relatives[0]));
+  const applyText = readText(path.join(root, relatives[1]));
+  const verifyText = readText(path.join(root, relatives[2]));
+  const archiveText = readText(path.join(root, relatives[3]));
+  for (const anchor of ["delegationGateErrors(", "authorityBasis", "authorityRef", "delegation-boundary-inconsistent", "docsProposalSchemaPrefix(substrate)", "proposal-composition-readback-mismatch"]) if (!proposeText.includes(anchor)) fail(`propose delegation integration missing: ${anchor}`);
+  for (const anchor of ["delegationGateErrors(delegationBoundary, true)", "delegation-boundary-not-ready"]) if (!applyText.includes(anchor)) fail(`apply delegation integration missing: ${anchor}`);
+  for (const anchor of ["activeChangeContextErrors(context, activeIdentity", "initialDelegationErrors", "finalizeDelegationCheckpoint(initialDelegationErrors, checkpoint)", "writeGateErrors.length > 0", "postWriteDelegationCheck"]) if (!verifyText.includes(anchor)) fail(`verify delegation integration missing: ${anchor}`);
+  for (const anchor of ["delegationBoundary: DELEGATION_BOUNDARY_SCHEMA", "trustCheckpoint: ARCHIVE_TRUST_CHECKPOINT_SCHEMA", "archiveDelegationGate(context.delegationBoundary, context.trustCheckpoint)", "archive-delegation-or-trust-not-ready"]) if (!archiveText.includes(anchor)) fail(`archive delegation integration missing: ${anchor}`);
+
+  const artifactBegin = "// BEGIN DELEGATION ARTIFACT CHECK";
+  const artifactEnd = "// END DELEGATION ARTIFACT CHECK";
+  const artifactBlocks = relatives.map((relative) => {
+    const content = readText(path.join(root, relative));
+    const begins = [...content.matchAll(/^\/\/ BEGIN DELEGATION ARTIFACT CHECK$/gm)];
+    const ends = [...content.matchAll(/^\/\/ END DELEGATION ARTIFACT CHECK$/gm)];
+    if (begins.length !== 1 || ends.length !== 1 || ends[0].index <= begins[0].index) fail(`${relative} delegation artifact-check markers must appear exactly once`);
+    return { relative, block: content.slice(begins[0].index + artifactBegin.length, ends[0].index).trim() };
+  });
+  for (let index = 1; index < artifactBlocks.length; index += 1) requirePureBlockEquivalent(artifactBlocks[0].block, artifactBlocks[index].block, `delegation artifact-check block ${artifactBlocks[index].relative}`);
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const artifactRunner = new AsyncFunction("agent", "changeRoot", "artifactPhase", "workflowPhase", `${artifactBlocks[0].block}\nreturn runDelegationArtifactCheck(changeRoot, artifactPhase, workflowPhase);`);
+  const artifactObservation = (changeRoot, artifactPhase, changes = {}) => ({
+    executedArgv: ["steadyspec", "delegation-check", "--change", changeRoot, "--phase", artifactPhase, "--json"],
+    exitCode: 0,
+    stdout: JSON.stringify({
+      ok: true,
+      phase: artifactPhase,
+      changePath: changeRoot,
+      results: [],
+      authorityArtifacts: [],
+      proposalContent: "# Proposal\n",
+      proposalSha256: `sha256:${"b".repeat(64)}`,
+      delegationBoundary: { authorizedOutcome: "Deliver Y.", hardConstraints: ["Preserve compatibility."], challengeableAssumptions: ["X may change."], proposedMeans: ["Use X."], delegatedDecisions: ["Agent may choose details."], challengeResolution: [], status: "ready" },
+      trustGates: { change: "001-change", intentMatch: "pass", delegationReview: "pass", evidenceCredibility: "pass", riskRoutingReview: "pass", debtFallbackVisibility: "pass", recommendedNext: "archive" },
+      trustSha256: `sha256:${"c".repeat(64)}`,
+      artifactFingerprint: `sha256:${"a".repeat(64)}`,
+    }),
+    stderr: "",
+    extraCommands: false,
+    ...changes,
+  });
+  for (const { relative } of artifactBlocks) {
+    const positive = await artifactRunner(async () => artifactObservation("docs/changes/001-change", "verify"), "docs/changes/001-change", "verify", "Handoff");
+    if (!positive.ok) fail(`${relative} delegation artifact positive observation failed: ${positive.errors.join(", ")}`);
+  }
+  for (const [label, mutation, expected] of [
+    ["phase", (value) => ({ ...value, stdout: JSON.stringify({ ...JSON.parse(value.stdout), phase: "archive" }) }), "delegation-check-phase-mismatch"],
+    ["change", (value) => ({ ...value, stdout: JSON.stringify({ ...JSON.parse(value.stdout), changePath: "docs/changes/other" }) }), "delegation-check-change-identity-mismatch"],
+    ["stderr", (value) => ({ ...value, stderr: "unexpected" }), "delegation-check-stderr-not-empty"],
+    ["shape", (value) => ({ ...value, stdout: JSON.stringify({ ...JSON.parse(value.stdout), results: null }) }), "delegation-check-report-shape-invalid"],
+  ]) {
+    const baseObservation = artifactObservation("docs/changes/001-change", "verify");
+    const negative = await artifactRunner(async () => mutation(baseObservation), "docs/changes/001-change", "verify", "Handoff");
+    if (negative.ok || !negative.errors.includes(expected)) fail(`delegation artifact negative observation ${label} did not fail closed`);
+  }
+
+  const pathBegin = "// BEGIN DELEGATION PATH PREFLIGHT";
+  const pathEnd = "// END DELEGATION PATH PREFLIGHT";
+  const pathBeginMatches = [...proposeText.matchAll(/^\/\/ BEGIN DELEGATION PATH PREFLIGHT$/gm)];
+  const pathEndMatches = [...proposeText.matchAll(/^\/\/ END DELEGATION PATH PREFLIGHT$/gm)];
+  if (pathBeginMatches.length !== 1 || pathEndMatches.length !== 1 || pathEndMatches[0].index <= pathBeginMatches[0].index) fail("propose delegation path-preflight markers must appear exactly once");
+  const pathBlock = proposeText.slice(pathBeginMatches[0].index + pathBegin.length, pathEndMatches[0].index).trim();
+  const pathRunner = new AsyncFunction("agent", "identity", "substrate", "workflowPhase", `${artifactBlocks[0].block}\n${pathBlock}\nreturn runDelegationPathPreflight(identity, substrate, workflowPhase);`);
+  const pathIdentity = { ok: true, changeId: "001-change", changeBase: "custom/changes", activeRoot: "custom/changes/001-change" };
+  const pathObservation = (identity = pathIdentity, changes = {}) => ({
+    executedArgv: ["steadyspec", "delegation-path-check", "--change-id", identity.changeId, "--substrate", "custom", "--change-root", identity.activeRoot, "--change-base", identity.changeBase, "--json"],
+    exitCode: 0,
+    stdout: JSON.stringify({
+      ok: true,
+      phase: "path-preflight",
+      changeId: identity.changeId,
+      substrate: "custom",
+      changeBase: identity.changeBase,
+      activeRoot: identity.activeRoot,
+      linkedComponents: [],
+      pathIdentityFingerprint: `sha256:${"d".repeat(64)}`,
+      results: [],
+    }),
+    stderr: "",
+    extraCommands: false,
+    ...changes,
+  });
+  const pathPositive = await pathRunner(async () => pathObservation(), pathIdentity, "custom", "Gather");
+  if (!pathPositive.ok) fail(`propose delegation path-preflight positive observation failed: ${pathPositive.errors.join(", ")}`);
+  for (const [label, mutation, expected] of [
+    ["identity", (value) => ({ ...value, stdout: JSON.stringify({ ...JSON.parse(value.stdout), activeRoot: "custom/changes/other" }) }), "delegation-path-check-identity-mismatch"],
+    ["linked", (value) => ({ ...value, stdout: JSON.stringify({ ...JSON.parse(value.stdout), linkedComponents: ["custom/changes"] }) }), "delegation-path-check-linked-component"],
+    ["stderr", (value) => ({ ...value, stderr: "unexpected" }), "delegation-path-check-stderr-not-empty"],
+  ]) {
+    const negative = await pathRunner(async () => mutation(pathObservation()), pathIdentity, "custom", "Gather");
+    if (negative.ok || !negative.errors.includes(expected)) fail(`delegation path-preflight negative observation ${label} did not fail closed`);
+  }
+  const pathInvocationIndex = proposeText.indexOf("const delegationPathPreflight = await runDelegationPathPreflight(");
+  if (pathInvocationIndex < 0) fail("propose workflow must invoke the code-owned path preflight");
+  for (const writeAnchor of ["label: 'write-context'", "label: 'write-grill'", "label: 'write-proposal-file'"]) {
+    const writeIndex = proposeText.indexOf(writeAnchor);
+    if (writeIndex < 0 || pathInvocationIndex > writeIndex) fail(`propose path preflight must precede every artifact write: ${writeAnchor}`);
+  }
 }
 
 function requireText(root, file, text, label = text) {
@@ -423,6 +1092,8 @@ function checkReleaseSurface(root, manifest, pkg) {
   }
 
   requireText(root, "CHANGELOG.md", "## 0.7.0 (experimental assurance protocol candidate)");
+  requireText(root, "CHANGELOG.md", "steadyspec delegation-path-check");
+  requireText(root, "CHANGELOG.md", "target proposal bytes to");
   requireText(root, "CHANGELOG.md", "## 0.6.1 (source-only reliability correction)");
   requireText(root, "CHANGELOG.md", "## 0.4.0 (alpha)");
 
@@ -501,8 +1172,18 @@ function checkSourceDistributionDocs(root, pkg) {
     fail("v0.7.0 evidence must not fabricate human acceptance or publication authority");
   }
   if (currentEvidenceManifest.evidence?.assuranceConformance !== "pass-local-53-total-51-core") fail("v0.7.0 evidence must report the current core/extension conformance split");
+  if (currentEvidenceManifest.evidence?.delegationPathPreflight !== "pass-local-real-windows-junction-zero-write-posix-symlink-fixture-defined-not-observed-installed-source") fail("v0.7.0 evidence must preserve the observed Windows junction, zero-write, installed-source, and unobserved POSIX boundary");
+  if (currentEvidenceManifest.evidence?.install !== "pass-local-113-entry-path-and-artifact-check") fail("v0.7.0 evidence must bind the installed path/artifact checks and package entry count");
+  if (currentEvidenceManifest.evidence?.composite !== "pass-local-exact-no-git-candidate-pending-exact-commit-run") fail("v0.7.0 evidence must distinguish the passing no-.git candidate from the pending exact committed run");
   requireText(root, "release-evidence/v0.7.0/README.md", "Evidence capture: **pre-release candidate**.");
   requireText(root, "release-evidence/v0.7.0/README.md", "No comparative effectiveness result exists");
+  for (const [file, anchors] of Object.entries({
+    "release-evidence/v0.7.0/README.md": ["write-before-check path", "real Windows junction", "target proposal bytes", "both installed `delegation-path-check` and `delegation-check`", "filesystem race", "was not observed in this capture"],
+    "EVIDENCE.md": ["write-before-check bypass", "Windows junction", "proposal target bytes", "same-Agent-observed", "POSIX execution remains unobserved"],
+    "zh/EVIDENCE.md": ["写前检查绕过", "真实 junction", "目标 proposal 字节", "同一 Agent", "未观察 POSIX 实际执行"],
+  })) {
+    for (const anchor of anchors) requireText(root, file, anchor);
+  }
   requireText(root, "SCOPE.md", "## v0.6 closure product boundary");
   const ci = readText(path.join(root, ".github", "workflows", "ci.yml"));
   for (const anchor of ["windows-latest", "ubuntu-latest", "node: [18, 22, 24]", "windows-autocrlf-v060-upgrade", "fetch-depth: 0", "25cc20eb3f8a77d6972ce04b949533c1925a81d6", "validate:assurance", "validate:portability", "validate:install", "core.autocrlf=true", "permissions:", "contents: read"]) {
@@ -2903,53 +3584,107 @@ function productContinuityErrors(snapshot) {
   const actualZhDigest = crypto.createHash("sha256")
     .update(Buffer.from(normalizeTransportEol(snapshot.zhProduct), "utf8"))
     .digest("hex");
+  const archivedV1Digest = crypto.createHash("sha256")
+    .update(Buffer.from(normalizeTransportEol(snapshot.archivedV1Product), "utf8"))
+    .digest("hex");
+  const archivedZhV1Digest = crypto.createHash("sha256")
+    .update(Buffer.from(normalizeTransportEol(snapshot.archivedZhV1Product), "utf8"))
+    .digest("hex");
+  const archivedV1MetadataDigest = crypto.createHash("sha256")
+    .update(Buffer.from(normalizeTransportEol(snapshot.archivedV1MetadataText), "utf8"))
+    .digest("hex");
+  const migrationMapDigest = crypto.createHash("sha256")
+    .update(Buffer.from(normalizeTransportEol(snapshot.migrationMap), "utf8"))
+    .digest("hex");
 
-  if (contract.schemaVersion !== 1 || contract.path !== "PRODUCT.md") errors.push("manifest product contract identity drift");
-  if (contract.schemaVersion === 1 && actualDigest !== PRODUCT_CONTRACT_V1_SHA256) errors.push("product contract v1 fixed baseline drift");
-  if (contract.schemaVersion === 1 && actualZhDigest !== ZH_PRODUCT_CONTRACT_V1_SHA256) errors.push("Chinese product contract v1 fixed baseline drift");
+  if (contract.descriptorSchemaVersion !== 1 || contract.contractVersion !== 2 || contract.path !== "PRODUCT.md") errors.push("manifest product contract identity drift");
+  if (contract.contractVersion === 2 && actualDigest !== PRODUCT_CONTRACT_V2_SHA256) errors.push("product contract v2 fixed baseline drift");
+  if (contract.contractVersion === 2 && actualZhDigest !== ZH_PRODUCT_CONTRACT_V2_SHA256) errors.push("Chinese product contract v2 fixed baseline drift");
   if (contract.normalizedSha256 !== actualDigest) errors.push("manifest product contract digest drift");
   if (contract.zhPath !== "zh/PRODUCT.md" || contract.zhNormalizedSha256 !== actualZhDigest) errors.push("manifest Chinese product contract digest drift");
-  if (JSON.stringify(contract.canonicalChangeLifecycle) !== JSON.stringify(expectedLifecycle)) errors.push("canonical five-verb lifecycle drift");
-  if (contract.assuranceRole !== "optional-additive-claim-integrity-support") errors.push("assurance support role drift");
-  if (contract.productIdentityChangeAuthority !== "human-owned-unverified") errors.push("product identity authority drift");
+  if (contract.core?.operatingPremise !== "external-human-accountability-retained") errors.push("external accountability premise drift");
+  if (contract.core?.problem !== "delegated-work-exceeds-practical-human-reperformance") errors.push("delegation problem drift");
+  if (contract.core?.objective !== "support-purpose-faithful-agent-capability-realization") errors.push("product purpose drift");
+  if (contract.core?.effectivenessStatus !== "unvalidated-product-hypothesis") errors.push("product effectiveness boundary drift");
+  if (JSON.stringify(contract.core?.invariants) !== JSON.stringify(PRODUCT_CORE_INVARIANTS)) errors.push("stable product core drift");
+  if (contract.referenceArchitecture?.portableMethod?.status !== "current-normative-reference" || contract.referenceArchitecture?.portableMethod?.shape !== "eight-mechanism-rails-and-wings") errors.push("portable method reference drift");
+  if (contract.referenceArchitecture?.softwareLifecycle?.status !== "current-normative-compatibility-protected") errors.push("software lifecycle protection drift");
+  if (JSON.stringify(contract.referenceArchitecture?.softwareLifecycle?.verbs) !== JSON.stringify(expectedLifecycle)) errors.push("current five-verb lifecycle drift");
+  if (contract.referenceArchitecture?.assuranceRole !== "optional-claim-integrity-support") errors.push("assurance support role drift");
+  if (contract.evolution?.authority !== "human-owned-unverified") errors.push("product evolution authority drift");
+  if (JSON.stringify(contract.evolution?.requiredForCoreOrReferenceChange) !== JSON.stringify(PRODUCT_EVOLUTION_REQUIREMENTS)) errors.push("product evolution requirements drift");
+  const prior = contract.evolution?.supersedes || {};
+  if (prior.contractVersion !== 1 || prior.sourceCommit !== "82da4603503be47e2b272b26aa618d410fe40fc1" || prior.reason !== "separate-product-purpose-from-current-reference-architecture") errors.push("v1 product contract history identity drift");
+  if (prior.englishPath !== "docs/product-contract-history/v1/PRODUCT.md" || prior.englishNormalizedSha256 !== PRODUCT_CONTRACT_V1_SHA256 || archivedV1Digest !== PRODUCT_CONTRACT_V1_SHA256) errors.push("English v1 product contract history drift");
+  if (prior.chinesePath !== "docs/product-contract-history/v1/zh-PRODUCT.md" || prior.chineseNormalizedSha256 !== ZH_PRODUCT_CONTRACT_V1_SHA256 || archivedZhV1Digest !== ZH_PRODUCT_CONTRACT_V1_SHA256) errors.push("Chinese v1 product contract history drift");
+  if (archivedV1MetadataDigest !== PRODUCT_CONTRACT_V1_METADATA_SHA256 || snapshot.archivedV1Metadata.contractVersion !== 1 || snapshot.archivedV1Metadata.status !== "superseded-pre-release-contract" || snapshot.archivedV1Metadata.supersededBy !== 2 || snapshot.archivedV1Metadata.sourceCommit !== prior.sourceCommit || snapshot.archivedV1Metadata.englishPath !== "PRODUCT.md" || snapshot.archivedV1Metadata.chinesePath !== "zh-PRODUCT.md" || snapshot.archivedV1Metadata.englishNormalizedSha256 !== PRODUCT_CONTRACT_V1_SHA256 || snapshot.archivedV1Metadata.chineseNormalizedSha256 !== ZH_PRODUCT_CONTRACT_V1_SHA256 || snapshot.archivedV1Metadata.reason !== "v1 prevented silent lifecycle demotion but over-bound the current reference architecture as product purpose") errors.push("v1 product contract metadata drift");
+  const migration = contract.evolution?.currentMigration || {};
+  const requiredMigration = {
+    humanDecisionRecord: "release-evidence/v0.7.0/README.md#product-continuity-rejection-and-two-stage-correction",
+    coverageMap: "docs/product-contract-history/v1/migration-to-v2.md",
+    coverageMapNormalizedSha256: PRODUCT_V1_TO_V2_COVERAGE_SHA256,
+    compatibilityPlan: "docs/product-contract-history/v1/migration-to-v2.md#compatibility-and-migration",
+    evidenceBoundary: "PRODUCT.md#effectiveness-and-evidence-boundary",
+    changelog: "CHANGELOG.md#070-experimental-assurance-protocol-candidate",
+    releaseEvidence: "release-evidence/v0.7.0/README.md",
+  };
+  if (JSON.stringify(migration) !== JSON.stringify(requiredMigration)) errors.push("v1-to-v2 product migration record drift");
+  if (migrationMapDigest !== PRODUCT_V1_TO_V2_COVERAGE_SHA256) errors.push("v1-to-v2 product coverage map fixed baseline drift");
   if (!Array.isArray(snapshot.pkg.files) || !snapshot.pkg.files.includes("PRODUCT.md")) errors.push("package payload omits PRODUCT.md");
-  if (!/five-flow SDD lifecycle with optional agent assurance/i.test(snapshot.pkg.description || "")) errors.push("package description demotes the lifecycle");
+  if (!Array.isArray(snapshot.pkg.files) || !snapshot.pkg.files.includes("docs/")) errors.push("package payload omits product history and experiment docs");
+  if (!/purpose-faithful delegation of software work to AI agents under retained external human accountability/i.test(snapshot.pkg.description || "")) errors.push("package description loses product purpose");
 
   const anchors = {
     product: [
-      "## PI-1: Long-running work, not only final claims",
-      "## PI-2: Five canonical software change verbs",
-      "## PI-3: Human attention and final responsibility",
-      "## PI-4: Capability without drift",
-      "## PI-5: Assurance is additive claim-integrity support",
-      "## PI-6: Product-identity changes are human-owned",
+      "## Operating premise: accountability remains external",
+      "## Product purpose: purpose-faithful capability realization",
+      "### PC-1: Authorized-purpose fidelity",
+      "### PC-2: Challenge without usurpation",
+      "### PC-3: Capability realization without premature convergence",
+      "### PC-4: Evidence-bounded claim integrity",
+      "### PC-5: Human authority is not semantic truth",
+      "### PC-6: Attention routing is triage, not responsibility discharge",
+      "## Current reference architecture",
+      "## Effectiveness and evidence boundary",
+      "## Evolution and authority boundary",
+      "## Explicit non-claims",
       "explore -> propose -> apply -> verify -> archive",
-      "retains each change's own intent and\nevidence records",
-      "does not define goal-to-change lineage or\ncompletion semantics",
-      "does not own, authenticate, or guarantee the host\ngoal state",
+      "It is a means\nof realizing the product purpose, not the purpose itself",
+      "must not adopt\na change to human-owned purpose",
+      "unvalidated product hypothesis",
+      "does not create, transfer, authenticate, satisfy, or\ndischarge responsibility",
     ],
     zhProduct: [
-      "## PI-2：五个规范的软件 change 动词",
-      "## PI-3：人的注意力与最终责任",
-      "## PI-4：不漂移地释放能力",
-      "## PI-5：Assurance 是增量式的声明完整性支持",
-      "## PI-6：产品身份变化由人决定",
-      "保存每个 change 自身的意图与证据记录",
-      "不定义 goal 到 change 的血缘或完成语义",
+      "## 运行前提：责任来自外部关系",
+      "## 产品目的：目的保真下的能力兑现",
+      "### PC-1：经授权目的的保真",
+      "### PC-2：质疑而不越权",
+      "### PC-3：避免过早收敛的能力兑现",
+      "### PC-4：证据边界内的声明完整性",
+      "### PC-5：人的权力不是语义真理",
+      "### PC-6：注意力路由是分诊，不是卸责",
+      "## 当前参考架构",
+      "## 有效性与证据边界",
+      "## 演进与授权边界",
+      "## 明确不作出的声明",
+      "不创造、转移、\n认证、履行或解除责任",
+      "未经验证的产品假设",
     ],
-    readme: ["canonical software change lifecycle", "Product Continuity Contract", "does not replace or demote the", "does not define goal-to-change\nlineage or completion semantics"],
-    scope: ["## Product continuity and host-goal boundary", "does not define goal-to-change lineage or\ncompletion semantics", "human-owned product decision", "## Deciding whether the software lifecycle fits your project", "## Deciding whether assurance augmentation fits"],
-    method: ["SteadySpec has both rails and wings", "canonical lifecycle `explore -> propose -> apply ->"],
-    quickstart: ["## Start with the canonical lifecycle", "does not define goal-to-change lineage or completion semantics", "## Optional two-minute assurance demo"],
-    artifact: ["canonical\nfive-flow software change lifecycle", "does not make this workflow contract or\nthe closure support product legacy"],
-    protocol: ["MUST NOT be interpreted as a replacement for or demotion of", "Protocol conformance is deliberately narrower than SteadySpec method or product"],
+    readme: ["SteadySpec governs that delegation", "Product Purpose and Continuity Contract", "current means, not SteadySpec's ultimate purpose", "does not define goal-to-change\nlineage or completion semantics"],
+    scope: ["governs delegation of consequential software work", "## Product effectiveness boundary", "has not shown causal improvement", "## Deciding whether the software lifecycle fits your project", "## Deciding whether assurance augmentation fits"],
+    method: ["method for governing Agent delegation under retained external\nhuman accountability", "The prompt is not automatically the purpose", "SteadySpec has both rails and wings", "current normative, compatibility-protected lifecycle"],
+    quickstart: ["governs Agent delegation under retained external human\naccountability", "five verbs are current normative means, not the product's\nultimate purpose", "## Start with the canonical lifecycle", "## Optional two-minute assurance demo"],
+    artifact: ["current\nnormative, compatibility-protected five-flow software reference lifecycle", "current means rather\nthan the product's ultimate purpose"],
+    protocol: ["current normative, compatibility-protected lifecycle—not the ultimate\nproduct purpose", "MUST NOT be interpreted as a replacement for or demotion of", "Protocol conformance is deliberately narrower than SteadySpec method or product"],
     experiment: ["same agent, authority,\nand host workflow without assurance augmentation", "cannot by itself validate or reject the wider SteadySpec product", "rate of `ready-for-human` claims that", "false/stale/unsupported readiness claim"],
-    enReadme: ["canonical software change lifecycle", "not a successor to the\nfive flows"],
-    zhReadme: ["五动词规范生命周期", "不定义 goal 到 change 的血缘或完成语义", "不会取代或降格五个治理"],
-    zhScope: ["## 产品连续性与宿主 goal 边界", "不定义 goal 到 change 的血缘或完成语义", "## 软件生命周期是否适合", "## Assurance 增强是否适合"],
-    zhMethod: ["SteadySpec 同时需要 rails 和 wings", "规范\n生命周期应用方法"],
-    zhQuickstart: ["## 从规范生命周期开始", "不定义 goal 到 change 的\n血缘或完成语义", "## 可选的两分钟 Assurance 演示"],
-    softwareRecipe: ["canonical SteadySpec software mapping", "does not define goal-to-change lineage or completion semantics", "support this\nlifecycle rather than replace it"],
+    wholeExperiment: ["Status: design candidate only, not pre-registered", "Sample size, assignment", "Before this design may be called pre-registered", "Same Agent using its ordinary strongest available workflow", "silent purpose loss", "blind final quality", "Agent usage, and rework cost", "does not ask whether SteadySpec produces unbiased or globally\noptimal work"],
+    migrationMap: ["No runtime, flow, skill, protocol,\nschema, or CLI capability is removed", "Five software verbs", "Retained unchanged as current-normative and compatibility-protected", "delegation-boundary classification and gate", "does not prove the v2\nproduct hypothesis"],
+    enReadme: ["Governing Agent delegation under retained external human accountability", "current normative,\ncompatibility-protected software reference lifecycle", "not a successor to the\nfive flows"],
+    zhReadme: ["治理对 Agent 的委托", "当前手段，不是 SteadySpec 的最终目的", "不会取代或降格五个治理"],
+    zhScope: ["治理重要软件工作的 Agent\n委托", "## 产品有效性边界", "尚未证明相对强 Agent 基线存在因果改善", "## 软件生命周期是否适合", "## Assurance 增强是否适合"],
+    zhMethod: ["在人类仍承担外部现实责任的条件下治理 Agent 委托", "prompt 不自动等于目的", "SteadySpec 同时需要 rails 和 wings", "当前\n规范且受兼容保护的生命周期"],
+    zhQuickstart: ["在人类仍承担外部现实责任的条件下治理 Agent 委托", "五个动词是当前规范手段，不是产品的最终目的", "## 从规范生命周期开始", "## 可选的两分钟 Assurance 演示"],
+    softwareRecipe: ["current normative, compatibility-protected software\nreference mapping", "means of realizing the product purpose, not the purpose itself", "does not define goal-to-change lineage or completion semantics", "support this\nlifecycle rather than replace it"],
   };
   for (const [name, required] of Object.entries(anchors)) {
     const text = normalizeTransportEol(snapshot[name]);
@@ -2958,20 +3693,74 @@ function productContinuityErrors(snapshot) {
     }
   }
 
-  const activeSurfaces = ["product", "zhProduct", "readme", "scope", "method", "quickstart", "artifact", "protocol", "experiment", "enReadme", "zhReadme", "zhScope", "zhMethod", "zhQuickstart", "softwareRecipe"];
+  const activeSurfaces = ["product", "zhProduct", "readme", "scope", "method", "quickstart", "artifact", "protocol", "experiment", "wholeExperiment", "migrationMap", "enReadme", "zhReadme", "zhScope", "zhMethod", "zhQuickstart", "softwareRecipe"];
   const demotion = /\blegacy\s+(?:bundled\s+)?(?:software|five[- ]verb|recipe|skill pack|workflow|closure\s+(?:lane|product))/i;
+  const unsupportedEffectClaims = [
+    /(?<!not )\b(?:guarantees?|ensures?)\s+(?:execution quality|semantic correctness|safety)\b/i,
+    /(?<!不)(?:保证|确保)(?:了)?(?:执行质量|语义正确|安全)/,
+  ];
   for (const name of activeSurfaces) {
     if (demotion.test(snapshot[name])) errors.push(`${name} demotes an active product surface to legacy`);
+    for (const pattern of unsupportedEffectClaims) {
+      if (pattern.test(snapshot[name])) errors.push(`${name} makes an unsupported product-effect guarantee`);
+    }
   }
 
   const releaseContract = snapshot.releaseManifest.productContinuity || {};
-  if (releaseContract.contractVersion !== 1 || releaseContract.contractPath !== "PRODUCT.md") errors.push("release evidence omits product contract identity");
+  if (releaseContract.descriptorSchemaVersion !== 1 || releaseContract.contractVersion !== 2 || releaseContract.contractPath !== "PRODUCT.md") errors.push("release evidence omits product contract identity");
   if (releaseContract.contractNormalizedSha256 !== actualDigest) errors.push("release evidence product contract digest drift");
   if (releaseContract.zhContractPath !== "zh/PRODUCT.md" || releaseContract.zhContractNormalizedSha256 !== actualZhDigest) errors.push("release evidence Chinese product contract digest drift");
-  if (JSON.stringify(releaseContract.canonicalChangeLifecycle) !== JSON.stringify(expectedLifecycle)) errors.push("release evidence lifecycle drift");
-  if (releaseContract.assuranceRole !== "optional-additive-claim-integrity-support") errors.push("release evidence assurance role drift");
-  if (releaseContract.productIdentityChangeAuthority !== "human-owned-unverified") errors.push("release evidence product authority drift");
+  if (JSON.stringify(releaseContract.core) !== JSON.stringify(contract.core)) errors.push("release evidence product core drift");
+  if (releaseContract.referenceArchitecture?.portableMethod !== "current-normative-reference:eight-mechanism-rails-and-wings") errors.push("release evidence portable method drift");
+  if (releaseContract.referenceArchitecture?.softwareLifecycleStatus !== "current-normative-compatibility-protected" || JSON.stringify(releaseContract.referenceArchitecture?.softwareLifecycleVerbs) !== JSON.stringify(expectedLifecycle)) errors.push("release evidence lifecycle drift");
+  if (releaseContract.referenceArchitecture?.assuranceRole !== "optional-claim-integrity-support") errors.push("release evidence assurance role drift");
+  if (releaseContract.evolution?.authority !== "human-owned-unverified" || JSON.stringify(releaseContract.evolution?.requiredForCoreOrReferenceChange) !== JSON.stringify(PRODUCT_EVOLUTION_REQUIREMENTS)) errors.push("release evidence product evolution drift");
+  if (JSON.stringify(releaseContract.evolution?.currentMigration) !== JSON.stringify(migration)) errors.push("release evidence migration record drift");
+  const releasePrior = releaseContract.evolution?.supersededContract || {};
+  if (releasePrior.contractVersion !== 1 || releasePrior.sourceCommit !== prior.sourceCommit || releasePrior.englishPath !== prior.englishPath || releasePrior.englishNormalizedSha256 !== PRODUCT_CONTRACT_V1_SHA256 || releasePrior.chinesePath !== prior.chinesePath || releasePrior.chineseNormalizedSha256 !== ZH_PRODUCT_CONTRACT_V1_SHA256 || releasePrior.reason !== prior.reason) errors.push("release evidence v1 contract history drift");
   if (releaseContract.rejectedCandidate !== "3c35b39a4ec6f9d3e61c3fefb2e0a10b056aff3a" || releaseContract.rejectedReason !== "product-positioning-drift") errors.push("release evidence erases the rejected v0.7 candidate");
+  if (releaseContract.interimContractV1Commit !== "82da4603503be47e2b272b26aa618d410fe40fc1") errors.push("release evidence erases the interim v1 correction");
+  return errors;
+}
+
+function productEvolutionStructureErrors(root, previous, current, record) {
+  const errors = [];
+  const changed = JSON.stringify(previous.core) !== JSON.stringify(current.core)
+    || JSON.stringify(previous.referenceArchitecture) !== JSON.stringify(current.referenceArchitecture);
+  if (!changed) return errors;
+  if (!Number.isInteger(previous.contractVersion) || !Number.isInteger(current.contractVersion) || current.contractVersion <= previous.contractVersion) errors.push("product evolution requires a contract version bump");
+  const required = {
+    humanDecisionRecord: "explicit authorization to execute it",
+    coverageMap: "# Product Contract v1 to v2 Coverage Map",
+    compatibilityPlan: "## Compatibility and migration",
+    evidenceBoundary: "## Effectiveness and evidence boundary",
+    changelog: "## 0.7.0 (experimental assurance protocol candidate)",
+    releaseEvidence: "# v0.7.0 Assurance Protocol Candidate Evidence",
+  };
+  for (const [key, anchor] of Object.entries(required)) {
+    const reference = record?.[key];
+    if (typeof reference !== "string" || !reference.trim()) {
+      errors.push(`product evolution missing ${key}`);
+      continue;
+    }
+    const relative = reference.split("#", 1)[0];
+    if (!relative || path.isAbsolute(relative)) {
+      errors.push(`product evolution ${key} must be a repository-relative file reference`);
+      continue;
+    }
+    const resolved = path.resolve(root, relative);
+    const relation = path.relative(root, resolved);
+    if (relation.startsWith("..") || path.isAbsolute(relation)) {
+      errors.push(`product evolution ${key} escapes the repository`);
+      continue;
+    }
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+      errors.push(`product evolution ${key} target is missing`);
+      continue;
+    }
+    if (!normalizeTransportEol(readText(resolved)).includes(anchor)) errors.push(`product evolution ${key} target lacks required anchor`);
+  }
+  if (record?.priorContractPreserved !== true) errors.push("product evolution must preserve the prior contract");
   return errors;
 }
 
@@ -2982,6 +3771,10 @@ function checkProductContinuityContract(root, manifest, pkg) {
     releaseManifest: readJson(path.join(root, "release-evidence", "v0.7.0", "manifest.json")),
     product: readText(path.join(root, "PRODUCT.md")),
     zhProduct: readText(path.join(root, "zh", "PRODUCT.md")),
+    archivedV1Product: readText(path.join(root, "docs", "product-contract-history", "v1", "PRODUCT.md")),
+    archivedZhV1Product: readText(path.join(root, "docs", "product-contract-history", "v1", "zh-PRODUCT.md")),
+    archivedV1Metadata: readJson(path.join(root, "docs", "product-contract-history", "v1", "metadata.json")),
+    archivedV1MetadataText: readText(path.join(root, "docs", "product-contract-history", "v1", "metadata.json")),
     readme: readText(path.join(root, "README.md")),
     scope: readText(path.join(root, "SCOPE.md")),
     method: readText(path.join(root, "METHOD.md")),
@@ -2989,6 +3782,8 @@ function checkProductContinuityContract(root, manifest, pkg) {
     artifact: readText(path.join(root, "ARTIFACT_CONTRACT.md")),
     protocol: readText(path.join(root, "protocol", "ASSURANCE_PROTOCOL.md")),
     experiment: readText(path.join(root, "protocol", "EXPERIMENT.md")),
+    wholeExperiment: readText(path.join(root, "docs", "experiments", "whole-product-pilot.md")),
+    migrationMap: readText(path.join(root, "docs", "product-contract-history", "v1", "migration-to-v2.md")),
     enReadme: readText(path.join(root, "en", "README.md")),
     zhReadme: readText(path.join(root, "zh", "README.md")),
     zhScope: readText(path.join(root, "zh", "SCOPE.md")),
@@ -2999,18 +3794,44 @@ function checkProductContinuityContract(root, manifest, pkg) {
   const errors = productContinuityErrors(snapshot);
   if (errors.length) fail(`product continuity contract failed:\n- ${errors.join("\n- ")}`);
 
+  const actualMigrationErrors = productEvolutionStructureErrors(root,
+    { contractVersion: 1, core: { v1: true }, referenceArchitecture: { v1: true } },
+    { contractVersion: manifest.productContract.contractVersion, core: manifest.productContract.core, referenceArchitecture: manifest.productContract.referenceArchitecture },
+    { ...manifest.productContract.evolution.currentMigration, priorContractPreserved: true });
+  if (actualMigrationErrors.length) fail(`product contract migration structure failed:\n- ${actualMigrationErrors.join("\n- ")}`);
+
   const mutate = () => JSON.parse(JSON.stringify(snapshot));
   const lifecycleMutation = mutate();
-  lifecycleMutation.manifest.productContract.canonicalChangeLifecycle = ["explore", "propose", "apply", "archive"];
+  lifecycleMutation.manifest.productContract.referenceArchitecture.softwareLifecycle.verbs = ["explore", "propose", "apply", "archive"];
   if (!productContinuityErrors(lifecycleMutation).some((item) => item.includes("lifecycle drift"))) fail("product continuity negative fixture failed to catch a removed verb");
 
   const roleMutation = mutate();
-  roleMutation.manifest.productContract.assuranceRole = "replacement-core";
+  roleMutation.manifest.productContract.referenceArchitecture.assuranceRole = "replacement-core";
   if (!productContinuityErrors(roleMutation).some((item) => item.includes("assurance support role drift"))) fail("product continuity negative fixture failed to catch assurance role inversion");
+
+  const purposeCollapseMutation = mutate();
+  purposeCollapseMutation.manifest.productContract.core.objective = "enforce-five-flow-compliance";
+  if (!productContinuityErrors(purposeCollapseMutation).some((item) => item.includes("product purpose drift"))) fail("product continuity negative fixture failed to catch purpose collapse into mechanism compliance");
+
+  const unilateralPurposeMutation = mutate();
+  unilateralPurposeMutation.manifest.productContract.core.invariants[1] = "agent-may-improve-purpose-without-approval";
+  if (!productContinuityErrors(unilateralPurposeMutation).some((item) => item.includes("stable product core drift"))) fail("product continuity negative fixture failed to catch unilateral purpose authority");
+
+  const accountabilityMutation = mutate();
+  accountabilityMutation.manifest.productContract.core.operatingPremise = "steadyspec-discharges-human-accountability";
+  if (!productContinuityErrors(accountabilityMutation).some((item) => item.includes("accountability premise drift"))) fail("product continuity negative fixture failed to catch accountability discharge");
+
+  const capabilityMutation = mutate();
+  capabilityMutation.manifest.productContract.core.invariants = capabilityMutation.manifest.productContract.core.invariants.filter((item) => item !== "capability-realization-without-premature-convergence");
+  if (!productContinuityErrors(capabilityMutation).some((item) => item.includes("stable product core drift"))) fail("product continuity negative fixture failed to catch capability removal");
 
   const demotionMutation = mutate();
   demotionMutation.readme += "\nThe five-verb workflow is a legacy software recipe.\n";
   if (!productContinuityErrors(demotionMutation).some((item) => item.includes("demotes an active product surface"))) fail("product continuity negative fixture failed to catch lifecycle demotion");
+
+  const effectClaimMutation = mutate();
+  effectClaimMutation.zhQuickstart += "\nSteadySpec 保证执行质量。\n";
+  if (!productContinuityErrors(effectClaimMutation).some((item) => item.includes("unsupported product-effect guarantee"))) fail("product continuity negative fixture failed to catch an unsupported effect guarantee");
 
   const digestMutation = mutate();
   digestMutation.product += "\nchanged without rebinding\n";
@@ -3028,6 +3849,39 @@ function checkProductContinuityContract(root, manifest, pkg) {
   const zhDigestMutation = mutate();
   zhDigestMutation.zhProduct += "\n未重新绑定的修改\n";
   if (!productContinuityErrors(zhDigestMutation).some((item) => item.includes("Chinese product contract digest drift"))) fail("product continuity negative fixture failed to catch Chinese contract content drift");
+
+  const archivedV1Mutation = mutate();
+  archivedV1Mutation.archivedV1Product += "\nrewritten history\n";
+  if (!productContinuityErrors(archivedV1Mutation).some((item) => item.includes("English v1 product contract history drift"))) fail("product continuity negative fixture failed to catch rewritten v1 history");
+
+  const archivedV1MetadataMutation = mutate();
+  archivedV1MetadataMutation.archivedV1MetadataText = archivedV1MetadataMutation.archivedV1MetadataText.replace("superseded-pre-release-contract", "rewritten-history");
+  archivedV1MetadataMutation.archivedV1Metadata.status = "rewritten-history";
+  if (!productContinuityErrors(archivedV1MetadataMutation).some((item) => item.includes("v1 product contract metadata drift"))) fail("product continuity negative fixture failed to catch rewritten v1 metadata");
+
+  const previousDescriptor = { contractVersion: 2, core: snapshot.manifest.productContract.core, referenceArchitecture: snapshot.manifest.productContract.referenceArchitecture };
+  const futureDescriptor = JSON.parse(JSON.stringify(previousDescriptor));
+  futureDescriptor.referenceArchitecture.softwareLifecycle.verbs = ["discover", "build", "close"];
+  const unversionedEvolution = productEvolutionStructureErrors(root, previousDescriptor, futureDescriptor, {});
+  if (!unversionedEvolution.some((item) => item.includes("version bump")) || !unversionedEvolution.some((item) => item.includes("coverageMap"))) fail("product evolution negative fixture failed to catch an unversioned, unmigrated architecture change");
+
+  futureDescriptor.contractVersion = 3;
+  const missingReferenceEvolution = productEvolutionStructureErrors(root, futureDescriptor, { ...futureDescriptor, contractVersion: 4, core: { changed: true } }, {
+    humanDecisionRecord: "missing/decision.md",
+    coverageMap: "missing/coverage.md",
+    compatibilityPlan: "missing/migration.md",
+    evidenceBoundary: "missing/evidence.md",
+    changelog: "missing/changelog.md",
+    releaseEvidence: "missing/release.md",
+    priorContractPreserved: true,
+  });
+  if (!missingReferenceEvolution.some((item) => item.includes("target is missing"))) fail("product evolution negative fixture failed to reject nonexistent migration evidence");
+
+  const structurallyReadyEvolution = productEvolutionStructureErrors(root, previousDescriptor, futureDescriptor, {
+    ...snapshot.manifest.productContract.evolution.currentMigration,
+    priorContractPreserved: true,
+  });
+  if (structurallyReadyEvolution.length) fail(`product evolution positive fixture must be structurally ready for human review: ${structurallyReadyEvolution.join(", ")}`);
 }
 
 function evidenceEntryFixture(overrides = {}) {
@@ -3069,6 +3923,14 @@ function checkCrossReviewWorkflowPreflight(root) {
     fail("steadyspec-archive.js missing the deterministic archive render pure helper block");
   }
   const archiveRenderBlock = archiveText.slice(archiveRenderStart + archiveRenderBegin.length, archiveRenderFinish).trim();
+  const delegationGateBegin = "// BEGIN DELEGATION GATE PURE";
+  const delegationGateEnd = "// END DELEGATION GATE PURE";
+  const delegationGateStart = archiveText.indexOf(delegationGateBegin);
+  const delegationGateFinish = archiveText.indexOf(delegationGateEnd);
+  if (delegationGateStart < 0 || delegationGateFinish < 0 || delegationGateFinish <= delegationGateStart) {
+    fail("steadyspec-archive.js missing the delegation gate helper dependency for archive path planning");
+  }
+  const delegationGateBlock = archiveText.slice(delegationGateStart + delegationGateBegin.length, delegationGateFinish).trim();
 
   for (const [text, relative] of [[verifyText, "steadyspec-verify.js"], [archiveText, "steadyspec-archive.js"]]) {
     for (const anchor of [
@@ -3109,7 +3971,7 @@ function checkCrossReviewWorkflowPreflight(root) {
   }
 
   const sandbox = { process: { platform: process.platform } };
-  vm.runInNewContext(`${verifyBlock}\n${archiveRenderBlock}\nthis.crossReviewApi = { buildCrossReviewCommandPlan, parseCrossReviewExecution, mapCrossReviewObservation, combineCrossReviewObservations, crossReviewVerifyDecision, buildCrossReviewArchiveClaimBlock, canonicalizeCrossReviewDeclaredPath, canonicalizeCrossReviewHostRoot, crossReviewExpectedOutputParent, crossReviewRunJsonIdentity, crossReviewArgvIsReadOnly, deriveArchivePathPlan, validateArchiveComposition, renderArchiveDocument, archiveMarkerCount };`, sandbox, { timeout: 1000 });
+  vm.runInNewContext(`${delegationGateBlock}\n${verifyBlock}\n${archiveRenderBlock}\nthis.crossReviewApi = { buildCrossReviewCommandPlan, parseCrossReviewExecution, mapCrossReviewObservation, combineCrossReviewObservations, crossReviewVerifyDecision, buildCrossReviewArchiveClaimBlock, canonicalizeCrossReviewDeclaredPath, canonicalizeCrossReviewHostRoot, crossReviewExpectedOutputParent, crossReviewRunJsonIdentity, crossReviewArgvIsReadOnly, deriveArchivePathPlan, validateArchiveComposition, renderArchiveDocument, archiveMarkerCount };`, sandbox, { timeout: 1000 });
   const api = sandbox.crossReviewApi;
   const hostRepoRoot = process.platform === "win32" ? "C:\\repo" : "/repo";
   const baseState = {
@@ -3502,7 +4364,15 @@ function checkCrossReviewWorkflowPreflight(root) {
     || api.deriveArchivePathPlan("fixture-change", "docs", null, "Docs/changes/fixture-change").ok
     || api.deriveArchivePathPlan("../fixture", "docs", null, "docs/changes/fixture").ok
     || api.deriveArchivePathPlan("fixture?change", "docs", null, "docs/changes/fixture?change").ok
-    || api.deriveArchivePathPlan("fixture-change", "custom", null, "custom/changes/fixture-change").ok) {
+    || api.deriveArchivePathPlan("fixture-change", "custom", null, "custom/changes/fixture-change").ok
+    || api.deriveArchivePathPlan("fixture-change", "custom", "docs/changes", "docs/changes/fixture-change").ok
+    || api.deriveArchivePathPlan("fixture-change", "custom", "Docs/changes", "Docs/changes/fixture-change").ok
+    || api.deriveArchivePathPlan("changes", "custom", "docs", "docs/changes").ok
+    || api.deriveArchivePathPlan("changes", "custom", "Docs", "Docs/changes").ok
+    || api.deriveArchivePathPlan("changes", "custom", "openspec", "openspec/changes").ok
+    || api.deriveArchivePathPlan("changes", "custom", ".meta", ".meta/changes").ok
+    || api.deriveArchivePathPlan("fixture-change", "custom", "docs.", "docs./fixture-change").ok
+    || api.deriveArchivePathPlan("fixture-change", "custom", "NUL", "NUL/fixture-change").ok) {
     fail("archive target path must be code-owned, substrate-bounded, and exact-change-root-bound");
   }
   const archiveComposition = {
@@ -4022,7 +4892,8 @@ async function checkHumanTransactionWorkflowIntegration(root) {
       const id = "resume-archive-b";
       const sourceRoot = `.meta/changes/${id}`;
       const targetRoot = `.meta/changes/archive/${id}`;
-      writeResume(`${sourceRoot}/proposal.md`, Buffer.from("# Proposal\n", "utf8"));
+      writeResume(`${sourceRoot}/proposal.md`, Buffer.from(readyDelegationProposalFixture(id), "utf8"));
+      writeResume(`${sourceRoot}/trust-checkpoint.md`, Buffer.from(archiveTrustFixture(id), "utf8"));
       const requestPath = ".steadyspec/requests/workflow-resume-archive.json";
       writePackedSmokeJson(path.join(resumeRepo, ...requestPath.split("/")), {
         schemaVersion: 1, sourceRoot, targetRoot, archiveBase64: Buffer.from("# Archive\n").toString("base64"),
@@ -4085,10 +4956,10 @@ function checkHumanDecisionTransactions(root) {
   const helper = path.join(root, "bin", "human-decision-transaction.js");
   const router = path.join(root, "bin", "init.js");
   if (!fs.existsSync(helper)) fail("human-decision transaction helper is missing");
-  const { recordHash } = require(helper);
+  const { canonicalJson, recordHash, sha256 } = require(helper);
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "steadyspec-human-transaction-"));
-  const run = (args, env = {}) => {
-    const result = spawnSync(process.execPath, [helper, ...args], {
+  const runWithHelper = (helperPath, args, env = {}) => {
+    const result = spawnSync(process.execPath, [helperPath, ...args], {
       cwd: repo,
       encoding: "utf8",
       env: { ...process.env, ...env },
@@ -4099,6 +4970,7 @@ function checkHumanDecisionTransactions(root) {
     try { json = JSON.parse(String(result.stdout || "").trim()); } catch (error) { /* asserted by caller */ }
     return { ...result, json };
   };
+  const run = (args, env = {}) => runWithHelper(helper, args, env);
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   const write = (relative, bytes) => {
     const file = path.join(repo, ...relative.split("/"));
@@ -4129,7 +5001,8 @@ function checkHumanDecisionTransactions(root) {
   const archiveFixture = (id, substrate = "meta") => {
     const base = substrate === "docs" ? "docs/changes" : ".meta/changes";
     const sourceRoot = `${base}/${id}`;
-    write(`${sourceRoot}/proposal.md`, Buffer.from("# Archive fixture\n", "utf8"));
+    write(`${sourceRoot}/proposal.md`, Buffer.from(readyDelegationProposalFixture(id), "utf8"));
+    write(`${sourceRoot}/trust-checkpoint.md`, Buffer.from(archiveTrustFixture(id), "utf8"));
     const archive = Buffer.from(`# Archive: ${id}\n`, "utf8");
     const targetRoot = `${base}/archive/${id}`;
     const requestRelative = `.steadyspec/requests/${id}-archive.json`;
@@ -4188,6 +5061,33 @@ function checkHumanDecisionTransactions(root) {
     write(".meta/changes/not-active/readme.md", Buffer.from("not a change\n", "utf8"));
     result = run(["prepare", "--kind", "archive-finalize", "--change", "not-active", "--request", ".steadyspec/requests/reserved-archive.json", "--json"]);
     assert(result.status === 2 && result.json.status === "invalid" && !fs.existsSync(path.join(repo, ".steadyspec", "human-transactions")), "directory without exact proposal.md was treated as an active change");
+
+    const missingTrustRoot = ".meta/changes/archive-missing-trust";
+    write(`${missingTrustRoot}/proposal.md`, Buffer.from(readyDelegationProposalFixture("missing trust"), "utf8"));
+    writePackedSmokeJson(path.join(repo, ".steadyspec", "requests", "archive-missing-trust.json"), {
+      schemaVersion: 1,
+      sourceRoot: missingTrustRoot,
+      targetRoot: ".meta/changes/archive/archive-missing-trust",
+      archiveBase64: Buffer.from("# Archive\n").toString("base64"),
+      substrate: "meta",
+      docsCheckRequired: false,
+    });
+    result = run(["prepare", "--kind", "archive-finalize", "--change", "archive-missing-trust", "--request", ".steadyspec/requests/archive-missing-trust.json", "--json"]);
+    assert(result.status === 3 && result.json.status === "blocked" && result.json.errors.some((item) => item.includes("ARCHIVE_DELEGATION_NOT_READY")) && !fs.existsSync(path.join(repo, ".steadyspec", "human-transactions")), "archive prepare without a passing trust artifact did not fail before pending state");
+
+    const reservedDocsId = "reserved-docs-custom";
+    write(`docs/changes/${reservedDocsId}/proposal.md`, Buffer.from(readyDelegationProposalFixture(reservedDocsId), "utf8"));
+    write(`docs/changes/${reservedDocsId}/trust-checkpoint.md`, Buffer.from(archiveTrustFixture(reservedDocsId), "utf8"));
+    writePackedSmokeJson(path.join(repo, ".steadyspec", "requests", "reserved-docs-custom.json"), {
+      schemaVersion: 1,
+      sourceRoot: `docs/changes/${reservedDocsId}`,
+      targetRoot: `docs/changes/archive/${reservedDocsId}`,
+      archiveBase64: Buffer.from("# Archive\n").toString("base64"),
+      substrate: "custom",
+      docsCheckRequired: false,
+    });
+    result = run(["prepare", "--kind", "archive-finalize", "--change", reservedDocsId, "--request", ".steadyspec/requests/reserved-docs-custom.json", "--json"]);
+    assert(result.status === 2 && result.json.status === "invalid" && result.json.errors.some((item) => item.includes("ARCHIVE_SUBSTRATE_MISMATCH")), "custom substrate impersonated the reserved docs namespace");
 
     const linkedTarget = path.join(repo, ".meta", "changes", "linked-target");
     const linkedChange = path.join(repo, ".meta", "changes", "linked-change");
@@ -4364,6 +5264,17 @@ function checkHumanDecisionTransactions(root) {
     result = commit(archivePending);
     assert(result.status === 0 && result.json.status === "already-committed" && read(`.steadyspec/human-transactions/${archivePending.decisionId}/commit.json`).equals(archiveJournal), "archive replay was not no-write idempotent");
 
+    const legacyArchive = archiveFixture("archive-legacy-pending");
+    const legacyPending = pendingFor(prepareArchive(legacyArchive));
+    delete legacyPending.binding.operation.delegationPolicyIdentity;
+    delete legacyPending.binding.operation.delegationArtifactFingerprint;
+    legacyPending.bindingHash = sha256(canonicalJson(legacyPending.binding));
+    legacyPending.pendingHash = recordHash(legacyPending, "pendingHash");
+    writePackedSmokeJson(path.join(repo, `.steadyspec/human-transactions/${legacyPending.decisionId}/pending.json`), legacyPending);
+    decisionFor(legacyPending);
+    result = commit(legacyPending);
+    assert(result.status === 3 && result.json.status === "stale" && result.json.errors.some((item) => item.includes("DELEGATION_BINDING_MISSING")) && fs.existsSync(path.join(repo, ...legacyArchive.sourceRoot.split("/"))) && !fs.existsSync(path.join(repo, ...legacyArchive.targetRoot.split("/"))), "legacy archive pending state bypassed the delegation artifact binding");
+
     const faultedArchive = archiveFixture("archive-fault");
     const faultedArchivePending = pendingFor(prepareArchive(faultedArchive));
     decisionFor(faultedArchivePending);
@@ -4373,6 +5284,25 @@ function checkHumanDecisionTransactions(root) {
     assert(recoveryStatus.status === 4 && recoveryStatus.json.status === "recovery-required", "in-progress archive status was not recovery-required");
     result = commit(faultedArchivePending);
     assert(result.status === 0 && result.json.status === "committed" && !fs.existsSync(path.join(repo, ...faultedArchive.sourceRoot.split("/"))), "archive retry did not recover to the exact terminal state");
+
+    const policyRuntime = path.join(repo, ".fixture-runtime-policy-drift");
+    fs.mkdirSync(policyRuntime, { recursive: true });
+    const policyHelper = path.join(policyRuntime, "human-decision-transaction.js");
+    const policyDocsCheck = path.join(policyRuntime, "docs-check.js");
+    fs.copyFileSync(helper, policyHelper);
+    fs.copyFileSync(path.join(root, "bin", "docs-check.js"), policyDocsCheck);
+    const policyArchive = archiveFixture("archive-policy-drift-recovery");
+    result = runWithHelper(policyHelper, ["prepare", "--kind", "archive-finalize", "--change", policyArchive.id, "--request", policyArchive.requestRelative, "--json"]);
+    const policyPending = pendingFor(result);
+    decisionFor(policyPending);
+    result = runWithHelper(policyHelper, ["commit", "--decision-id", policyPending.decisionId, "--decision-record", policyPending.expectedDecisionPath, "--json"], { STEADYSPEC_INTERNAL_TRANSACTION_FAULT: "archive-before-source-retire" });
+    assert(result.status === 4 && fs.existsSync(path.join(repo, ...policyArchive.sourceRoot.split("/"))) && fs.existsSync(path.join(repo, ...policyArchive.targetRoot.split("/"))), "policy drift recovery fixture did not stop with both sides available");
+    const policyJournalRelative = `.steadyspec/human-transactions/${policyPending.decisionId}/commit.json`;
+    const policyJournalBefore = JSON.parse(read(policyJournalRelative).toString("utf8"));
+    fs.appendFileSync(policyDocsCheck, "\n// fixture policy identity drift\n", "utf8");
+    result = runWithHelper(policyHelper, ["commit", "--decision-id", policyPending.decisionId, "--decision-record", policyPending.expectedDecisionPath, "--json"]);
+    const policyJournalAfter = JSON.parse(read(policyJournalRelative).toString("utf8"));
+    assert(result.status === 3 && result.json.status === "stale" && result.json.errors.some((item) => item.includes("DELEGATION_POLICY_STALE")) && fs.existsSync(path.join(repo, ...policyArchive.sourceRoot.split("/"))) && fs.existsSync(path.join(repo, ...policyArchive.targetRoot.split("/"))) && policyJournalAfter.phase === policyJournalBefore.phase, "archive recovery advanced or retired source before rejecting stale delegation policy identity");
 
     const mutatedArchive = archiveFixture("archive-target-mutation");
     const mutatedArchivePending = pendingFor(prepareArchive(mutatedArchive));
@@ -4391,7 +5321,8 @@ function checkHumanDecisionTransactions(root) {
     result = commit(hardArchivePending);
     assert(result.status === 0 && result.json.status === "committed" && !fs.existsSync(path.join(repo, ...hardArchive.sourceRoot.split("/"))), "archive exact retry did not reclaim a dead owner lock");
 
-    write("random/foo/proposal.md", Buffer.from("# arbitrary archive\n", "utf8"));
+    write("random/foo/proposal.md", Buffer.from(readyDelegationProposalFixture("custom archive"), "utf8"));
+    write("random/foo/trust-checkpoint.md", Buffer.from(archiveTrustFixture("foo"), "utf8"));
     writePackedSmokeJson(path.join(repo, ".steadyspec", "requests", "custom-archive.json"), {
       schemaVersion: 1,
       sourceRoot: "random/foo",
@@ -4434,6 +5365,7 @@ function checkHumanDecisionTransactions(root) {
     const forgedStaging = path.join(repo, ...forgedDocsJournal.workPaths.staging.split("/"));
     fs.mkdirSync(forgedStaging, { recursive: true });
     fs.copyFileSync(path.join(repo, ...forgedDocs.sourceRoot.split("/"), "proposal.md"), path.join(forgedStaging, "proposal.md"));
+    fs.copyFileSync(path.join(repo, ...forgedDocs.sourceRoot.split("/"), "trust-checkpoint.md"), path.join(forgedStaging, "trust-checkpoint.md"));
     fs.writeFileSync(path.join(forgedStaging, "archive.md"), forgedDocs.archive);
     forgedDocsJournal.phase = "staging-built";
     forgedDocsJournal.status = "in-progress";
@@ -4482,6 +5414,7 @@ function checkPackedInstall(root, pkg) {
     const requiredPackedFiles = [
       "package.json",
       "bin/init.js",
+      "bin/docs-check.js",
       "bin/assurance.js",
       "bin/human-decision-transaction.js",
       "bin/closure.js",
@@ -4508,9 +5441,14 @@ function checkPackedInstall(root, pkg) {
       "en/runtime/closure-env.js",
       "en/runtime/process-cleanup.js",
       "en/flows/steadyspec-verify-flow/SKILL.md",
+      "en/flows/steadyspec-propose-flow/SKILL.md",
+      "en/flows/steadyspec-apply-flow/SKILL.md",
       "en/flows/steadyspec-archive-flow/SKILL.md",
       "en/runtime/codex/agents/steadyspec-verify-flow.yaml",
       "en/runtime/codex/agents/steadyspec-archive-flow.yaml",
+      "en/runtime/claude/workflows/steadyspec-propose.js",
+      "en/substrates/docs/contract.json",
+      "en/substrates/docs/templates/proposal.md",
       "README.md",
       "QUICKSTART.md",
       "ARTIFACT_CONTRACT.md",
@@ -4532,6 +5470,8 @@ function checkPackedInstall(root, pkg) {
     const installedPackage = readJson(path.join(installedRoot, "package.json"));
     if (installedPackage.version !== pkg.version) throw new Error(`installed package version ${installedPackage.version} differs from ${pkg.version}`);
     for (const relative of requiredPackedFiles) if (!fs.existsSync(path.join(installedRoot, relative))) throw new Error(`installed package missing ${relative}`);
+    const installedProposeWorkflow = readText(path.join(installedRoot, "en", "runtime", "claude", "workflows", "steadyspec-propose.js"));
+    if (!installedProposeWorkflow.includes("docsProposalSchemaPrefix(substrate)") || !installedProposeWorkflow.includes('substrate === "docs" ? "schemaVersion: 1\\n\\n" : ""')) throw new Error("installed Claude propose workflow lost the docs-only schema marker");
 
     const shimName = process.platform === "win32" ? "steadyspec.cmd" : "steadyspec";
     const shim = process.platform === "win32" ? path.join(globalPrefix, shimName) : path.join(globalPrefix, "bin", shimName);
@@ -4570,6 +5510,92 @@ function checkPackedInstall(root, pkg) {
       ".codex/skills/steadyspec-archive-flow/SKILL.md",
       ".codex/skills/steadyspec-archive-flow/agents/openai.yaml",
     ]) if (!fs.existsSync(path.join(installDir, relative))) throw new Error(`installed init output missing ${relative}`);
+
+    const installedSubstrateState = readJson(path.join(installDir, ".steadyspec", "substrate.json"));
+    const installedDocsContract = readJson(path.join(installDir, ".steadyspec", "substrates", "docs", "contract.json"));
+    if (installedSubstrateState.contract?.version !== 2 || installedDocsContract.version !== 2) throw new Error("installed package did not activate docs delegation contract version 2");
+    const delegationChangeRelative = "docs/changes/000-installed-delegation";
+    const delegationChangeDir = path.join(installDir, ...delegationChangeRelative.split("/"));
+    fs.mkdirSync(delegationChangeDir, { recursive: true });
+    const installedDelegationProposal = (outcome, challengeRow) => `schemaVersion: 1
+
+# Proposal: installed delegation fixture
+
+## Intent
+
+Use X to deliver Y.
+
+## Delegation Boundary
+
+| Field | Value |
+|-------|-------|
+| Authorized Outcome | ${outcome} |
+| Hard Constraints | Preserve compatibility. |
+| Challengeable Assumptions | X is the best means. |
+| Proposed Means | Use X. |
+| Delegated Decisions | Agent may choose reversible implementation details. |
+| Challenge Resolution | See ## Challenge Resolution |
+| Delegation Status | ready |
+
+## Challenge Resolution
+
+| Finding ID | Finding | Layer | Owner | Status | Authority Basis | Authority Ref | Resolution |
+|------------|---------|-------|-------|--------|-----------------|---------------|------------|
+${challengeRow}
+
+## Boundary
+
+In: fixture. Out: production.
+
+## Evidence Required
+
+Observable fixture.
+
+## Stop Conditions
+
+Purpose changes.
+
+## Decision Ledger
+
+None recorded.
+
+## Risk Routing
+
+None recorded.
+
+## Attention Report
+
+None recorded.
+`;
+    const installedProposalPath = path.join(delegationChangeDir, "proposal.md");
+    const installedDocsCheck = (label) => {
+      const result = runInstalledShim(shim, ["check", delegationChangeRelative, "--phase", "apply", "--substrate", "docs", "--json"], installDir);
+      return { result, json: parsePackedSmokeJson(`installed delegation docs check ${label}`, result) };
+    };
+    fs.writeFileSync(installedProposalPath, installedDelegationProposal("unresolved", "| none | No consequential challenge raised. | none | none | none-raised | not-required | none | None. |"), "utf8");
+    let installedDelegationCheck = installedDocsCheck("unresolved-outcome");
+    if (installedDelegationCheck.result.status === 0 || installedDelegationCheck.json.ok !== false || !(installedDelegationCheck.json.results || []).some((item) => item.code === "DOCS_PROPOSAL_DELEGATION_NOT_CONCRETE")) throw new Error("installed docs check accepted ready plus unresolved Authorized Outcome");
+    fs.writeFileSync(installedProposalPath, installedDelegationProposal("<result the authorized principal wants>", "| none | No consequential challenge raised. | none | none | none-raised | not-required | none | None. |"), "utf8");
+    installedDelegationCheck = installedDocsCheck("placeholder-outcome");
+    if (installedDelegationCheck.result.status === 0 || !(installedDelegationCheck.json.results || []).some((item) => item.code === "DOCS_PROPOSAL_DELEGATION_NOT_CONCRETE")) throw new Error("installed docs check accepted ready plus template Authorized Outcome");
+    fs.writeFileSync(installedProposalPath, installedDelegationProposal("Deliver Y.", "| F1 | Remove compatibility. | hard-constraint | agent | resolved | agent-delegation | proposal.md#delegation-boundary | Agent removed it. |"), "utf8");
+    installedDelegationCheck = installedDocsCheck("self-authorized-hard-constraint");
+    if (installedDelegationCheck.result.status === 0 || !(installedDelegationCheck.json.results || []).some((item) => item.code === "DOCS_PROPOSAL_INVALID_CHALLENGE_AUTHORITY")) throw new Error("installed docs check accepted Agent self-authorization over a hard constraint");
+    fs.writeFileSync(installedProposalPath, installedDelegationProposal("Deliver Y.", "| F1 | Revise the outcome. | authorized-outcome | agent | within-delegation | prior-delegation | because-I-say-so | Agent changed it. |"), "utf8");
+    installedDelegationCheck = installedDocsCheck("prose-authority-ref");
+    if (installedDelegationCheck.result.status === 0 || !(installedDelegationCheck.json.results || []).some((item) => item.code === "DOCS_PROPOSAL_INVALID_CHALLENGE_AUTHORITY")) throw new Error("installed docs check accepted a prose authority reference");
+    fs.writeFileSync(installedProposalPath, installedDelegationProposal("Deliver Y.", "| F1 | Revise the outcome. | authorized-outcome | agent | within-delegation | prior-delegation | missing.md#decision | Agent changed it. |"), "utf8");
+    installedDelegationCheck = installedDocsCheck("missing-authority-target");
+    if (installedDelegationCheck.result.status === 0 || !(installedDelegationCheck.json.results || []).some((item) => item.code === "DOCS_PROPOSAL_INVALID_CHALLENGE_AUTHORITY" && item.message.includes("authority-ref-target-missing"))) throw new Error("installed docs check accepted a missing authority target");
+    fs.writeFileSync(installedProposalPath, installedDelegationProposal("Deliver Y.", "| F1 | Validate the means. | means | agent | resolved | agent-delegation | proposal.md#decision-ledger | Agent selected the reversible means. |"), "utf8");
+    installedDelegationCheck = installedDocsCheck("valid-ready");
+    if (installedDelegationCheck.result.status !== 0 || installedDelegationCheck.json.ok !== true || (installedDelegationCheck.json.results || []).some((item) => item.severity === "error")) throw packedSmokeFailure("installed positive delegation docs check", installedDelegationCheck.result);
+    const installedPathPreflight = runInstalledShim(shim, ["delegation-path-check", "--change-id", path.posix.basename(delegationChangeRelative), "--substrate", "docs", "--change-root", delegationChangeRelative, "--json"], installDir);
+    const installedPathPreflightJson = parsePackedSmokeJson("installed delegation path preflight", installedPathPreflight);
+    if (installedPathPreflight.status !== 0 || installedPathPreflightJson.ok !== true || !/^sha256:[a-f0-9]{64}$/.test(installedPathPreflightJson.pathIdentityFingerprint || "")) throw packedSmokeFailure("installed delegation path preflight", installedPathPreflight);
+    const installedDirectDelegation = runInstalledShim(shim, ["delegation-check", "--change", delegationChangeRelative, "--phase", "apply", "--json"], installDir);
+    const installedDirectDelegationJson = parsePackedSmokeJson("installed direct delegation check", installedDirectDelegation);
+    if (installedDirectDelegation.status !== 0 || installedDirectDelegationJson.ok !== true || !/^sha256:[a-f0-9]{64}$/.test(installedDirectDelegationJson.artifactFingerprint || "")) throw packedSmokeFailure("installed direct delegation check", installedDirectDelegation);
 
     validationProgress("install-human-transaction-lifecycle");
     const { recordHash: installedRecordHash } = require(path.join(installedRoot, "bin", "human-decision-transaction.js"));
@@ -4618,12 +5644,16 @@ function checkPackedInstall(root, pkg) {
       const sourceRoot = `.meta/changes/${id}`;
       const source = path.join(installDir, ...sourceRoot.split("/"));
       fs.mkdirSync(source, { recursive: true });
-      fs.writeFileSync(path.join(source, "proposal.md"), "# packed archive\n", "utf8");
+      fs.writeFileSync(path.join(source, "proposal.md"), readyDelegationProposalFixture(id), "utf8");
+      fs.writeFileSync(path.join(source, "trust-checkpoint.md"), archiveTrustFixture(id), "utf8");
       const requestRelative = `.steadyspec/packed-requests/${id}-archive.json`;
       writePackedSmokeJson(path.join(installDir, ...requestRelative.split("/")), { schemaVersion: 1, sourceRoot, targetRoot: `.meta/changes/archive/${id}`, archiveBase64: Buffer.from(`# archive ${id}\n`).toString("base64"), substrate: "meta", docsCheckRequired: false });
       return { id, sourceRoot, targetRoot: `.meta/changes/archive/${id}`, requestRelative };
     };
     let archiveTx = installedArchiveFixture("packed-archive-commit");
+    const installedArchiveDelegation = runInstalledShim(shim, ["delegation-check", "--change", archiveTx.sourceRoot, "--phase", "archive", "--json"], installDir);
+    const installedArchiveDelegationJson = parsePackedSmokeJson("installed archive delegation check", installedArchiveDelegation);
+    if (installedArchiveDelegation.status !== 0 || installedArchiveDelegationJson.ok !== true || installedArchiveDelegationJson.delegationReview !== "pass" || installedArchiveDelegationJson.recommendedNext !== "archive") throw packedSmokeFailure("installed archive delegation check", installedArchiveDelegation);
     txPending = installedPrepare("archive-finalize", archiveTx.id, archiveTx.requestRelative);
     installedDecision(txPending, "approve-exact-transaction");
     txResult = installedFinish("commit", txPending);
@@ -4759,7 +5789,7 @@ function checkPackedInstall(root, pkg) {
       tarballSha256,
       packedEntryCount: packed.entryCount,
       installedShim: path.relative(temp, shim).replace(/\\/g, "/"),
-      installedLifecycle: ["help", "init", "intent-prepare-commit-cancel", "archive-prepare-commit-cancel", "invalid-config", "valid-config", "prepare", "status", "critic-import", "proof", "evaluator-start"],
+      installedLifecycle: ["help", "init", "delegation-path-check", "delegation-check", "intent-prepare-commit-cancel", "archive-prepare-commit-cancel", "invalid-config", "valid-config", "prepare", "status", "critic-import", "proof", "evaluator-start"],
       failClosed: ["duplicate-evaluator-start", "mismatched-evaluator-import"],
       terminalState: finalStatusJson.state,
       boundary: `one fresh ${process.platform} project; not registry publication, reviewer quality, process-death, team behavior, semantic correctness, or human acceptance`
@@ -4868,6 +5898,8 @@ async function main() {
     checkV03ResponsibilityModel(root, manifest);
     checkActiveVerbSurface(root);
     checkDocsSubstrateContract(root);
+    checkDelegationBoundaryContract(root);
+    await checkDelegationBoundaryWorkflowGates(root);
     checkReleaseSurface(root, manifest, pkg);
     checkSourceDistributionDocs(root, pkg);
     checkActiveProductIdentity(root, pkg);
@@ -4885,9 +5917,9 @@ async function main() {
   });
 
   if (selected("closure")) await runValidationSuite("closure", async () => {
-    checkV06ClosureContracts(root);
     await checkHumanTransactionWorkflowIntegration(root);
     checkHumanDecisionTransactions(root);
+    checkV06ClosureContracts(root);
   });
 
   if (selected("install")) await runValidationSuite("install", async () => {

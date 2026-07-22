@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "steadyspec-docs",
-  "version": 1,
+  "version": 2,
   "changeDirPattern": "^\\d+-[a-z0-9][a-z0-9-]*$",
   "phases": {
     "proposal": {
@@ -9,6 +9,8 @@
       "requiredAnchors": {
         "proposal.md": [
           "## Intent",
+          "## Delegation Boundary",
+          "## Challenge Resolution",
           "## Boundary",
           "## Evidence Required",
           "## Stop Conditions",
@@ -34,7 +36,15 @@
     "verify": {
       "requiresApply": true,
       "requiredFiles": ["trust-checkpoint.md"],
-      "trustFields": ["Recommended Next"]
+      "trustFields": [
+        "Change",
+        "Intent Match",
+        "Delegation Review",
+        "Evidence Credibility",
+        "Risk Routing Review",
+        "Debt/Fallback Visibility",
+        "Recommended Next"
+      ]
     },
     "archive": {
       "requiresVerify": true,

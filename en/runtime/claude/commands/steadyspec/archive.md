@@ -5,7 +5,17 @@ category: Workflow
 tags: [steadyspec, archive, workflow]
 ---
 
-SteadySpec archive verb. Runs five gates in order, each must pass before the archive is written:
+SteadySpec archive verb. Before the five ordinary gates, require on every
+substrate a ready structured Delegation Boundary plus a current
+`trust-checkpoint.md` whose five trust gates are all `pass` and whose
+Recommended Next is `archive`. Resolved authority refs use change-relative `path.md#anchor` and
+their targets/headings are read back inside the change; missing,
+unresolved, unbound, blocked, misclassified, or non-archive states route back to
+verify. The docs checker is defense in depth, not the only enforcement point.
+
+On every substrate, run `steadyspec delegation-check --change <repo-relative-change-path> --phase archive --json` before rendering or moving archive truth. Non-zero stops archive. The filesystem transaction independently binds and rechecks the proposal/trust artifact fingerprint, including resumed commits.
+
+Then run five gates in order, each of which must pass before archive is written:
 
 1. `review-against-intent` — implementation must match what the proposal promised
 2. `doc-sync` auto-scan — must-update docs must be updated; should-check docs prompt the user

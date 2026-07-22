@@ -15,9 +15,12 @@ and MAY are normative requirements in this document.
 
 ## 1. Relationship to the SteadySpec product
 
-[PRODUCT.md](../PRODUCT.md) defines the product continuity boundary. The five
-canonical software verbs govern one change lifecycle; attention/responsibility
-and capability-without-drift guide that work. This protocol is optional,
+[PRODUCT.md](../PRODUCT.md) defines the stable product purpose, current
+reference architecture, and evolution boundary. The five software verbs are
+the current normative, compatibility-protected lifecycle—not the ultimate
+product purpose. Purpose fidelity, challenge without usurpation, capability
+realization, evidence-bounded claims, and human authority guide that work. This
+protocol is optional,
 risk-triggered claim-integrity support for verification, handoff, and truthful
 finalization. It MUST NOT be interpreted as a replacement for or demotion of
 that lifecycle.

@@ -7,7 +7,7 @@ SDD preserves the change.
 TDD-style loops prove the implementation.
 ```
 
-## SDD Owns Intent
+## SDD Owns The Delegation Boundary
 
 SDD answers:
 
@@ -20,7 +20,12 @@ SDD answers:
 - whether implementation drifted from the original intent
 - which historical constraints still matter
 
-SDD artifacts can be specs, proposals, issues, design notes, decision records, or plain change documents. The substrate can vary; the intent discipline does not.
+SDD artifacts can be specs, proposals, issues, design notes, decision records,
+or plain change documents. The substrate can vary; the delegation discipline
+does not. For consequential work, the record separates Authorized Outcome,
+Hard Constraints, Challengeable Assumptions, Proposed Means, Delegated
+Decisions, and Challenge Resolution. The prompt is source material, not a
+monolithic authority statement.
 
 ## SDD Keeps Scope Hard
 
@@ -57,7 +62,10 @@ Fallback is not full proof. It is a named residual risk with manual check, monit
 
 ## Drift Rule
 
-If execution discovers that the intent is wrong or incomplete, stop and update the intent record before continuing.
+If execution discovers that the intent is wrong or incomplete, classify which
+delegation layer changed. The Agent may update assumptions or means within the
+recorded delegation. A change to Authorized Outcome or Hard Constraints stops
+execution until an explicit human decision or prior delegation covers it.
 
 Do not let tests, prototypes, or implementation edits silently redefine the change.
 

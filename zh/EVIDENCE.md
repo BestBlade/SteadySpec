@@ -104,6 +104,47 @@ validator 代码和两份 manifest 中，协调重绑两份摘要的负向 fixtu
 失败。validator 能迫使未来合同变化显式修改代码或版本，但不能证明人已
 批准，也不能保证那次显式协调修改一定正确。
 
+完成那次修复后，用户补充了最初的产品缘起：真正长期存在的问题，是 Agent
+承担的现实工作已经可能超过责任主体逐项重做或检查的能力，而外部权力与后果
+仍留在人或组织一侧形成的委托鸿沟。这说明 Product Contract v1 虽然有效阻止
+了五动词被降格，却仍把当前五动词架构绑定得过于接近产品目的。v2 在
+`docs/product-contract-history/v1/` 保留 v1 精确内容，把目的和稳定原则放在
+机制上层，同时继续把五动词作为当前受兼容保护的软件参考架构。
+
+随后一轮结构化审查又发现，这个区分仍然只存在于产品文案：已安装 flow 仍接收
+单一 intent 字符串，可能把可疑手段冻结成目的。接受的 P1 修复把委托边界加入
+router/explore/propose/apply/verify 及其 Codex/Claude 表面，并把 docs contract
+升级为 version 2。checker fixture 现在会拒绝缺字段、apply 时的 `needs-human`，
+与 unresolved challenge 并存的 `ready`、格式错误的 authority ref，以及缺失的
+docs 目标文件/标题。确定性 archive 也会在每种 substrate 上重复委托/trust
+门，而不是只依赖 docs checker。这只证明声明过的结构门，不证明语义分类、
+当事人身份或引用决策的充分性一定正确。
+
+下一轮 Critic/Evaluator 又发现：归档仍可能信任 Agent 返回的 checkpoint，而且
+旧 pending 事务可能从恢复入口绕过工作流新加的 gather 门。修复后，公开的
+`steadyspec delegation-check` 会在 OpenSpec、docs、`.meta` 与 custom 路径上
+直接回读 proposal、trust、授权目标与标题，并把授权工件字节纳入指纹；归档
+prepare/commit/recovery 都绑定并复核该指纹。负例覆盖缺失目标/标题、路径穿越、
+缺失或 blocked trust，以及没有新绑定的旧 pending。安装态 smoke 也直接执行
+这个公开命令。它堵住的是已观察到的结构绕过，仍不认证谁写了授权记录，也不
+证明那项决定在语义上正确。
+
+后续精确候选审查又发现了写前检查绕过：显式 custom base 可以是指向内置
+命名空间或仓库外部的 symlink/junction。纯词法工作流门会接受它，随后
+`propose` 可能先写 context、grill 或 proposal，较晚的 realpath-aware
+`delegation-check` 才拒绝该路径。修复增加公开只读命令
+`steadyspec delegation-path-check`，在第一次 proposal 工件写入前运行，并把
+“失败时零写入”规则贯穿 canonical primitive、governed path、router、flow 与
+Codex/Claude 适配器。contract fixture 覆盖 base、nested、active-child 链接；
+Windows 本地运行使用真实 junction，同一 fixture 在 POSIX 选择目录 symlink，
+同时要求目标 proposal 字节前后不变。安装态 smoke 会执行 path 与 artifact
+两种检查。这仍是同一 Agent 观察到的检查时刻路径证据，不是恶意宿主认证，
+也不能阻止检查后的文件系统竞态；本次 capture 未观察 POSIX 实际执行。
+
+这次澄清是用户授权的产品方向，不是有效性证据。
+[`docs/experiments/whole-product-pilot.md`](../docs/experiments/whole-product-pilot.md)
+只是尚未预注册的全产品实验设计候选，尚无运行或结果。
+
 这是本地候选证据，不是因果实验结果。它不证明 SteadySpec 已降低漂移或
 人工负担，也不授权 commit、tag、GitHub Release、npm 发布或采用声明。
 
@@ -111,7 +152,8 @@ validator 代码和两份 manifest 中，协调重绑两份摘要的负向 fixtu
 
 - 这套方法在单作者场景下，从零产出了一个能用的编排层
 - 引入外部审查者之后，方法抓住了自己的盲区
-- docs 模式 checker 能在 plain-docs change 被视为结构就绪前，拒绝缺少结构和已知 archive truth 风险
+- docs 模式 checker 能在 plain-docs change 被视为结构就绪前，拒绝委托字段
+  缺失、未 ready 的 apply 和已知 archive truth 风险
 - v0.7 protocol 的黑盒进程行为可复验，但它的现实效果仍是未回答的实验
 - 这套方法还没在多人团队、并行变更或 issue-tracker 介质的项目中验证过
 

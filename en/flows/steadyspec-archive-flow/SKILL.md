@@ -25,6 +25,31 @@ One of SteadySpec's five outward verbs: explore -> propose -> apply -> verify ->
 
 ## Gates (must pass in order; any STOP halts archive write)
 
+Before closure or the five ordinary gates, enforce the delegation/trust pre-gate
+for every substrate, not only docs mode:
+
+1. Read the structured Delegation Boundary from `proposal.md`; do not infer it
+   from a monolithic intent string. It must be `ready`, have a concrete
+   Authorized Outcome, and contain no unresolved or structurally unbound
+   challenge.
+2. Every resolved challenge authority reference must use a portable
+   change-relative `path.md#markdown-anchor`; read back the target file and
+   heading inside the active change. Docs mode additionally enforces this
+   existence check deterministically.
+3. Read `trust-checkpoint.md`. Intent Match, Delegation Review, Evidence
+   Credibility, Risk Routing Review, and Debt/Fallback Visibility must all be
+   `pass`, and Recommended Next must be `archive`. A missing checkpoint, any
+   `gap`/`blocked`/`misclassified` gate, or any other recommendation STOPs
+   archive and routes back to `steadyspec-verify-flow`.
+
+This gate applies to OpenSpec, docs, `.meta`, and custom substrates. The later
+docs checker is defense in depth, not the only enforcement point. A structurally
+valid reference does not authenticate its author or prove the decision wise.
+
+Run `steadyspec delegation-check --change <repo-relative-change-path> --phase archive --json` before rendering or moving archive truth. A non-zero result
+stops archive. The archive transaction binds the directly read proposal/trust
+fingerprint and rechecks it on commit and recovery.
+
 Before the five ordinary archive gates, archive-flow applies the optional v0.6
 closure pre-gate. This is still the `archive` verb; `closure` remains a
 deterministic support command under `verify`, not a sixth governed verb.
@@ -157,6 +182,8 @@ The verb's report contains:
 
 ## Failure modes (consult while running)
 
+- **FM-archive-bypasses-delegation:** a non-docs substrate or disabled closure
+  lane does not permit archive to skip Delegation Boundary plus Trust Checkpoint.
 - **FM-prose-hides-decisions:** human-owned decisions, accepted debt, fallback, and strategy signals must be named items in archive.md, not buried in narrative paragraphs that read smoothly but hide responsibility.
 - **FM-must-update-doc-skipped:** a `must-update` doc found in Gate 2 but unchecked is a Gate 2 STOP, not a "should-check" downgrade. Confidence levels are not negotiable to keep momentum.
 - **FM-fallback-as-evidence:** a fallback path is residual risk, not evidence that intent was met. Same FM as apply-flow; restated here because archive is the last gate.

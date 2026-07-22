@@ -25,12 +25,30 @@ apply-flow's per-slice loop is a generalization of TDD; TDD is the special case 
 
 ## Inputs to gather before applying
 
-1. The change directory (`<substrate>/changes/<change-id>/`) and its proposal.md (intent / boundary / non-goals / evidence required / stop conditions / tasks if any).
+1. The change directory (`<substrate>/changes/<change-id>/`) and its proposal.md
+   (intent / delegation boundary / boundary / non-goals / evidence required /
+   stop conditions / tasks if any).
 2. The decision ledger, risk routing summary, and attention report from proposal.md or sibling artifacts.
 3. Any prior evidence already recorded for this change (resumed apply scenario).
 4. Any trust checkpoint or handoff snapshot already recorded for this change.
 5. The drift signals already known for this change (any earlier pause + decision recorded in evidence.md).
 6. Any v0.4 capability-lane artifacts: `direction-map.md`, `findings.md` selection section, `evidence-contract.md`, or `## Mainline Decision` section.
+
+Before the first slice, require Delegation Status `ready`. Compare the proposed
+slice to Authorized Outcome, Hard Constraints, Proposed Means, and Delegated
+Decisions. If the boundary is missing, collapsed into one intent string, or
+`needs-human`, stop and route back to explore/propose. The Agent may improve the
+means within Delegated Decisions. A “better solution” is not authority to
+change Authorized Outcome or Hard Constraints; that requires an explicit human
+decision record or unambiguous prior delegation.
+Reject `ready` when the outcome/means are placeholders or when a challenge row
+lacks its required authority basis/reference. An Agent-owned `resolved` row can
+never authorize an outcome or hard-constraint change.
+
+On every substrate, run `steadyspec delegation-check --change <repo-relative-change-path> --phase apply --json` before consequential
+implementation. A non-zero result blocks apply. This command directly reads the
+active proposal and authority-reference targets; it is structural lineage
+evidence, not semantic proof or human acceptance.
 
 ## Per-slice loop
 
@@ -55,6 +73,12 @@ After all slices in this change have passed: optional refactor pass (per discipl
 ## Drift handling
 
 When step 5 of any slice detects drift (intent / boundary / schema / validation has diverged from the proposal), pause the loop. Present the user with four options:
+
+First classify which delegation layer changed. Assumption/means changes inside
+Delegated Decisions may be resolved and recorded by the Agent. Changes to
+Authorized Outcome or Hard Constraints are never an in-place Agent patch; they
+require a human-owned intent-expansion/replacement decision and make downstream
+evidence stale.
 
 - **(i) Patch intent in place — expansion only.** apply-flow itself opens proposal.md and edits the affected field. Acceptable patches: add a file/layer to boundary, add a non-goal entry, add a stop condition, add an evidence requirement. **Forbidden patches: remove a promised behavior, narrow a boundary that excludes a previously promised user-facing capability, delete an evidence requirement.** Letting implementation narrow what was promised is the classic anti-pattern this product exists to prevent. If the needed patch is "remove" or "narrow", path is not (i) — go to (iv) STOP. On valid expansion: record a drift event entry in evidence.md (timestamp, before-after diff, slice that triggered), continue the apply loop.
 - **(ii) Accept as known-limitation.** Record a debt entry in evidence.md with what the limitation is and why accepting; flag with reduced-confidence marker. Continue.
@@ -98,3 +122,6 @@ The verb's report contains:
 - **FM-fallback-as-proof:** a fallback path is residual risk, not evidence that intent was met. Recording fallback as proof inflates apparent completion.
 - **FM-re-slice-without-ownership:** changing slice shape because implementation got complicated is not a private agent optimization when scope, proof, or user-visible behavior changes. Record the re-slice event and route risk.
 - **FM-claim-proof-mismatch:** when an evidence contract exists, a slice cannot be reported as supporting a mainline claim unless the evidence names that claim, says whether it touched the main path, and states its coverage limit.
+- **FM-better-solution-usurps-purpose:** technical superiority does not grant
+  authority. Do not replace Authorized Outcome or Hard Constraints while
+  describing the result as an implementation improvement.

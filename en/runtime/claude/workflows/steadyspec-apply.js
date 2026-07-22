@@ -35,10 +35,268 @@ const EVIDENCE_SOURCE_SCHEMA = {
   required: ['path', 'status', 'content', 'complete', 'truncated', 'readError'],
 }
 
+const DELEGATION_BOUNDARY_SCHEMA = {
+  type: 'object',
+  properties: {
+    authorizedOutcome: { type: 'string' },
+    hardConstraints: { type: 'array', items: { type: 'string' } },
+    challengeableAssumptions: { type: 'array', items: { type: 'string' } },
+    proposedMeans: { type: 'array', items: { type: 'string' } },
+    delegatedDecisions: { type: 'array', items: { type: 'string' } },
+    challengeResolution: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          findingId: { type: 'string' },
+          finding: { type: 'string' },
+          layer: { type: 'string', enum: ['authorized-outcome', 'hard-constraint', 'assumption', 'means', 'delegated-decision'] },
+          owner: { type: 'string', enum: ['user', 'agent', 'shared'] },
+          status: { type: 'string', enum: ['resolved', 'unresolved', 'within-delegation'] },
+          authorityBasis: { type: 'string', enum: ['human-decision', 'prior-delegation', 'agent-delegation', 'not-required'] },
+          authorityRef: { type: 'string' },
+          resolution: { type: 'string' },
+        },
+        required: ['findingId', 'finding', 'layer', 'owner', 'status', 'authorityBasis', 'authorityRef', 'resolution'],
+      },
+    },
+    status: { type: 'string', enum: ['ready', 'needs-human', 'missing'] },
+  },
+  required: ['authorizedOutcome', 'hardConstraints', 'challengeableAssumptions', 'proposedMeans', 'delegatedDecisions', 'challengeResolution', 'status'],
+}
+
+// BEGIN DELEGATION GATE PURE
+function unfinishedDelegationValue(value) {
+  const normalized = String(value || "").trim()
+  if (!normalized || /^<[^>]+>$/.test(normalized)) return true
+  return /^(?:unresolved|unknown|tbd|todo|pending)(?:\b|\s*:)/i.test(normalized)
+    || /^not\s+(?:recorded|yet\s+(?:known|decided|resolved)|determined)\b/i.test(normalized)
+}
+
+function authorityRefParts(value) {
+  const normalized = String(value || "").trim()
+  if (unfinishedDelegationValue(normalized) || /^(?:none|n\/a|not-required)$/i.test(normalized)) return null
+  const hash = normalized.indexOf("#")
+  if (hash <= 0 || hash !== normalized.lastIndexOf("#")) return null
+  const artifactPath = normalized.slice(0, hash)
+  const anchor = normalized.slice(hash + 1)
+  const segments = artifactPath.split("/")
+  if (!artifactPath.endsWith(".md") || artifactPath.startsWith("/") || artifactPath.includes("\\") || /^[A-Za-z]:/.test(artifactPath)) return null
+  if (segments.some((segment) => !segment || segment === "." || segment === ".." || !/^[A-Za-z0-9._-]+$/.test(segment) || /[. ]$/.test(segment) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(segment))) return null
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(anchor)) return null
+  return { artifactPath, anchor }
+}
+
+function concreteAuthorityRef(value) {
+  return authorityRefParts(value) !== null
+}
+
+function docsProposalSchemaPrefix(substrate) {
+  return substrate === "docs" ? "schemaVersion: 1\n\n" : ""
+}
+
+function canonicalActiveChangePath(value) {
+  const raw = String(value || "")
+  if (!raw || raw !== raw.trim() || raw.includes("\\") || raw.startsWith("/") || /^[A-Za-z]:/.test(raw)) return null
+  const segments = raw.split("/")
+  if (segments.some((segment) => !segment
+    || segment === "."
+    || segment === ".."
+    || segment.endsWith(".")
+    || segment.endsWith(" ")
+    || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(segment)
+    || !/^[A-Za-z0-9._-]+$/.test(segment))) return null
+  return segments.join("/")
+}
+
+function deriveActiveChangeIdentity(changeId, substrate, explicitChangeBase, observedChangeRoot) {
+  const id = canonicalActiveChangePath(changeId)
+  if (!id || id.includes("/")) return { ok: false, errors: ["active-change-id-invalid"] }
+  const builtInBases = { openspec: "openspec/changes", docs: "docs/changes", meta: ".meta/changes" }
+  let baseRaw = builtInBases[substrate]
+  if (substrate === "custom") {
+    baseRaw = explicitChangeBase
+    const customBase = canonicalActiveChangePath(baseRaw)
+    if (!customBase) return { ok: false, errors: ["active-custom-base-required"] }
+    if (Object.values(builtInBases).some((reserved) => customBase.toLowerCase() === reserved.toLowerCase() || customBase.toLowerCase().startsWith(`${reserved.toLowerCase()}/`))) {
+      return { ok: false, errors: ["active-custom-base-reserved"] }
+    }
+  }
+  if (!baseRaw) return { ok: false, errors: ["active-substrate-invalid"] }
+  const base = canonicalActiveChangePath(baseRaw)
+  const observed = canonicalActiveChangePath(observedChangeRoot)
+  if (!base || !observed) return { ok: false, errors: ["active-change-path-invalid"] }
+  const activeRoot = `${base}/${id}`
+  if (substrate === "custom" && Object.values(builtInBases).some((reserved) => activeRoot.toLowerCase() === reserved.toLowerCase() || activeRoot.toLowerCase().startsWith(`${reserved.toLowerCase()}/`))) {
+    return { ok: false, errors: ["active-custom-root-reserved"] }
+  }
+  if (observed !== activeRoot) return { ok: false, errors: ["active-change-root-mismatch"] }
+  return {
+    ok: true,
+    changeId: id,
+    changeBase: base,
+    activeRoot,
+    proposalPath: `${activeRoot}/proposal.md`,
+    evidencePath: `${activeRoot}/evidence.md`,
+    checkpointPath: `${activeRoot}/trust-checkpoint.md`,
+    handoffPath: `${activeRoot}/handoff-snapshot.md`,
+    errors: [],
+  }
+}
+
+function activeChangeContextErrors(context, identity, options = {}) {
+  if (!identity || !identity.ok) return [...(identity?.errors || ["active-change-identity-missing"])]
+  const errors = []
+  if (context?.changeId !== identity.changeId) errors.push("context-change-id-mismatch")
+  if (context?.changeDir !== identity.activeRoot) errors.push("context-change-root-mismatch")
+  if (context?.proposalPath !== identity.proposalPath) errors.push("context-proposal-path-mismatch")
+  if (context?.evidencePath !== identity.evidencePath) errors.push("context-evidence-path-mismatch")
+  if (options.requireCheckpoint && context?.checkpointPath !== identity.checkpointPath) errors.push("context-checkpoint-path-mismatch")
+  if (context?.checkpointPath && context.checkpointPath !== identity.checkpointPath) errors.push("context-checkpoint-path-mismatch")
+  if (context?.handoffPath && context.handoffPath !== identity.handoffPath) errors.push("context-handoff-path-mismatch")
+  return [...new Set(errors)]
+}
+
+function delegationBoundaryReadbackErrors(expected, observed) {
+  const normalize = (value) => ({
+    authorizedOutcome: String(value?.authorizedOutcome || ""),
+    hardConstraints: Array.isArray(value?.hardConstraints) ? value.hardConstraints.map(String) : [],
+    challengeableAssumptions: Array.isArray(value?.challengeableAssumptions) ? value.challengeableAssumptions.map(String) : [],
+    proposedMeans: Array.isArray(value?.proposedMeans) ? value.proposedMeans.map(String) : [],
+    delegatedDecisions: Array.isArray(value?.delegatedDecisions) ? value.delegatedDecisions.map(String) : [],
+    challengeResolution: Array.isArray(value?.challengeResolution) ? value.challengeResolution.map((row) => ({
+      findingId: String(row?.findingId || ""), finding: String(row?.finding || ""), layer: String(row?.layer || ""), owner: String(row?.owner || ""),
+      status: String(row?.status || ""), authorityBasis: String(row?.authorityBasis || ""), authorityRef: String(row?.authorityRef || ""), resolution: String(row?.resolution || ""),
+    })) : [],
+    status: String(value?.status || ""),
+  })
+  return JSON.stringify(normalize(expected)) === JSON.stringify(normalize(observed)) ? [] : ["delegation-boundary-readback-mismatch"]
+}
+
+function delegationGateErrors(boundary, requireReady) {
+  const errors = []
+  if (!boundary || typeof boundary !== "object") return ["delegation-boundary-missing"]
+  if (requireReady && boundary.status !== "ready") errors.push("delegation-status-not-ready")
+  if (requireReady && unfinishedDelegationValue(boundary.authorizedOutcome)) errors.push("authorized-outcome-not-concrete")
+  const hardConstraints = Array.isArray(boundary.hardConstraints) ? boundary.hardConstraints : []
+  const challengeableAssumptions = Array.isArray(boundary.challengeableAssumptions) ? boundary.challengeableAssumptions : []
+  const proposedMeans = Array.isArray(boundary.proposedMeans) ? boundary.proposedMeans : []
+  const delegatedDecisions = Array.isArray(boundary.delegatedDecisions) ? boundary.delegatedDecisions : []
+  if (requireReady && (hardConstraints.length === 0 || hardConstraints.some(unfinishedDelegationValue))) errors.push("hard-constraints-not-concrete")
+  if (requireReady && (challengeableAssumptions.length === 0 || challengeableAssumptions.some(unfinishedDelegationValue))) errors.push("challengeable-assumptions-not-concrete")
+  if (requireReady && (proposedMeans.length === 0 || proposedMeans.some(unfinishedDelegationValue))) errors.push("proposed-means-not-concrete")
+  if (requireReady && (delegatedDecisions.length === 0 || delegatedDecisions.some(unfinishedDelegationValue))) errors.push("delegated-decisions-not-concrete")
+  const resolutions = Array.isArray(boundary.challengeResolution) ? boundary.challengeResolution : []
+  for (const row of resolutions) {
+    const id = row && row.findingId ? row.findingId : "unknown"
+    if (!row || typeof row !== "object") {
+      errors.push(`${id}:challenge-resolution-invalid`)
+      continue
+    }
+    if ([row.findingId, row.finding, row.resolution].some(unfinishedDelegationValue)) errors.push(`${id}:unfinished-challenge-resolution`)
+    if (requireReady && row.status === "unresolved") errors.push(`${id}:challenge-unresolved`)
+    const coreLayer = row.layer === "authorized-outcome" || row.layer === "hard-constraint"
+    if (coreLayer && row.status === "resolved") {
+      if (!["user", "shared"].includes(row.owner) || row.authorityBasis !== "human-decision" || !concreteAuthorityRef(row.authorityRef)) {
+        errors.push(`${id}:core-change-without-human-decision`)
+      }
+    } else if (coreLayer && row.status === "within-delegation") {
+      if (row.authorityBasis !== "prior-delegation" || !concreteAuthorityRef(row.authorityRef)) errors.push(`${id}:core-change-without-prior-delegation`)
+    } else if (row.status !== "unresolved") {
+      if (row.authorityBasis === "not-required" || !concreteAuthorityRef(row.authorityRef)) errors.push(`${id}:resolved-challenge-without-authority-ref`)
+    }
+  }
+  return [...new Set(errors)]
+}
+
+function archiveDelegationGate(boundary, trustCheckpoint) {
+  const delegationErrors = delegationGateErrors(boundary, true)
+  const trust = trustCheckpoint && typeof trustCheckpoint === "object"
+    ? trustCheckpoint
+    : { present: false, delegationReview: "missing", recommendedNext: "missing", sourcePath: "" }
+  const trustErrors = []
+  if (trust.present !== true) trustErrors.push("trust-checkpoint-missing")
+  for (const [field, value] of Object.entries({
+    "intent-match": trust.intentMatch,
+    "delegation-review": trust.delegationReview,
+    "evidence-credibility": trust.evidenceCredibility,
+    "risk-routing-review": trust.riskRoutingReview,
+    "debt-fallback-visibility": trust.debtFallbackVisibility,
+  })) if (value !== "pass") trustErrors.push(`${field}-${value || "missing"}`)
+  if (trust.recommendedNext !== "archive") trustErrors.push(`trust-recommended-next-${trust.recommendedNext || "missing"}`)
+  return { gateFailed: delegationErrors.length > 0 || trustErrors.length > 0, delegationErrors, trustErrors, trust }
+}
+
+function finalizeDelegationCheckpoint(initialErrors, checkpoint) {
+  const next = {
+    ...checkpoint,
+    pendingUserDecisions: [...(checkpoint.pendingUserDecisions || [])],
+    evidenceGaps: [...(checkpoint.evidenceGaps || [])],
+  }
+  const gateValues = [next.intentMatch, next.delegationReview, next.evidenceCredibility, next.riskRoutingReview, next.debtFallbackVisibility]
+  const hardBlocked = gateValues.some((value) => value === "blocked" || value === "misclassified")
+  const pendingDecision = next.pendingUserDecisions.length > 0
+  const gateFailed = (initialErrors || []).length > 0 || hardBlocked || pendingDecision
+  if (gateFailed) {
+    if ((initialErrors || []).length > 0) {
+      next.intentMatch = "blocked"
+      next.delegationReview = "blocked"
+    }
+    const reOpen = (initialErrors || []).length > 0 || [next.intentMatch, next.delegationReview, next.riskRoutingReview].some((value) => value === "blocked" || value === "misclassified")
+    next.recommendedNext = reOpen ? "re-open-intent" : "stop"
+    const reason = `Trust gate failed: ${[...(initialErrors || []), ...(hardBlocked ? ["blocked-or-misclassified-trust-dimension"] : []), ...(pendingDecision ? ["pending-user-decision"] : [])].join(", ")}.`
+    if (!next.pendingUserDecisions.includes(reason)) next.pendingUserDecisions.push(reason)
+  } else if (next.recommendedNext === "archive" && gateValues.some((value) => value !== "pass")) {
+    next.recommendedNext = "continue"
+    const reason = "Archive was withheld because every persisted trust dimension must pass; gaps remain visible."
+    if (!next.evidenceGaps.includes(reason)) next.evidenceGaps.push(reason)
+  }
+  return { gateFailed, checkpoint: next }
+}
+// END DELEGATION GATE PURE
+
+// BEGIN DELEGATION ARTIFACT CHECK
+const DELEGATION_CHECK_OBSERVATION_SCHEMA = {
+  type: 'object',
+  properties: {
+    executedArgv: { type: 'array', items: { type: 'string' } },
+    exitCode: { type: 'number' },
+    stdout: { type: 'string' },
+    stderr: { type: 'string' },
+    extraCommands: { type: 'boolean' },
+  },
+  required: ['executedArgv', 'exitCode', 'stdout', 'stderr', 'extraCommands'],
+}
+
+async function runDelegationArtifactCheck(changeRoot, artifactPhase, workflowPhase) {
+  const argv = ['steadyspec', 'delegation-check', '--change', changeRoot, '--phase', artifactPhase, '--json']
+  const expectedChangePath = String(changeRoot || '').replace(/\\/g, '/').replace(/^\.\//, '')
+  const observation = await agent(
+    `Execute exactly one read-only SteadySpec process without a shell.\n\nEXACT ARGV JSON:\n${JSON.stringify(argv)}\n\nDo not write files and do not run any other command. Return exact argv, exit code, stdout, stderr, and extraCommands=true if anything else ran.`,
+    { label: `delegation-artifact-${artifactPhase}`, phase: workflowPhase, schema: DELEGATION_CHECK_OBSERVATION_SCHEMA },
+  )
+  const errors = []
+  if (!observation || JSON.stringify(observation.executedArgv) !== JSON.stringify(argv)) errors.push('delegation-check-argv-mismatch')
+  if (observation?.extraCommands !== false) errors.push('delegation-check-extra-command')
+  if (String(observation?.stderr || '').trim()) errors.push('delegation-check-stderr-not-empty')
+  let report = null
+  try { report = JSON.parse(observation?.stdout || '') } catch (error) { errors.push('delegation-check-json-invalid') }
+  if (observation?.exitCode !== 0 || report?.ok !== true) errors.push('delegation-check-not-ready')
+  if (report?.phase !== artifactPhase) errors.push('delegation-check-phase-mismatch')
+  if (report?.changePath !== expectedChangePath) errors.push('delegation-check-change-identity-mismatch')
+  if (!Array.isArray(report?.results) || !Array.isArray(report?.authorityArtifacts)) errors.push('delegation-check-report-shape-invalid')
+  if (typeof report?.proposalContent !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(report?.proposalSha256 || '') || !report?.delegationBoundary || typeof report.delegationBoundary !== 'object') errors.push('delegation-check-proposal-readback-invalid')
+  if (['verify', 'archive'].includes(artifactPhase) && (!report?.trustGates || typeof report.trustGates !== 'object' || !/^sha256:[a-f0-9]{64}$/.test(report?.trustSha256 || ''))) errors.push('delegation-check-trust-readback-invalid')
+  if (!/^sha256:[a-f0-9]{64}$/.test(report?.artifactFingerprint || '')) errors.push('delegation-check-fingerprint-invalid')
+  return { ok: errors.length === 0, errors, report, observationBoundary: 'model-independent-process-readback-observed-by-agent-not-host-attestation' }
+}
+// END DELEGATION ARTIFACT CHECK
+
 const CHANGE_CONTEXT_SCHEMA = {
   type: 'object',
   properties: {
     changeId: { type: 'string' },
+    changeDir: { type: 'string' },
     proposalPath: { type: 'string' },
     evidencePath: { type: 'string' },
     tasksPath: { type: 'string' },
@@ -46,6 +304,7 @@ const CHANGE_CONTEXT_SCHEMA = {
     designPath: { type: 'string' },
     substrateType: { type: 'string', enum: ['openspec', 'docs', 'meta', 'custom', 'none'] },
     intent: { type: 'string' },
+    delegationBoundary: DELEGATION_BOUNDARY_SCHEMA,
     boundary: {
       type: 'object',
       properties: {
@@ -86,7 +345,7 @@ const CHANGE_CONTEXT_SCHEMA = {
     },
     evidenceSource: EVIDENCE_SOURCE_SCHEMA,
   },
-  required: ['changeId', 'proposalPath', 'evidencePath', 'intent', 'slices', 'evidenceSource'],
+  required: ['changeId', 'changeDir', 'proposalPath', 'evidencePath', 'substrateType', 'intent', 'delegationBoundary', 'slices', 'evidenceSource'],
 }
 
 const SLICE_RESULT_SCHEMA = {
@@ -929,8 +1188,21 @@ const context = await agent(
       b) Read .steadyspec/substrate.json for recorded changeDir.
       c) Auto-detect: check openspec/changes/${changeId}/, docs/changes/${changeId}/, .meta/changes/${changeId}/.
       Use the first one that exists and contains proposal.md.
+      Return changeDir as that exact repository-relative active change root.
+      proposalPath must be changeDir/proposal.md and evidencePath must be
+      changeDir/evidence.md; never return paths from a different change.
 
-   2. Read proposal.md — extract intent, boundary (in scope / out of scope), non-goals, evidence required, stop conditions.
+   2. Read proposal.md — extract intent; delegation boundary (Authorized
+      Outcome, Hard Constraints, Challengeable Assumptions, Proposed Means,
+      Delegated Decisions, Challenge Resolution rows (findingId, layer, owner,
+      status, authorityBasis, authorityRef, resolution), Delegation Status); ordinary
+      boundary (in scope / out of scope); non-goals; evidence required; and stop
+      conditions. Do not infer missing delegation fields from the intent. If
+      the section is absent or collapsed into one prompt string, return empty
+      field values and status="missing". Authority refs use change-relative
+      path.md#markdown-heading-anchor form; confirm the target and heading
+      exist inside the active change. Docs mode also enforces that resolution
+      deterministically.
 
    3. Read evidence.md as an exact, complete source string without summarizing,
       normalizing line endings, or omitting legacy prose. Return evidenceSource:
@@ -968,6 +1240,64 @@ const context = await agent(
 
 if (!context) {
   return { error: 'context-gather-failed', changeId }
+}
+
+const activeIdentity = deriveActiveChangeIdentity(changeId, context.substrateType, explicitChangeDir, context.changeDir)
+const activeIdentityErrors = activeChangeContextErrors(context, activeIdentity)
+if (resumedIntentTransaction && activeIdentity.ok && activeIdentity.activeRoot !== resumedIntentTransaction.transaction.changeRoot) {
+  activeIdentityErrors.push('transaction-active-change-root-mismatch')
+}
+if (activeIdentityErrors.length > 0) {
+  return {
+    error: 'active-change-identity-mismatch',
+    status: 'blocked',
+    changeId,
+    identityErrors: [...new Set(activeIdentityErrors)],
+    activeIdentity,
+    domainState: resumedIntentTransaction ? 'proposal-insertion-committed-evidence-not-written' : 'no-transaction-commit',
+    recommendedNext: 'Stop before support commands or writes. Restore the exact code-owned substrate/change path identity.',
+  }
+}
+
+const delegationBoundary = context.delegationBoundary || { status: 'missing' }
+const delegationErrors = delegationGateErrors(delegationBoundary, true)
+if (delegationErrors.length > 0) {
+  return {
+    error: 'delegation-boundary-not-ready',
+    status: 'blocked',
+    changeId,
+    delegationStatus: delegationBoundary.status || 'missing',
+    delegationErrors,
+    recommendedNext: 'Stop implementation and classify or resolve the delegation boundary in explore/propose. Do not guess ownership from the prompt.',
+  }
+}
+
+const delegationArtifactCheck = await runDelegationArtifactCheck(
+  activeIdentity.activeRoot,
+  'apply',
+  'Gather',
+)
+if (!delegationArtifactCheck.ok) {
+  return {
+    error: 'delegation-artifact-check-failed',
+    status: 'blocked',
+    changeId,
+    delegationErrors: delegationArtifactCheck.errors,
+    delegationArtifactReport: delegationArtifactCheck.report,
+    observationBoundary: delegationArtifactCheck.observationBoundary,
+    recommendedNext: 'Restore the active change delegation artifacts and authority targets before implementation.',
+  }
+}
+const delegationReadbackErrors = delegationBoundaryReadbackErrors(context.delegationBoundary, delegationArtifactCheck.report?.delegationBoundary)
+if (delegationReadbackErrors.length > 0) {
+  return {
+    error: 'delegation-boundary-readback-mismatch',
+    status: 'blocked',
+    changeId,
+    delegationErrors: delegationReadbackErrors,
+    observedDelegationBoundary: delegationArtifactCheck.report?.delegationBoundary || null,
+    recommendedNext: 'Stop. The gathered delegation boundary differs from the deterministic proposal readback; do not implement either interpretation.',
+  }
 }
 
 if (context.changeId !== changeId || resumedIntentTransaction && context.proposalPath !== `${resumedIntentTransaction.transaction.changeRoot}/proposal.md`) {
@@ -1036,6 +1366,12 @@ for (let i = 0; i < pendingSlices.length && !stopRequested; i++) {
     `Define the proof signal for this slice BEFORE writing any code.
 
      CHANGE INTENT: ${context.intent}
+     AUTHORIZED OUTCOME: ${context.delegationBoundary.authorizedOutcome}
+     HARD CONSTRAINTS: ${(context.delegationBoundary.hardConstraints || []).join('; ') || 'None recorded'}
+     CHALLENGEABLE ASSUMPTIONS: ${(context.delegationBoundary.challengeableAssumptions || []).join('; ') || 'None identified'}
+     PROPOSED MEANS: ${(context.delegationBoundary.proposedMeans || []).join('; ') || 'not recorded'}
+     DELEGATED DECISIONS: ${(context.delegationBoundary.delegatedDecisions || []).join('; ') || 'None recorded'}
+     CHALLENGE RESOLUTION: ${JSON.stringify(context.delegationBoundary.challengeResolution || [])}
      BOUNDARY: in scope [${(context.boundary?.inScope || []).join(', ')}] / out of scope [${(context.boundary?.outOfScope || []).join(', ')}]
      NON-GOALS: ${(context.nonGoals || []).join(', ')}
      SLICE BEHAVIOR: ${slice.behavior}
@@ -1113,6 +1449,11 @@ for (let i = 0; i < pendingSlices.length && !stopRequested; i++) {
     `IMPLEMENT the smallest code change to make this proof pass.
 
      CHANGE INTENT: ${context.intent}
+     AUTHORIZED OUTCOME (MUST PRESERVE): ${context.delegationBoundary.authorizedOutcome}
+     HARD CONSTRAINTS (MUST PRESERVE): ${(context.delegationBoundary.hardConstraints || []).join('; ') || 'None recorded'}
+     PROPOSED MEANS: ${(context.delegationBoundary.proposedMeans || []).join('; ') || 'not recorded'}
+     DELEGATED DECISIONS: ${(context.delegationBoundary.delegatedDecisions || []).join('; ') || 'None recorded'}
+     CHALLENGE RESOLUTION: ${JSON.stringify(context.delegationBoundary.challengeResolution || [])}
      BOUNDARY (DO NOT EXCEED): in scope [${(context.boundary?.inScope || []).join(', ')}]
      OUT OF SCOPE (DO NOT TOUCH): [${(context.boundary?.outOfScope || []).join(', ')}]
      SLICE BEHAVIOR: ${slice.behavior}
@@ -1128,6 +1469,9 @@ for (let i = 0; i < pendingSlices.length && !stopRequested; i++) {
      1. Write the MINIMAL code change — keep this slice review-sized.
      2. Do NOT refactor. The RED is already confirmed — get to GREEN first.
      3. Do NOT anticipate the next slice.
+     4. You may improve assumptions or means only within Delegated Decisions.
+        A technically better solution does not authorize changing Authorized
+        Outcome or Hard Constraints; report that as drift requiring the owner.
      4. Do NOT touch out-of-scope areas.
      5. If the implementation reveals the intent/boundary was wrong, report it as drift.
      6. Link the proof to decision ledger ids when proposal.md contains a ledger.
@@ -1158,6 +1502,10 @@ for (let i = 0; i < pendingSlices.length && !stopRequested; i++) {
 
        DRIFT DETAIL: ${impl.driftDetail}
        CURRENT INTENT: ${context.intent}
+       AUTHORIZED OUTCOME: ${context.delegationBoundary.authorizedOutcome}
+       HARD CONSTRAINTS: ${(context.delegationBoundary.hardConstraints || []).join(', ') || 'None recorded'}
+       PROPOSED MEANS: ${(context.delegationBoundary.proposedMeans || []).join(', ') || 'not recorded'}
+       DELEGATED DECISIONS: ${(context.delegationBoundary.delegatedDecisions || []).join(', ') || 'None recorded'}
        CURRENT BOUNDARY IN SCOPE: ${(context.boundary?.inScope || []).join(', ')}
        CURRENT BOUNDARY OUT OF SCOPE: ${(context.boundary?.outOfScope || []).join(', ')}
 
@@ -1165,6 +1513,11 @@ for (let i = 0; i < pendingSlices.length && !stopRequested; i++) {
        - "expansion": adding a file/layer to boundary, adding a non-goal, adding a stop condition, adding evidence — these are VALID patches
        - "forbidden-narrow": narrowing boundary to exclude a previously promised user-facing capability — FORBIDDEN
        - "forbidden-remove": removing a promised behavior or deleting an evidence requirement — FORBIDDEN
+
+       First identify the delegation layer. A change to an assumption or means
+       is Agent-resolvable only when Delegated Decisions covers it. Any change
+       to Authorized Outcome or Hard Constraints is human-owned and MUST be
+       classified as requiring STOP rather than an in-place Agent patch.
 
        If the needed change is forbidden-narrow or forbidden-remove, recommend STOP (option iv).`,
       { label: `slice-${slice.index}-drift-classify`, phase: 'Slice', schema: DRIFT_PATCH_SCHEMA }

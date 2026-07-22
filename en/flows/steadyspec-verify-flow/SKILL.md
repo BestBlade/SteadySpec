@@ -18,7 +18,10 @@ The trust checkpoint for SteadySpec v0.3. This skill is an orchestration of prim
 
 1. The change directory and its proposal.md, evidence.md, tasks.md if present, review.md if present, decision ledger, attention report, re-slice events, handoff snapshot, and any human-decision-records.
 2. Current git diff or changed-file list when available.
-3. The original intent, boundary, non-goals, evidence required, and stop conditions.
+3. The original intent; delegation boundary (Authorized Outcome, Hard
+   Constraints, Challengeable Assumptions, Proposed Means, Delegated Decisions,
+   Challenge Resolution, Delegation Status); boundary; non-goals; evidence
+   required; and stop conditions.
 4. Proof signals that were claimed passed, failed, missing, blocked, fallback, or accepted as debt.
 5. Any v0.4 capability-lane artifacts: direction map, selection findings, evidence contract, mainline decision section, parked directions, rejected directions, and source labels for qualitative evidence.
 6. Any cross-agent review artifacts under `cross-agent/`, especially `run.json`, `raw.md`, and `moderation.md`.
@@ -34,7 +37,27 @@ Run the gates in order. Do not write archive.md. Do not move the change director
 
 The situation calls for `steadyspec-review-against-intent` - surface this and let the agent reach for it based on its description.
 
-Classify each intent/boundary point as pass, gap, accepted-debt, or blocker.
+Classify each Authorized Outcome, Hard Constraint, and ordinary boundary point
+as pass, gap, accepted-debt, or blocker. Confirm that changed assumptions or
+means stayed within Delegated Decisions and that every consequential challenge
+has a recorded owner/resolution. Missing or non-ready delegation boundary, or
+an unauthorized outcome/constraint change, is `blocked`; do not credit it as a
+better implementation.
+For outcome/hard-constraint challenges, require either user/shared +
+human-decision reference for `resolved`, or a concrete prior-delegation
+reference for `within-delegation`. References use change-relative
+`path.md#markdown-heading-anchor`; read back the target and heading in every
+substrate, while docs mode also resolves them deterministically.
+Any `blocked` trust dimension, or `misclassified` Delegation/Risk Routing
+Review, must set Recommended Next to `re-open-intent` or `stop`, and the
+top-level verify result remains blocked. An `archive` recommendation requires
+all five persisted trust dimensions to be `pass`; a `gap` remains visible and
+routes to `continue` or `handoff` instead.
+
+On every substrate, run `steadyspec delegation-check --change <repo-relative-change-path> --phase verify --json`. A non-zero result blocks a
+verified/archive recommendation. This direct artifact readback checks structural
+delegation lineage; it does not prove the work correct or authenticate the
+human named by an authority record.
 
 ### Gate 2: evidence credibility
 
@@ -189,6 +212,7 @@ Recommend exactly one of:
 ## Output artifact
 
 Write or update `<substrate>/changes/<change-id>/trust-checkpoint.md` when the substrate is file-based.
+Failure to write the exact code-owned checkpoint path blocks `verified`.
 
 Minimum shape:
 
@@ -199,6 +223,7 @@ Minimum shape:
 |-------|-------|
 | Change | <change id> |
 | Intent Match | pass|gap|blocked |
+| Delegation Review | pass|misclassified|blocked |
 | Evidence Credibility | pass|gap|blocked |
 | Risk Routing Review | pass|misclassified|blocked |
 | Debt/Fallback Visibility | pass|gap|blocked |
@@ -213,7 +238,12 @@ Also include:
 - pending user decisions
 - next safest action rationale
 
-If the substrate is docs mode and `steadyspec check` is available, run `steadyspec check <change-id-or-path> --phase verify --substrate docs` after writing `trust-checkpoint.md`. If it fails, report the checker errors and do not recommend archive until the trust checkpoint structure is fixed.
+After writing on every substrate, rerun `steadyspec delegation-check --change
+<repo-relative-change-path> --phase verify --json` and require its Change, five
+trust dimensions, and Recommended Next to equal the intended checkpoint. A
+mismatch blocks `verified`. In docs mode also run `steadyspec check
+<change-id-or-path> --phase verify --substrate docs`; fail or unavailable is
+blocked rather than a verified result.
 
 ## Handoff snapshot
 
@@ -247,6 +277,9 @@ The verb's report contains:
 
 - **FM-verify-becomes-archive:** verify-flow must not write archive.md or move the change.
 - **FM-test-equals-truth:** a passing check does not prove broader intent unless the proof signal covers that intent.
+- **FM-authority-equals-truth:** a human-owned decision proves who was
+  authorized to decide, not that the decision was factually or technically
+  correct. Keep both authority and evidence checks.
 - **FM-risk-rubberstamp:** do not accept agent-owned low-risk classification for a hard high-risk trigger.
 - **FM-clean-handoff:** handoff must preserve debt, fallback, drift, and pending decisions instead of making the state look cleaner than it is.
 - **FM-mainline-unsupported:** a mainline decision is not credible just because work happened nearby. The evidence must name and support the actual claim, with limits.

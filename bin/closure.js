@@ -332,18 +332,18 @@ function schemaPaths(packageRoot) {
 function validateSchemaPackage(packageRoot) {
   const errors = [];
   for (const [name, file] of Object.entries(schemaPaths(packageRoot))) {
-    if (!fs.existsSync(file)) { errors.push(`${name} schema missing: ${file}; reinstall SteadySpec v0.6.1 from source`); continue; }
+    if (!fs.existsSync(file)) { errors.push(`${name} schema missing: ${file}; reinstall the current pinned SteadySpec source/tarball`); continue; }
     try {
       const observedDigest = hashPortableTextFile(file);
       if (observedDigest !== SCHEMA_SHA256[name]) {
-        errors.push(`${name} schema package-integrity mismatch: expected ${SCHEMA_SHA256[name]}, observed ${observedDigest}; reinstall SteadySpec v0.6.1 from source`);
+        errors.push(`${name} schema package-integrity mismatch: expected ${SCHEMA_SHA256[name]}, observed ${observedDigest}; reinstall the current pinned SteadySpec source/tarball`);
         continue;
       }
       const schema = readJson(file);
       if (schema.$schema !== "https://json-schema.org/draft/2020-12/schema") errors.push(`${name} schema has unexpected draft identifier`);
       if (schema.type !== "object") errors.push(`${name} schema root must be object`);
     } catch (error) {
-      errors.push(`${name} schema unreadable: ${error.message}; reinstall SteadySpec v0.6.1 from source`);
+      errors.push(`${name} schema unreadable: ${error.message}; reinstall the current pinned SteadySpec source/tarball`);
     }
   }
   return errors;
