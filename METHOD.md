@@ -7,8 +7,17 @@ The core claim is simple: work does not usually fail because people never wrote 
 Use this document as the portable method. The experimental
 [Assurance Protocol Candidate 0.7](protocol/ASSURANCE_PROTOCOL.md) extracts a
 machine-checkable claim boundary from the method; it does not replace these
-eight mechanisms or prove their real-world effect. Use `recipes/software-sdd.md`
-as the legacy software reference recipe.
+eight mechanisms or prove their real-world effect. The software product applies
+the method through the canonical lifecycle `explore -> propose -> apply ->
+verify -> archive`; see [PRODUCT.md](PRODUCT.md) for its continuity and authority
+contract and `recipes/software-sdd.md` for the mapping.
+
+SteadySpec has both rails and wings. The rails reduce silent drift and preserve
+responsibility and truth. The wings help a capable agent recover context,
+generate better questions, expand technical directions, and pressure-test a
+mainline when the human cannot supply a perfect prompt, implementation plan, or
+temporary domain expertise. Neither side transfers value, risk, direction, or
+final acceptance authority away from the human.
 
 ## How Work Drifts
 
@@ -95,6 +104,12 @@ Capability work stays inside responsibility routing:
 5. Route high-risk mainline choices to the user instead of hiding them as agent preference.
 
 This is "wings" on top of rails, not a replacement for rails. A better answer that loses ownership, evidence boundaries, or archive truth is still drift.
+
+The inverse is also important: perfect record-keeping around a needlessly weak
+answer is not the product goal. Capability support is bounded and
+risk-triggered, but it is part of SteadySpec's method rather than historical
+decoration. Assurance may later constrain claims about the selected result; it
+cannot perform this search and selection work for the lifecycle.
 
 ---
 

@@ -1,6 +1,12 @@
 # Software SDD Recipe
 
-This is the v1 SteadySpec reference implementation: the general anti-drift method in `METHOD.md` applied to software spec-driven development.
+This is the canonical SteadySpec software mapping: the general anti-drift method
+in `METHOD.md` applied through the outward lifecycle `explore -> propose ->
+apply -> verify -> archive`. A host goal or plan may sequence multiple changes;
+SteadySpec retains each change's own records and aggregates strategy signals.
+It does not define goal-to-change lineage or completion semantics or own that
+goal. Optional cross-review, closure, and assurance mechanisms support this
+lifecycle rather than replace it. See [../PRODUCT.md](../PRODUCT.md).
 
 ## Mapping
 

@@ -1,15 +1,18 @@
 # SteadySpec Workflow Artifact Contract
 
-This file records the shared artifact contract for the legacy bundled software
-workflow and closure recipe. Within that legacy surface, the workflow scripts
-remain the source of runtime behavior and this file names the formats they must
-agree on.
+This file records the shared artifact contract for SteadySpec's canonical
+five-flow software change lifecycle and its optional closure support. The
+workflow scripts remain the source of runtime behavior and this file names the
+formats they must agree on.
 
 It is not the normative source for the experimental v0.7 assurance protocol.
-That source is [protocol/ASSURANCE_PROTOCOL.md](protocol/ASSURANCE_PROTOCOL.md),
-with strict trace/result schemas and process conformance under `protocol/`.
-The legacy v0.6 closure lane has only a lossy state projection and is not
-claimed to be a conformant thin adapter.
+That narrower source is
+[protocol/ASSURANCE_PROTOCOL.md](protocol/ASSURANCE_PROTOCOL.md), with strict
+trace/result schemas and process conformance under `protocol/`. The old v0.6
+closure state format has only a lossy state projection and is not a conformant
+thin adapter. That compatibility limit does not make this workflow contract or
+the closure support product legacy. Their relationship is bound by
+[PRODUCT.md](PRODUCT.md).
 
 ## Scope
 

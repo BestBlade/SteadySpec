@@ -1,12 +1,14 @@
 # SteadySpec
 
-### Anti-drift method, experimental assurance protocol, and software SDD recipe
+### Governed agent work with visible responsibility
 
 Substrate-agnostic SDD methodology built around drift defense. This package is standalone: humans read it to understand the method; agents configure and install it for a target runtime.
 
-SteadySpec v0.7.0 is source-distributed. It separates the portable method, an
-experimental assurance protocol candidate, implementations/adapters, and the
-legacy software SDD recipe. It is not
+SteadySpec v0.7.0 is source-distributed. The canonical software change lifecycle
+is `explore -> propose -> apply -> verify -> archive`; attention/responsibility
+and capability-without-drift remain part of the product. The experimental
+assurance protocol is optional claim-integrity support, not a successor to the
+five flows. Their relationship is bound by [../PRODUCT.md](../PRODUCT.md). It is not
 published to the npm registry. Use only the official Git repository pinned to a
 trusted tag or commit; do not use a registry install or `npx steadyspec`.
 
@@ -61,7 +63,8 @@ When a user asks an agent to use this package in a project, the agent should:
 
 The init command auto-detects `.claude/` or `.codex/`; pass `--runtime claude`
 or `--runtime codex` to override. `assurance` is an independent experimental
-protocol process. The legacy recipe support CLI provides docs `check`,
+protocol process with a narrower conformance boundary. The lifecycle support
+CLI provides docs `check`,
 `cross-review`, `closure`, and `hooks`; these are support commands, not new
 governed verbs. There is no top-level `update`, project-level `uninstall`, or
 general `status` command.

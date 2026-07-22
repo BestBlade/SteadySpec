@@ -6,7 +6,7 @@
   "capture": {
     "observedAt": "2026-07-22",
     "sourceIdentity": "uncommitted-working-tree",
-    "baseCommit": "d3438ea0d6b4bc196ff46c055b7360c5f63c5bc4",
+    "baseCommit": "3c35b39a4ec6f9d3e61c3fefb2e0a10b056aff3a",
     "branch": "codex/v0.7-assurance-core",
     "remoteResultsIncluded": false
   },
@@ -16,6 +16,19 @@
     "npmPublicationBlocked": true,
     "intendedTag": "v0.7.0",
     "remoteReleaseState": "external-to-capture"
+  },
+  "productContinuity": {
+    "contractVersion": 1,
+    "contractPath": "PRODUCT.md",
+    "contractNormalizedSha256": "c03077a1130f3e258bd530a317b8b7f39ae36ac1c835a4aed0594780c4469582",
+    "zhContractPath": "zh/PRODUCT.md",
+    "zhContractNormalizedSha256": "871055c5b402f8566106003f13b124fa0375af92e1d1a6757feefd5e2080bc4e",
+    "canonicalChangeLifecycle": ["explore", "propose", "apply", "verify", "archive"],
+    "assuranceRole": "optional-additive-claim-integrity-support",
+    "productIdentityChangeAuthority": "human-owned-unverified",
+    "rejectedCandidate": "3c35b39a4ec6f9d3e61c3fefb2e0a10b056aff3a",
+    "rejectedReason": "product-positioning-drift",
+    "correction": "pass-local-pending-human-acceptance"
   },
   "evidence": {
     "assuranceConformance": "pass-local-53-total-51-core",

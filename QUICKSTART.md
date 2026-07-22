@@ -1,10 +1,33 @@
 # SteadySpec Quick Start
 
-SteadySpec contains an anti-drift method, an experimental v0.7 assurance
-protocol candidate, and a legacy five-verb software skill pack. Read
-[SCOPE.md](SCOPE.md) before adopting.
+SteadySpec applies an anti-drift method through the canonical software change
+lifecycle `explore -> propose -> apply -> verify -> archive`. Read the compact
+[Product Continuity Contract](PRODUCT.md) and [SCOPE.md](SCOPE.md) before
+adopting.
 
-## Two-minute assurance demo
+## Start with the canonical lifecycle
+
+Install the source package as described below, initialize one project, and use
+the five verbs as the change moves:
+
+```text
+/steadyspec:explore
+/steadyspec:propose <intent>
+/steadyspec:apply <change-id>
+/steadyspec:verify <change-id>
+/steadyspec:archive <change-id>
+```
+
+A host agent goal or plan may sequence multiple changes. SteadySpec retains
+each change's own intent, evidence, and handoff records and aggregates strategy
+signals. It does not define goal-to-change lineage or completion semantics, or
+own or authenticate the host goal.
+
+## Optional two-minute assurance demo
+
+The experimental v0.7 protocol is an additive claim-integrity layer for costly
+verification, handoff, or finalization boundaries. It is not the default entry
+path and does not replace the five verbs.
 
 From a source checkout, run:
 
@@ -37,7 +60,7 @@ node tests/assurance-conformance.js --implementation node --arg bin/assurance.js
 ```
 
 Custom implementations run only the 51-case `core` profile. A process that also
-implements SteadySpec's optional legacy projection can opt into the two
+implements SteadySpec's optional v0.6 state projection can opt into the two
 extension cases:
 
 ```bash
@@ -103,8 +126,9 @@ Auto-detects `.claude/` or `.codex/` in your project. Pass `--runtime claude` or
 
 ## Optional v0.6 closure under verify
 
-This is an advanced legacy recipe. It is not the normative v0.7 protocol or a
-required first-use path.
+This is optional advanced support under `verify`, not a required first-use path
+and not a sixth governed verb. Only its old v0.6 state format is a legacy
+compatibility surface for v0.7 projection.
 
 Closure is opt-in support for long `verify` work; it is not a sixth governed
 verb. Start with manual routing:
@@ -564,5 +588,6 @@ Remove-Item -LiteralPath .steadyspec -Recurse -ErrorAction SilentlyContinue
 ## Read next
 
 - [SCOPE.md](SCOPE.md) — agent tier matrix, single-developer assumption, what SteadySpec does NOT promise.
-- [METHOD.md](METHOD.md) - the portable anti-drift method. The five verbs are one implementation; the method extends.
+- [PRODUCT.md](PRODUCT.md) - the product identity, canonical software lifecycle, and change-authority boundary.
+- [METHOD.md](METHOD.md) - the portable anti-drift method. The five verbs are its canonical software lifecycle; the domain-neutral method also transfers beyond software.
 - [README.md](README.md) — full product overview, OpenSpec coexistence guidance, stability surface.

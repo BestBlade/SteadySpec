@@ -3,8 +3,9 @@
 Evidence capture: **pre-release candidate**.
 
 This is the public, sanitized evidence carrier for the experimental v0.7
-Assurance Protocol Candidate. The captured source is an uncommitted working tree
-based on commit `d3438ea0d6b4bc196ff46c055b7360c5f63c5bc4` on branch
+Assurance Protocol Candidate and its product-continuity correction. The current
+capture is an uncommitted working tree based on rejected local candidate commit
+`3c35b39a4ec6f9d3e61c3fefb2e0a10b056aff3a` on branch
 `codex/v0.7-assurance-core`; it is not an immutable release identity. A later
 commit, tag, GitHub Release, or CI run must be checked independently against its
 exact SHA.
@@ -22,6 +23,27 @@ independence, human acceptance, merge authority, or release authority.
 - npm registry publication: forbidden (`package.json` has `private: true`)
 - Installable artifact: local `npm pack` tarball built from a trusted commit
 - Remote CI/tag/Release: external to this capture and not observed here
+
+## Product-continuity rejection and correction
+
+Commit `3c35b39` passed its technical Critic/Evaluator loop and all six local
+validation suites, but the user rejected it as a product candidate. Its docs
+called SteadySpec's canonical five-flow software lifecycle a legacy recipe and
+made the assurance protocol appear to be the successor product. The validators
+were green because they checked the shifted v0.7 target rather than continuity
+with the v0.1-v0.6.1 product identity.
+
+The corrected candidate preserves the assurance implementation but restores the
+five canonical verbs, attention/responsibility, capability-without-drift, and
+host-goal boundary through [PRODUCT.md](../../PRODUCT.md). It retains records
+per change and aggregates strategy signals, but defines no model-independent
+goal-to-change lineage or completion semantics. It also records
+product-identity changes as human-owned and adds deterministic drift signals.
+The validator pins the normalized English and Chinese v1 contract content in
+code as well as in the source and release manifests; a negative fixture rebinding
+both manifests still fails unless the validator baseline or contract version is
+also changed. This makes a coordinated product-identity edit explicit in code;
+it does not authenticate a human or turn approval into machine truth.
 
 ## Reproducible commands
 
@@ -63,7 +85,7 @@ node tests/assurance-conformance.js --implementation node --arg tests/fixtures/a
 - Node.js: v25.9.0
 - npm: 11.12.1
 - Git: 2.38.1.windows.1
-- Base commit: `d3438ea0d6b4bc196ff46c055b7360c5f63c5bc4`
+- Base commit: `3c35b39a4ec6f9d3e61c3fefb2e0a10b056aff3a`
 
 ## Current observations
 
@@ -76,7 +98,7 @@ were independently recomputed. The default suite also rejected the bundled
 always-ready mutant plus an incomplete/forged-result mutant on core behavior.
 Focused assurance, contract, cross-review,
 closure, install, and portability suites passed locally. A final composite run
-then passed all six suites, including a 106-entry local tarball installed into
+then passed all six suites, including a 108-entry local tarball installed into
 an isolated global prefix and both packaged assurance example traces.
 
 An earlier composite run against an earlier working-tree candidate timed out in
@@ -90,8 +112,9 @@ included.
 
 - The protocol, schemas, conformance catalog, and reference process are
   experimental pre-1.0 surfaces and may change under a new `protocolVersion`.
-- Existing Codex/Claude workflows and the v0.6 closure engine are legacy
-  recipes with lossy projection, not conformant thin adapters.
+- Existing Codex/Claude workflows and the v0.6 closure product are active
+  lifecycle/support surfaces, not conformant thin adapters. Only the old v0.6
+  closure state format has a lossy compatibility projection.
 - The reference reducer checks declared artifact digests but does not dereference
   locators or attest that external bytes match those declarations; producers and
   adapters own that check.
@@ -104,6 +127,6 @@ included.
 - A same-family or same-project Critic/Evaluator is structured scrutiny, not an
   independent source of truth.
 
-The preregistered future comparison is in
+The preregistered incremental assurance comparison is in
 [protocol/EXPERIMENT.md](../../protocol/EXPERIMENT.md). Machine-readable capture
 state is in [manifest.json](manifest.json).

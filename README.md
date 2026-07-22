@@ -1,29 +1,41 @@
 # SteadySpec
 
-### An anti-drift method and an experimental agent assurance protocol
+### A method for working with agents - and keeping responsibility visible
 
 [中文版本](zh/README.md) | [中文方法论文档](zh/METHOD.md)
 
 Long-running work with AI agents has a quiet failure mode: the agent slowly
-edits the intent, decisions lose their owner, validation is mistaken for truth,
-and the final record is cleaned up until it no longer describes what happened.
-SteadySpec now separates four things that earlier releases mixed together:
+edits the intent, decisions lose their owner, a coherent but low-ceiling answer
+is selected too early, validation is mistaken for truth, and the final record
+is cleaned up until it no longer describes what happened. SteadySpec combines:
 
-1. [METHOD.md](METHOD.md) explains why work drifts and who retains responsibility.
-2. [The v0.7 assurance protocol candidate](protocol/ASSURANCE_PROTOCOL.md)
-   constrains what a process may claim for one exact target, candidate,
-   evidence bundle, and assessment.
-3. Implementations/adapters connect that protocol to a runtime. v0.7 ships one
-   dependency-free reference process, not a completed adapter ecosystem.
-4. Recipes/profiles describe how work is done. The five-stage software SDD pack
-   and v0.6 Critic/Builder/Evaluator closure remain bundled legacy recipes.
+1. a domain-neutral [anti-drift method](METHOD.md);
+2. the canonical software change lifecycle
+   `explore -> propose -> apply -> verify -> archive`;
+3. attention and responsibility routing so people decide value, risk, and
+   direction without needing to supervise every implementation detail; and
+4. capability mechanisms that help a strong agent search, question, and
+   pressure-test beyond an imperfect prompt or temporary domain gap.
+
+The stable relationship between these parts is recorded in the
+[Product Continuity Contract](PRODUCT.md). A host agent's goal or planning
+facility may sequence multiple changes. SteadySpec retains each change's own
+records and aggregates strategy signals; it does not define goal-to-change
+lineage or completion semantics, or claim to own or authenticate the host goal.
+
+v0.7 adds an experimental [assurance protocol candidate](protocol/ASSURANCE_PROTOCOL.md)
+as optional claim-integrity support for verification, handoff, and truthful
+finalization. It constrains what a process may claim for one exact target,
+candidate, evidence bundle, and assessment. It does not replace or demote the
+five governed verbs.
 
 `ready-for-human` is the protocol's strongest claim. It means the exact supplied
 snapshot is suitable input to a human checkpoint within recorded coverage. It
 does not mean truth, human acceptance, reviewer independence, merge, archive,
 release, deployment, or risk authority.
 
-Try the core without installing skills or editing closure policy:
+Try the optional assurance layer without installing skills or editing closure
+policy:
 
 ```bash
 node bin/assurance.js reduce --trace protocol/examples/empty-trace.json --json
@@ -39,15 +51,18 @@ implementation both fail mandatory cases. This proves
 declared protocol behavior only. It does not prove lower drift or lower review
 cost in real projects; that question is [pre-registered, not answered](protocol/EXPERIMENT.md).
 
-If you want the software workflow rather than the protocol, continue with the
-five-verb skill pack below. See [SCOPE.md](SCOPE.md) before adopting either
-surface and [EVIDENCE.md](EVIDENCE.md) for bounded dogfood evidence.
+For ordinary software work, start with the five-verb skill pack below. Adopt the
+assurance layer only when the cost of an overstated closure claim justifies it.
+See [SCOPE.md](SCOPE.md) for both boundaries and [EVIDENCE.md](EVIDENCE.md) for
+bounded dogfood evidence.
 
 The reference skill pack (`/steadyspec:explore` / `:propose` / `:apply` / `:verify` / `:archive`) wraps a spec workflow with closed-loop orchestration: explore routes attention to active risk, propose records a decision ledger and risk routing, apply executes slice-by-slice with proof-linked decisions and explicit re-slice events, verify runs a trust checkpoint before archive or handoff, and archive runs review + doc-sync + confirmed_by + durable truth gates before writing. It coexists with OpenSpec, plain docs, or issue trackers. The method is substrate-aware: OpenSpec owns its own schema, docs mode can use SteadySpec's native structural contract/checker, and issue trackers remain experimental.
 
 ## v0.6 Attention-Preserving Closure
 
-This is the legacy bundled software recipe, not the normative v0.7 protocol.
+This is an optional support engine beneath the canonical `verify` verb. Its old
+v0.6 state format has a lossy compatibility projection into the experimental
+v0.7 protocol, but the closure product and five-flow lifecycle are not legacy.
 
 v0.6 adds an optional closure support engine under `verify`; the outward product
 still has exactly five governed verbs. Closure coordinates a fingerprint-bound
@@ -437,7 +452,7 @@ The reference skill pack is alpha. Full matrix in [SCOPE.md](SCOPE.md).
 - **Independent assurance process:** `assurance` implements the experimental
   protocol candidate. It can be evaluated without installing or invoking the
   five software verbs.
-- **Legacy recipe support CLI:** `init`, docs `check`, `cross-review`, `closure`,
+- **Lifecycle support CLI:** `init`, docs `check`, `cross-review`, `closure`,
   and `hooks` support the five governed verbs. They are not additional
   methodology verbs. There is no top-level `update`, project-level `uninstall`,
   or general `status`; removal is manual plus `npm uninstall -g` for a local
@@ -449,6 +464,7 @@ The reference skill pack is alpha. Full matrix in [SCOPE.md](SCOPE.md).
 ```text
 steadyspec/
   METHOD.md             # domain-neutral anti-drift method
+  PRODUCT.md            # normative product identity and change authority
   SCOPE.md              # tier matrix, single-developer assumption, no-promise list
   QUICKSTART.md         # 5 verbs + install + manual cleanup
   README.md             # this file
@@ -493,7 +509,7 @@ steadyspec/
   release-evidence/
     v0.6.1/             # public candidate evidence and machine-readable state
     v0.7.0/             # public protocol-candidate evidence and residual unknowns
-  schemas/              # legacy closure/config/acceptance JSON schemas
+  schemas/              # closure/config/acceptance JSON schemas
   manifest.json         # install spec
   package.json
 ```
@@ -538,8 +554,9 @@ top-level `update` or project-level `uninstall` command. See
 v0.7.0 remains pre-1.0. The assurance protocol, schemas, conformance catalog,
 and reference process are explicitly experimental. They may change
 incompatibly before 1.0; a semantic change must use a new `protocolVersion` and
-be recorded in [CHANGELOG.md](CHANGELOG.md). The following legacy software-recipe
-surfaces are intended to remain stable unless the changelog says otherwise:
+be recorded in [CHANGELOG.md](CHANGELOG.md). The following canonical software
+lifecycle surfaces are intended to remain stable unless an explicit human-owned
+product decision versions [PRODUCT.md](PRODUCT.md):
 
 - Outward verb names: `/steadyspec:explore`, `/steadyspec:propose`, `/steadyspec:apply`, `/steadyspec:verify`, `/steadyspec:archive`.
 - Verb-flow SKILL names: `steadyspec-<verb>-flow`.
@@ -556,10 +573,11 @@ Read [METHOD.md](METHOD.md) to learn the domain-neutral anti-drift mechanisms. R
 
 If you are evaluating the method:
 
-1. [METHOD.md](METHOD.md) — the portable anti-drift thought (8 mechanisms, domain-neutral)
-2. [EVIDENCE.md](EVIDENCE.md) — the dogfood record (what happened when the method was applied to itself)
-3. [SCOPE.md](SCOPE.md) — does the reference skill pack fit your project?
-4. [QUICKSTART.md](QUICKSTART.md) — what daily use looks like
+1. [PRODUCT.md](PRODUCT.md) — product identity, canonical lifecycle, and change authority
+2. [METHOD.md](METHOD.md) — the portable anti-drift thought (8 mechanisms, domain-neutral)
+3. [EVIDENCE.md](EVIDENCE.md) — the dogfood record (what happened when the method was applied to itself)
+4. [SCOPE.md](SCOPE.md) — does the reference skill pack fit your project?
+5. [QUICKSTART.md](QUICKSTART.md) — what daily use looks like
 
 If you are evaluating the assurance protocol candidate:
 

@@ -89,13 +89,27 @@ the exact remote SHA; this historical capture is not itself a release claim.
 
 ## v0.7.0 (experimental assurance protocol candidate)
 
-v0.7 separates the portable method, a model- and role-independent assurance
-protocol candidate, implementations/adapters, and legacy recipes. It adds a
-dependency-free reference reducer, strict trace/result schemas, static
-black-box conformance cases, an always-ready negative control, and a lossy
-non-conformant v0.6 projection. Public replay commands, candidate identity,
-observations, and residual unknowns are in
+v0.7 adds a model- and role-independent assurance protocol candidate as
+optional claim-integrity support beneath the canonical five-flow lifecycle. It
+adds a dependency-free reference reducer, strict trace/result schemas, static
+black-box conformance cases, negative controls, and a lossy non-conformant
+projection of the old v0.6 closure state format. Public replay commands,
+candidate identity, observations, and residual unknowns are in
 [`release-evidence/v0.7.0/`](release-evidence/v0.7.0/README.md).
+
+The first local candidate, commit `3c35b39`, passed its technical
+Critic/Evaluator loop and every local validation suite but was rejected by the
+user: it called the canonical software lifecycle a legacy recipe and made the
+support protocol appear to be its successor. That was product-level drift, not
+a documentation typo. The correction adds [PRODUCT.md](PRODUCT.md), restores
+the lifecycle/capability/attention relationship, narrows legacy terminology to
+the old state projection, narrows host-goal claims to per-change records plus
+aggregated strategy signals, and adds deterministic continuity signals. The v1
+English and Chinese contract content is pinned in validator code as well as in
+both manifests, with a coordinated-rebinding negative fixture. The validator
+can make future contract changes require an explicit code/version decision; it
+cannot prove human approval or prevent that explicit coordinated edit from
+being wrong.
 
 This is local candidate evidence, not a causal result. It does not show that
 SteadySpec lowers drift or human burden, and it does not authorize a commit,

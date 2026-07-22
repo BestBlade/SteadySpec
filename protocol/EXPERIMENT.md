@@ -4,10 +4,15 @@ Status: protocol only. No dataset, run, result, or causal claim ships in v0.7.
 
 ## Question
 
-For long, interruption-prone agent tasks, does an implementation conforming to
-the SteadySpec Assurance Protocol reduce silent requirement drift, human review
-burden, or recovery cost compared with the strongest unassisted agent available
-at run time?
+For long, interruption-prone agent tasks, does adding an implementation
+conforming to the SteadySpec Assurance Protocol reduce overstated readiness,
+human review burden, or recovery cost compared with the same agent, authority,
+and host workflow without assurance augmentation?
+
+This is not an experiment on the value of SteadySpec's canonical five-flow
+lifecycle, attention/responsibility routing, or capability-without-drift. A
+whole-product comparison against an unassisted agent requires a separate
+preregistration and measures for direction quality and low-ceiling answers.
 
 ## Design
 
@@ -22,6 +27,11 @@ at run time?
 
 ## Primary measures
 
+- under blinded final assessment, the rate of `ready-for-human` claims that
+  still contain an unmet required intent item, stale binding, or unsupported
+  evidence claim;
+- the rate at which an otherwise silent false/stale/unsupported readiness claim
+  is converted into a blocking or remediation state;
 - required intent items silently lost or changed;
 - human interventions needed before a trustworthy final decision;
 - correction and interruption-recovery cost;
@@ -36,13 +46,14 @@ Separate deterministic evidence, human ratings, and agent self-report.
 
 ## Falsifiers
 
-The product-value hypothesis is weakened if differences are unstable, if review
-burden merely moves into protocol maintenance, if false blocks erase any
-recovery benefit, or if the unassisted condition matches assisted outcomes at
-lower total cost.
+The assurance-augmentation hypothesis is weakened if differences are unstable,
+if review burden merely moves into protocol maintenance, if false blocks erase
+any recovery benefit, or if the same workflow without assurance matches the
+augmented outcomes at lower total cost.
 
 ## Claim boundary
 
 Until this pilot is run across more than one real project and more than one
 model strength, SteadySpec MUST describe v0.7 as an experimental assurance
-protocol candidate. Passing conformance is not evidence of causal benefit.
+protocol candidate. Passing conformance is not evidence of causal benefit and
+the pilot cannot by itself validate or reject the wider SteadySpec product.

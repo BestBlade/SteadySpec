@@ -5,24 +5,32 @@ Normative protocol version: `0.7`.
 
 This protocol defines when one exact target/candidate/evidence/assessment
 snapshot may be called `ready-for-human`. It does not teach an agent how to
-build, review, or repair work. Those are recipe concerns. It does not prove
+explore, propose, build, review, or repair work. Those belong to the governed
+change lifecycle and its support mechanisms. This protocol does not prove
 semantic truth, reviewer independence, human identity, newest-snapshot
 currentness, acceptance, merge authority, or release authority.
 
 The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT,
 and MAY are normative requirements in this document.
 
-## 1. Product layers
+## 1. Relationship to the SteadySpec product
 
-1. **Method** explains why intent, evidence, decisions, and final records drift.
-2. **Protocol** constrains what an implementation may claim for exact bindings.
-3. **Implementations/adapters** reduce traces or connect a runtime to the
-   protocol.
-4. **Recipes/profiles** choose work stages, roles, and domain checks.
+[PRODUCT.md](../PRODUCT.md) defines the product continuity boundary. The five
+canonical software verbs govern one change lifecycle; attention/responsibility
+and capability-without-drift guide that work. This protocol is optional,
+risk-triggered claim-integrity support for verification, handoff, and truthful
+finalization. It MUST NOT be interpreted as a replacement for or demotion of
+that lifecycle.
 
-The v0.6 software SDD and Critic/Builder/Evaluator closure lane is a legacy
-bundled recipe. Its state-only v0.7 projection is lossy and non-conformant. The
-existing Codex and Claude surfaces are not claimed to be thin v0.7 adapters.
+Protocol conformance is deliberately narrower than SteadySpec method or product
+conformance. An implementation can reduce assurance traces without implementing
+the five flows, and a project can use the five flows without assurance. This is
+interface separation, not a product hierarchy.
+
+The old v0.6 closure state format has a state-only v0.7 projection that is lossy
+and non-conformant. The v0.6 closure product, software lifecycle, and existing
+Codex/Claude workflows are not legacy; they are also not claimed to be thin
+v0.7 adapters.
 
 ## 2. Restricted canonical JSON v1
 

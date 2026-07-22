@@ -2,14 +2,27 @@
 
 ## 0.7.0 (experimental assurance protocol candidate)
 
-v0.7 separates SteadySpec's method, assurance protocol, implementations/
-adapters, and recipes without rewriting the working v0.6 closure lane.
+v0.7 adds an optional assurance protocol candidate beneath SteadySpec's
+canonical five-flow software change lifecycle. It does not replace the method,
+attention/responsibility model, capability-without-drift, or working v0.6
+closure product.
+
+- **PRODUCT CONTINUITY: explicit contract and correction.** `PRODUCT.md` binds
+  the five canonical verbs, a per-change-record-only host-goal boundary, human
+  responsibility, capability support, additive assurance role, and human-owned
+  authority for product-identity changes. Its normalized English and Chinese
+  v1 content is pinned in validator code and both evidence manifests, including
+  a coordinated-rebinding negative fixture. The first local v0.7 candidate
+  (`3c35b39`) was rejected because it called the software lifecycle a legacy
+  recipe even though its technical validators passed; public evidence
+  preserves that failure.
 
 - **NEW: model- and role-independent protocol candidate.** Exact target,
   candidate, evidence, assessment, invocation, invalidation, and declared
   decision bindings determine one bounded assurance state. Critic, Builder,
-  Evaluator, the five verbs, and six software review dimensions are not core
-  requirements.
+  Evaluator, the five verbs, and six software review dimensions are not
+  requirements of the narrow protocol conformance profile. The five verbs
+  remain the canonical SteadySpec software lifecycle.
 - **NEW: restricted canonical JSON and domain-separated fingerprints.** Static
   vectors cover key order, Unicode, line-ending identity, safe integers,
   duplicate keys, and hash domains.
@@ -24,12 +37,13 @@ adapters, and recipes without rewriting the working v0.6 closure lane.
 - **ALIGNED: normative acceptance domain.** Trace schema and reducer both
   require trimmed structured strings and calendar-valid uppercase-`Z` event
   timestamps; invalid dates and `24:00` fail closed.
-- **COMPATIBILITY: honest legacy projection.** v0.6 state projection is
-  read-only, lossy, and non-conformant. A legacy `candidate-ready` state never
+- **COMPATIBILITY: honest legacy-state projection.** The old v0.6 closure state
+  projection is read-only, lossy, and non-conformant. A legacy
+  `candidate-ready` state never
   upgrades to v0.7 readiness without artifact reconstruction, which is
   deferred.
-- **BOUNDARY: no effectiveness claim.** v0.7 preregisters a later
-  counterfactual pilot but ships no dataset, experiment result, external
+- **BOUNDARY: no effectiveness claim.** v0.7 preregisters a later incremental
+  assurance pilot but ships no dataset, experiment result, external
   adoption claim, actor authentication, or semantic-correctness guarantee.
 - **DISTRIBUTION: source-only remains.** The package is private and is not
   published to the npm registry.

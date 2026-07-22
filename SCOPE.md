@@ -1,9 +1,26 @@
 # SteadySpec Scope and Boundaries
 
-SteadySpec contains the anti-drift method described in [METHOD.md](METHOD.md),
-an experimental v0.7 assurance protocol candidate, and a legacy software skill
-pack with five outward verbs (`explore` / `propose` / `apply` / `verify` /
-`archive`). These surfaces have different evidence and adoption boundaries.
+SteadySpec applies the anti-drift method in [METHOD.md](METHOD.md) through a
+canonical software change lifecycle with five outward verbs (`explore` /
+`propose` / `apply` / `verify` / `archive`). Attention/responsibility routing
+and capability-without-drift are part of that product. v0.7 adds an optional,
+experimental assurance protocol candidate beneath verification, handoff, and
+truthful finalization. These surfaces have different evidence and adoption
+boundaries; their stable relationship is defined in [PRODUCT.md](PRODUCT.md).
+
+## Product continuity and host-goal boundary
+
+A host agent's goal/task/plan facility may sequence multiple SteadySpec changes
+toward a longer objective. SteadySpec retains each change's own intent and
+evidence records, handoff truth, and prior decisions, and aggregates
+cross-change strategy signals. It does not define goal-to-change lineage or
+completion semantics; does not own, authenticate, or guarantee the host goal
+state; and does not claim that multiple changes produce an unbiased result.
+
+Changing the product problem, five canonical verbs, human responsibility,
+capability-without-drift, or the subordinate role of support mechanisms is a
+human-owned product decision under [PRODUCT.md](PRODUCT.md). Validators can
+make contract changes visible; they cannot authenticate approval.
 
 ## v0.7 assurance protocol boundary
 
@@ -20,8 +37,11 @@ authentication; remote attestation; newest-snapshot rollback protection; team
 coordination; or semantic truth. Existing Codex/Claude workflows and the v0.6
 closure engine are not claimed to be conformant thin adapters.
 
-The protocol can be evaluated without installing the five verbs. Conversely,
-users may adopt the method or software recipe without using the protocol.
+The protocol can be evaluated without installing the five verbs because its
+conformance boundary is intentionally smaller than SteadySpec product
+conformance. Ordinary users may adopt the canonical lifecycle without using the
+protocol. Neither independence statement makes the protocol a replacement
+product.
 
 ## v0.7 source distribution boundary
 
@@ -92,7 +112,7 @@ The lane lets the agent expand directions, draft evidence contracts, pressure-te
 
 ## Single-developer assumption
 
-The legacy software skill pack is designed for **one author per change**. The
+The software skill pack is designed for **one author per change**. The
 "human" referenced in skills (`steadyspec-human-decision-record`,
 `steadyspec-strategy-rollup`, `verify-flow`, archive gates) means future-you or
 a successor who needs to re-evaluate decisions without the original context.
@@ -114,6 +134,7 @@ To save users from misaligned expectations:
 - **It does not prevent agents from making mistakes.** It increases the chance an agent will pause at the right moment if you have called the right verb.
 - **It relies on the agent to detect drift caused by the agent.** v0.3 adds a trust checkpoint and risk-routing review, but the same-agent limitation still exists. An external reviewer is recommended for high-risk work. The honest-tuning failure — where the same agent wrote a violation and the validator that missed it — illustrates this structural limitation.
 - **It does not version your specs.** The substrate (OpenSpec, plain docs, issue tracker) is responsible for that. SteadySpec adds drift defense around the substrate. Docs mode has a SteadySpec structural checker; OpenSpec still owns its own schema and lifecycle.
+- **It does not own the host agent's goal state.** Goal/task/plan facilities may sequence multiple changes, but SteadySpec currently defines no model-independent goal schema, fingerprint, or goal-to-change completion contract.
 - **It does not replace tests.** Tests are one form of observable check. SteadySpec asks whether the right thing was built; tests verify whether the built thing works.
 - **It does not enforce its own use.** You can install SteadySpec and never invoke a single verb. The package will not complain.
 - **Its support commands are bounded, not new methodology verbs.** In addition
@@ -141,15 +162,7 @@ SteadySpec applies its own method to itself. The records of those self-applicati
 - Successors inheriting the source repo may not see `.meta/`. That is intentional. Read the public CHANGELOG.md and `git log` for the durable history.
 - Treat `.meta/changes/` as SteadySpec's private substrate. **Do not adopt it as your project's substrate.** Use one of the substrates documented in the user-facing recipes.
 
-## Deciding whether the protocol fits
-
-Use the v0.7 protocol candidate when an exact snapshot may cross agents,
-contexts, interruptions, or days and a stale or fabricated readiness claim
-would be materially costly. Do not use it merely to add ceremony to a short
-task. Until comparative pilots exist, treat adoption as dogfood and measure its
-burden against the strongest unassisted agent available to you.
-
-## Deciding whether the legacy software recipe fits your project
+## Deciding whether the software lifecycle fits your project
 
 SteadySpec fits when **all** of these are true:
 
@@ -159,6 +172,14 @@ SteadySpec fits when **all** of these are true:
 3. You expect the work to live long enough that future-you (or a successor) will need the records.
 4. You are willing to invoke the five verbs explicitly when the situation calls for them.
 
-If any of those is false, the legacy software recipe is not the right fit. Use
-a lighter or different tool; this does not by itself decide whether the smaller
-protocol surface is useful.
+If any of those is false, the SteadySpec software lifecycle is not the right
+fit. Use a lighter or different tool.
+
+## Deciding whether assurance augmentation fits
+
+Within a project that uses SteadySpec or another workflow, consider the v0.7
+protocol candidate when an exact snapshot may cross agents, contexts,
+interruptions, or days and a stale or fabricated readiness claim would be
+materially costly. Do not use it merely to add ceremony to a short task. Until
+comparative pilots exist, treat adoption as dogfood and measure its incremental
+benefit and burden against the same workflow without assurance augmentation.

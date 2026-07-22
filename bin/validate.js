@@ -10,6 +10,7 @@ const { execSync, spawnSync } = require("child_process");
 const ALLOWED_ROOT_FILES = new Set([
   "README.md",
   "METHOD.md",
+  "PRODUCT.md",
   "EVIDENCE.md",
   "SCOPE.md",
   "QUICKSTART.md",
@@ -39,6 +40,7 @@ const FORBIDDEN_NAMES = new Set([
 const REQUIRED_ROOT_FILES = [
   "README.md",
   "METHOD.md",
+  "PRODUCT.md",
   "EVIDENCE.md",
   "SCOPE.md",
   "QUICKSTART.md",
@@ -52,6 +54,8 @@ const REQUIRED_ROOT_FILES = [
 ];
 
 const CJK_REGEX = /[一-鿿　-〿＀-￯]/;
+const PRODUCT_CONTRACT_V1_SHA256 = "c03077a1130f3e258bd530a317b8b7f39ae36ac1c835a4aed0594780c4469582";
+const ZH_PRODUCT_CONTRACT_V1_SHA256 = "871055c5b402f8566106003f13b124fa0375af92e1d1a6757feefd5e2080bc4e";
 
 let activeSuite = null;
 let activeSuiteStartedAt = 0;
@@ -522,16 +526,21 @@ function checkSourceDistributionDocs(root, pkg) {
 
   checkLocalMarkdownLinks(root, [
     "README.md",
+    "PRODUCT.md",
     "QUICKSTART.md",
     "SCOPE.md",
     "EVIDENCE.md",
     "en/README.md",
     "zh/README.md",
+    "zh/PRODUCT.md",
     "zh/QUICKSTART.md",
     "zh/SCOPE.md",
     "zh/EVIDENCE.md",
     "release-evidence/v0.6.1/README.md",
     "release-evidence/v0.7.0/README.md",
+    "protocol/ASSURANCE_PROTOCOL.md",
+    "protocol/EXPERIMENT.md",
+    "recipes/software-sdd.md",
   ]);
 }
 
@@ -2884,6 +2893,143 @@ function checkActiveProductIdentity(root, pkg) {
   }
 }
 
+function productContinuityErrors(snapshot) {
+  const errors = [];
+  const expectedLifecycle = ["explore", "propose", "apply", "verify", "archive"];
+  const contract = snapshot.manifest.productContract || {};
+  const actualDigest = crypto.createHash("sha256")
+    .update(Buffer.from(normalizeTransportEol(snapshot.product), "utf8"))
+    .digest("hex");
+  const actualZhDigest = crypto.createHash("sha256")
+    .update(Buffer.from(normalizeTransportEol(snapshot.zhProduct), "utf8"))
+    .digest("hex");
+
+  if (contract.schemaVersion !== 1 || contract.path !== "PRODUCT.md") errors.push("manifest product contract identity drift");
+  if (contract.schemaVersion === 1 && actualDigest !== PRODUCT_CONTRACT_V1_SHA256) errors.push("product contract v1 fixed baseline drift");
+  if (contract.schemaVersion === 1 && actualZhDigest !== ZH_PRODUCT_CONTRACT_V1_SHA256) errors.push("Chinese product contract v1 fixed baseline drift");
+  if (contract.normalizedSha256 !== actualDigest) errors.push("manifest product contract digest drift");
+  if (contract.zhPath !== "zh/PRODUCT.md" || contract.zhNormalizedSha256 !== actualZhDigest) errors.push("manifest Chinese product contract digest drift");
+  if (JSON.stringify(contract.canonicalChangeLifecycle) !== JSON.stringify(expectedLifecycle)) errors.push("canonical five-verb lifecycle drift");
+  if (contract.assuranceRole !== "optional-additive-claim-integrity-support") errors.push("assurance support role drift");
+  if (contract.productIdentityChangeAuthority !== "human-owned-unverified") errors.push("product identity authority drift");
+  if (!Array.isArray(snapshot.pkg.files) || !snapshot.pkg.files.includes("PRODUCT.md")) errors.push("package payload omits PRODUCT.md");
+  if (!/five-flow SDD lifecycle with optional agent assurance/i.test(snapshot.pkg.description || "")) errors.push("package description demotes the lifecycle");
+
+  const anchors = {
+    product: [
+      "## PI-1: Long-running work, not only final claims",
+      "## PI-2: Five canonical software change verbs",
+      "## PI-3: Human attention and final responsibility",
+      "## PI-4: Capability without drift",
+      "## PI-5: Assurance is additive claim-integrity support",
+      "## PI-6: Product-identity changes are human-owned",
+      "explore -> propose -> apply -> verify -> archive",
+      "retains each change's own intent and\nevidence records",
+      "does not define goal-to-change lineage or\ncompletion semantics",
+      "does not own, authenticate, or guarantee the host\ngoal state",
+    ],
+    zhProduct: [
+      "## PI-2：五个规范的软件 change 动词",
+      "## PI-3：人的注意力与最终责任",
+      "## PI-4：不漂移地释放能力",
+      "## PI-5：Assurance 是增量式的声明完整性支持",
+      "## PI-6：产品身份变化由人决定",
+      "保存每个 change 自身的意图与证据记录",
+      "不定义 goal 到 change 的血缘或完成语义",
+    ],
+    readme: ["canonical software change lifecycle", "Product Continuity Contract", "does not replace or demote the", "does not define goal-to-change\nlineage or completion semantics"],
+    scope: ["## Product continuity and host-goal boundary", "does not define goal-to-change lineage or\ncompletion semantics", "human-owned product decision", "## Deciding whether the software lifecycle fits your project", "## Deciding whether assurance augmentation fits"],
+    method: ["SteadySpec has both rails and wings", "canonical lifecycle `explore -> propose -> apply ->"],
+    quickstart: ["## Start with the canonical lifecycle", "does not define goal-to-change lineage or completion semantics", "## Optional two-minute assurance demo"],
+    artifact: ["canonical\nfive-flow software change lifecycle", "does not make this workflow contract or\nthe closure support product legacy"],
+    protocol: ["MUST NOT be interpreted as a replacement for or demotion of", "Protocol conformance is deliberately narrower than SteadySpec method or product"],
+    experiment: ["same agent, authority,\nand host workflow without assurance augmentation", "cannot by itself validate or reject the wider SteadySpec product", "rate of `ready-for-human` claims that", "false/stale/unsupported readiness claim"],
+    enReadme: ["canonical software change lifecycle", "not a successor to the\nfive flows"],
+    zhReadme: ["五动词规范生命周期", "不定义 goal 到 change 的血缘或完成语义", "不会取代或降格五个治理"],
+    zhScope: ["## 产品连续性与宿主 goal 边界", "不定义 goal 到 change 的血缘或完成语义", "## 软件生命周期是否适合", "## Assurance 增强是否适合"],
+    zhMethod: ["SteadySpec 同时需要 rails 和 wings", "规范\n生命周期应用方法"],
+    zhQuickstart: ["## 从规范生命周期开始", "不定义 goal 到 change 的\n血缘或完成语义", "## 可选的两分钟 Assurance 演示"],
+    softwareRecipe: ["canonical SteadySpec software mapping", "does not define goal-to-change lineage or completion semantics", "support this\nlifecycle rather than replace it"],
+  };
+  for (const [name, required] of Object.entries(anchors)) {
+    const text = normalizeTransportEol(snapshot[name]);
+    for (const anchor of required) {
+      if (!text.includes(anchor)) errors.push(`${name} missing product continuity anchor: ${anchor}`);
+    }
+  }
+
+  const activeSurfaces = ["product", "zhProduct", "readme", "scope", "method", "quickstart", "artifact", "protocol", "experiment", "enReadme", "zhReadme", "zhScope", "zhMethod", "zhQuickstart", "softwareRecipe"];
+  const demotion = /\blegacy\s+(?:bundled\s+)?(?:software|five[- ]verb|recipe|skill pack|workflow|closure\s+(?:lane|product))/i;
+  for (const name of activeSurfaces) {
+    if (demotion.test(snapshot[name])) errors.push(`${name} demotes an active product surface to legacy`);
+  }
+
+  const releaseContract = snapshot.releaseManifest.productContinuity || {};
+  if (releaseContract.contractVersion !== 1 || releaseContract.contractPath !== "PRODUCT.md") errors.push("release evidence omits product contract identity");
+  if (releaseContract.contractNormalizedSha256 !== actualDigest) errors.push("release evidence product contract digest drift");
+  if (releaseContract.zhContractPath !== "zh/PRODUCT.md" || releaseContract.zhContractNormalizedSha256 !== actualZhDigest) errors.push("release evidence Chinese product contract digest drift");
+  if (JSON.stringify(releaseContract.canonicalChangeLifecycle) !== JSON.stringify(expectedLifecycle)) errors.push("release evidence lifecycle drift");
+  if (releaseContract.assuranceRole !== "optional-additive-claim-integrity-support") errors.push("release evidence assurance role drift");
+  if (releaseContract.productIdentityChangeAuthority !== "human-owned-unverified") errors.push("release evidence product authority drift");
+  if (releaseContract.rejectedCandidate !== "3c35b39a4ec6f9d3e61c3fefb2e0a10b056aff3a" || releaseContract.rejectedReason !== "product-positioning-drift") errors.push("release evidence erases the rejected v0.7 candidate");
+  return errors;
+}
+
+function checkProductContinuityContract(root, manifest, pkg) {
+  const snapshot = {
+    manifest,
+    pkg,
+    releaseManifest: readJson(path.join(root, "release-evidence", "v0.7.0", "manifest.json")),
+    product: readText(path.join(root, "PRODUCT.md")),
+    zhProduct: readText(path.join(root, "zh", "PRODUCT.md")),
+    readme: readText(path.join(root, "README.md")),
+    scope: readText(path.join(root, "SCOPE.md")),
+    method: readText(path.join(root, "METHOD.md")),
+    quickstart: readText(path.join(root, "QUICKSTART.md")),
+    artifact: readText(path.join(root, "ARTIFACT_CONTRACT.md")),
+    protocol: readText(path.join(root, "protocol", "ASSURANCE_PROTOCOL.md")),
+    experiment: readText(path.join(root, "protocol", "EXPERIMENT.md")),
+    enReadme: readText(path.join(root, "en", "README.md")),
+    zhReadme: readText(path.join(root, "zh", "README.md")),
+    zhScope: readText(path.join(root, "zh", "SCOPE.md")),
+    zhMethod: readText(path.join(root, "zh", "METHOD.md")),
+    zhQuickstart: readText(path.join(root, "zh", "QUICKSTART.md")),
+    softwareRecipe: readText(path.join(root, "recipes", "software-sdd.md")),
+  };
+  const errors = productContinuityErrors(snapshot);
+  if (errors.length) fail(`product continuity contract failed:\n- ${errors.join("\n- ")}`);
+
+  const mutate = () => JSON.parse(JSON.stringify(snapshot));
+  const lifecycleMutation = mutate();
+  lifecycleMutation.manifest.productContract.canonicalChangeLifecycle = ["explore", "propose", "apply", "archive"];
+  if (!productContinuityErrors(lifecycleMutation).some((item) => item.includes("lifecycle drift"))) fail("product continuity negative fixture failed to catch a removed verb");
+
+  const roleMutation = mutate();
+  roleMutation.manifest.productContract.assuranceRole = "replacement-core";
+  if (!productContinuityErrors(roleMutation).some((item) => item.includes("assurance support role drift"))) fail("product continuity negative fixture failed to catch assurance role inversion");
+
+  const demotionMutation = mutate();
+  demotionMutation.readme += "\nThe five-verb workflow is a legacy software recipe.\n";
+  if (!productContinuityErrors(demotionMutation).some((item) => item.includes("demotes an active product surface"))) fail("product continuity negative fixture failed to catch lifecycle demotion");
+
+  const digestMutation = mutate();
+  digestMutation.product += "\nchanged without rebinding\n";
+  if (!productContinuityErrors(digestMutation).some((item) => item.includes("digest drift"))) fail("product continuity negative fixture failed to catch contract content drift");
+
+  const coordinatedDigestMutation = mutate();
+  coordinatedDigestMutation.product += "\nCoordinated contract edit.\n";
+  const coordinatedDigest = crypto.createHash("sha256")
+    .update(Buffer.from(normalizeTransportEol(coordinatedDigestMutation.product), "utf8"))
+    .digest("hex");
+  coordinatedDigestMutation.manifest.productContract.normalizedSha256 = coordinatedDigest;
+  coordinatedDigestMutation.releaseManifest.productContinuity.contractNormalizedSha256 = coordinatedDigest;
+  if (!productContinuityErrors(coordinatedDigestMutation).some((item) => item.includes("fixed baseline drift"))) fail("product continuity negative fixture failed to catch coordinated contract and evidence rebinding");
+
+  const zhDigestMutation = mutate();
+  zhDigestMutation.zhProduct += "\n未重新绑定的修改\n";
+  if (!productContinuityErrors(zhDigestMutation).some((item) => item.includes("Chinese product contract digest drift"))) fail("product continuity negative fixture failed to catch Chinese contract content drift");
+}
+
 function evidenceEntryFixture(overrides = {}) {
   return {
     sliceIndex: "2",
@@ -4725,6 +4871,7 @@ async function main() {
     checkReleaseSurface(root, manifest, pkg);
     checkSourceDistributionDocs(root, pkg);
     checkActiveProductIdentity(root, pkg);
+    checkProductContinuityContract(root, manifest, pkg);
     checkEvidenceContinuityWorkflows(root);
   });
 

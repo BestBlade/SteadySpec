@@ -1,8 +1,21 @@
 # SteadySpec 范围和边界
 
-SteadySpec 包含 [METHOD.md](METHOD.md) 中的反漂移方法、实验性的 v0.7
-Assurance Protocol Candidate，以及 legacy 五动词软件技能包。这些表面的
-证据与采用边界不同。
+SteadySpec 通过五个规范动词（`explore` / `propose` / `apply` / `verify` /
+`archive`）把 [METHOD.md](METHOD.md) 中的反漂移方法应用到软件 change。
+注意力/责任路由和能力不漂移都是产品的一部分。v0.7 在验证、交接和真实
+收口下面增加了可选、实验性的 Assurance Protocol Candidate。这些表面的
+证据与采用边界不同；稳定关系见 [PRODUCT.md](PRODUCT.md)。
+
+## 产品连续性与宿主 goal 边界
+
+宿主 Agent 的 goal/task/plan 能力可以把多个 SteadySpec change 串成长目标。
+SteadySpec 保存每个 change 自身的意图与证据记录、交接事实和既有决策，并
+汇总跨 change 策略信号。它不定义 goal 到 change 的血缘或完成语义，不拥有、
+不认证、不保证宿主 goal 状态，也不承诺多个 change 一定产生无偏结果。
+
+改变产品问题、五个规范动词、人的责任、能力不漂移，或支持机制的从属地位，
+都属于 [PRODUCT.md](PRODUCT.md) 规定的由人负责的产品决策。validator 能让
+合同变化可见，但不能认证人的批准。
 
 ## v0.7 assurance protocol 边界
 
@@ -15,6 +28,10 @@ v0.7 的证据覆盖参考进程、可替换实现的黑盒 conformance，以及
 always-ready 实现。它不覆盖真实漂移/人工负担/恢复成本的因果改善、外部
 采用、actor 身份认证、远程证明、旧快照回滚防护、团队协作或语义真理。
 现有 Codex/Claude workflow 与 v0.6 closure 也没有被宣称为薄适配器。
+
+协议可以在不安装五个动词时单独测试，因为它的 conformance 边界刻意比
+SteadySpec 产品更小。普通用户也可以不用协议，只采用五动词生命周期。
+这种接口分离不代表协议是继任产品。
 
 ## v0.7 源码分发边界
 
@@ -70,7 +87,7 @@ v0.4 增加了一个可选能力通道，用在过早收敛本身就是风险的
 
 ## 单开发者假设
 
-Legacy 软件技能包是为**每次变更一名作者**设计的。技能里提到的"人"
+软件技能包是为**每次变更一名作者**设计的。技能里提到的"人"
 指未来的你或接手者——一个需要在没有原始上下文时重新评估决策的人。
 
 实际意味着：
@@ -90,6 +107,7 @@ Legacy 软件技能包是为**每次变更一名作者**设计的。技能里提
 - **它不会阻止 Agent 犯错。** 它增加的是——在你调了正确动词的前提下——Agent 在正确时刻停下来的概率。
 - **它依赖 Agent 去检测 Agent 自己造成的漂移。** v0.3 增加了信任检查点和风险路由审查，但同 Agent 限制仍然存在。高风险工作建议使用外部审查者。honest-tuning 那次失败——同一个 Agent 既写了违规代码又写了校验器，校验器还过了——就是这个结构性限制的典型案例。
 - **它不会给规格书做版本管理。** 那是介质（OpenSpec、纯文档、issue tracker）的事。SteadySpec 在介质外面加了一层漂移防御。
+- **它不拥有宿主 Agent 的 goal 状态。** goal/task/plan 可以串联多个 change，但 SteadySpec 目前没有模型无关的 goal schema、fingerprint 或 goal 到 change 的完成合同。
 - **它不替代测试。** 测试是可观测检查的一种。SteadySpec 问的是"东西做对了没有"，测试验的是"做出来的东西管不管用"。
 - **它不强制被使用。** 你可以装了 SteadySpec 但一次动词都不调。包不会吭声。
 - **辅助命令有界，不是新的方法论动词。** 除了 `init` 和 docs 模式
@@ -115,13 +133,7 @@ SteadySpec 把它的方法用在了自己身上。自我应用的记录存在源
 - 继承这个仓库的接手者可能看不到 `.meta/`。这是故意的。公开的 CHANGELOG.md 和 `git log` 是持久历史。
 - 把 `.meta/changes/` 当成 SteadySpec 的私有介质。**别把它当你的项目介质。** 用文档里推荐的介质。
 
-## Assurance protocol 是否适合
-
-当精确快照要跨 Agent、上下文压缩、中断或数天流转，而过期/伪造 ready
-声明的代价较高时，可以 dogfood v0.7 protocol。短任务不要只为仪式感使用。
-在对照实验完成前，应同时测量收益与维护协议本身的负担。
-
-## Legacy 软件 recipe 是否适合
+## 软件生命周期是否适合
 
 SteadySpec 适合你，当**以下全部**成立：
 
@@ -131,5 +143,12 @@ SteadySpec 适合你，当**以下全部**成立：
 3. 你预计这份工作活得够久——久到未来的你（或接手者）会需要这些记录。
 4. 你愿意在合适的时候显式调用这五个动词。
 
-以上任何一条不成立，legacy 软件 recipe 就不是正确选择。用更轻或不同的
-工具；这不自动决定更小的 protocol 表面是否适用。
+以上任何一条不成立，SteadySpec 软件生命周期就不是正确选择。用更轻或
+不同的工具。
+
+## Assurance 增强是否适合
+
+在采用 SteadySpec 或其他工作流的项目里，如果精确快照要跨 Agent、上下文
+压缩、中断或数天流转，而过期/伪造 ready 声明的代价较高，可以 dogfood
+v0.7 protocol。短任务不要只为仪式感使用。在对照实验完成前，应比较同一
+工作流“有/无 assurance 增强”的收益与维护负担。

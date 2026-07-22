@@ -2,7 +2,7 @@
   "name": "steadyspec",
   "version": "0.7.0",
   "private": true,
-  "description": "Source-distributed anti-drift method with an experimental agent assurance protocol.",
+  "description": "Source-distributed anti-drift five-flow SDD lifecycle with optional agent assurance.",
   "bin": {
     "steadyspec": "bin/init.js"
   },
@@ -47,6 +47,7 @@
     "zh/",
     "recipes/",
     "METHOD.md",
+    "PRODUCT.md",
     "CHANGELOG.md",
     "ARTIFACT_CONTRACT.md",
     "manifest.json",

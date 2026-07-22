@@ -1,7 +1,17 @@
 {
   "name": "steadyspec",
   "version": "0.7.0",
-  "description": "Source-distributed anti-drift method with an experimental agent assurance protocol.",
+  "description": "Source-distributed anti-drift five-flow SDD lifecycle with optional agent assurance.",
+  "productContract": {
+    "schemaVersion": 1,
+    "path": "PRODUCT.md",
+    "normalizedSha256": "c03077a1130f3e258bd530a317b8b7f39ae36ac1c835a4aed0594780c4469582",
+    "zhPath": "zh/PRODUCT.md",
+    "zhNormalizedSha256": "871055c5b402f8566106003f13b124fa0375af92e1d1a6757feefd5e2080bc4e",
+    "canonicalChangeLifecycle": ["explore", "propose", "apply", "verify", "archive"],
+    "assuranceRole": "optional-additive-claim-integrity-support",
+    "productIdentityChangeAuthority": "human-owned-unverified"
+  },
   "languages": ["en"],
   "install": {
     "defaultLayout": "flat-runtime-skills",
